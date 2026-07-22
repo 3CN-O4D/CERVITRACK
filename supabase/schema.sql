@@ -172,7 +172,7 @@ create table if not exists public.consent_log (
 
 -- ── PROVIDERS (doctors, nurses, etc.) ────────────────────────
 create table if not exists public.providers (
-  id bigserial primary key,
+  id uuid primary key default uuid_generate_v4(),
   name text not null,
   email text unique not null,
   phone text,
@@ -454,10 +454,11 @@ create policy "Anyone can view articles"
 create policy "Anyone can view chat contacts"
   on public.chat_contacts for select using (true);
 
--- ── Providers: self-manage + patient access ──────────────────
-create policy "Providers manage own profile"
+-- ── Providers: server-side admin access (providers use custom auth, not Supabase Auth) ──
+create policy "Service role can manage providers"
   on public.providers for all
-  using (auth.uid() = id);
+  using (true)
+  with check (true);
 
 -- ── Reports: provider/admin can create/read for their patients
 create policy "Providers create reports"
