@@ -9,6 +9,7 @@ import { ScreeningsModule } from './features/screenings/screenings.module';
 import { FacilitiesModule } from './features/facilities/facilities.module';
 import { ReportsModule } from './features/reports/reports.module';
 import { TelemetryModule } from './features/telemetry/telemetry.module';
+import { SampleKitsModule } from './features/sample-kits/sample-kits.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { TelemetryModule } from './features/telemetry/telemetry.module';
     FacilitiesModule,
     ReportsModule,
     TelemetryModule,
+    SampleKitsModule,
   ],
 })
 export class AppModule implements NestModule {

@@ -57,6 +57,21 @@ const portals = [
     cta: 'Open Workspace',
   },
   {
+    title: 'Sample Kit Tracking',
+    subtitle: 'Barcode-Based Chain of Custody',
+    desc: 'Track every sample kit from registration to lab results. Scan barcodes at each stage — pairing, collection, transit, lab receipt, and processing.',
+    features: ['QR/barcode scanning at every stage', 'Real-time movement tracking', 'Chain of custody audit trail', 'Patient self-collection confirmation'],
+    color: 'from-cyan-500 to-cyan-700',
+    icon: (
+      <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0113.5 9.375v-4.5z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 6.75h.75v.75h-.75v-.75zM6.75 16.5h.75v.75h-.75v-.75zM16.5 6.75h.75v.75h-.75v-.75zM13.5 13.5h.75v.75h-.75v-.75zM13.5 19.5h.75v.75h-.75v-.75zM19.5 13.5h.75v.75h-.75v-.75zM19.5 19.5h.75v.75h-.75v-.75zM16.5 16.5h.75v.75h-.75v-.75z" />
+      </svg>
+    ),
+    href: '/kits',
+    cta: 'Open Kit Tracker',
+  },
+  {
     title: 'Administrative Panels',
     subtitle: 'County & National Surveillance',
     desc: 'Real-time dashboards for screening coverage, disease burden, facility performance, and aggregate reporting across all 47 counties.',

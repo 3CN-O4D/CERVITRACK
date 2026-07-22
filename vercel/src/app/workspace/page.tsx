@@ -16,6 +16,27 @@ interface Patient {
   facilityId: string;
 }
 
+interface Kit {
+  id: string;
+  barcode: string;
+  kitType: string;
+  status: string;
+  patientName?: string;
+  collectionMethod?: string;
+  result?: string;
+  events: KitEvent[];
+}
+
+interface KitEvent {
+  id: string;
+  action: string;
+  scannedBy: string;
+  scannedByName: string;
+  location?: string;
+  notes?: string;
+  timestamp: string;
+}
+
 interface Screening {
   id: string;
   patientId: string;
@@ -26,94 +47,137 @@ interface Screening {
   createdAt: string;
 }
 
+const STATUS_COLORS: Record<string, string> = {
+  REGISTERED: 'bg-blue-100 text-blue-700',
+  PAIRED: 'bg-amber-100 text-amber-700',
+  COLLECTED: 'bg-green-100 text-green-700',
+  IN_TRANSIT: 'bg-purple-100 text-purple-700',
+  IN_LAB: 'bg-cyan-100 text-cyan-700',
+  PROCESSED: 'bg-emerald-100 text-emerald-700',
+};
+
+const STATUS_BG: Record<string, string> = {
+  IN_TRANSIT: 'bg-purple-50', IN_LAB: 'bg-cyan-50', COLLECTED: 'bg-green-50',
+  PROCESSED: 'bg-emerald-50', REGISTERED: 'bg-blue-50', PAIRED: 'bg-amber-50',
+};
+
 export default function WorkspaceDashboard() {
   const router = useRouter();
-  const [provider, setProvider] = useState<any>(null);
   const [patients, setPatients] = useState<Patient[]>([]);
-  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
-  const [patientScreenings, setPatientScreenings] = useState<Screening[]>([]);
+  const [screenings, setScreenings] = useState<Screening[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [showNewScreening, setShowNewScreening] = useState(false);
-  const [screeningForm, setScreeningForm] = useState({ type: 'VIA', findings: '', result: '', riskLevel: '' });
-  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [tab, setTab] = useState<'patients' | 'kits'>('patients');
+
+  // Kit state
+  const [barcode, setBarcode] = useState('');
+  const [scannedKit, setScannedKit] = useState<Kit | null>(null);
+  const [kitLoading, setKitLoading] = useState(false);
+  const [kitError, setKitError] = useState('');
+  const [kitSuccess, setKitSuccess] = useState('');
+  const [kitAction, setKitAction] = useState<'pair' | 'collect' | 'transit' | null>(null);
+  const [kitNotes, setKitNotes] = useState('');
+  const [kitToLocation, setKitToLocation] = useState('');
+  const [selectedKitPatient, setSelectedKitPatient] = useState('');
 
   useEffect(() => {
-    const stored = localStorage.getItem('provider_data');
-    if (!stored) { router.push('/provider/login'); return; }
-    setProvider(JSON.parse(stored));
-    fetchPatients();
-  }, [router]);
+    fetchData();
+  }, []);
 
-  async function fetchPatients() {
+  async function fetchData() {
     setLoading(true);
     try {
-      const res = await fetch(`/api/providers/patients${search ? `?search=${encodeURIComponent(search)}` : ''}`);
-      if (!res.ok) throw new Error('Failed to fetch patients');
-      const data = await res.json();
-      setPatients(data.patients || data.data || []);
-    } catch {
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function viewPatient(id: string) {
-    try {
-      const [patientRes, screeningsRes] = await Promise.all([
-        fetch(`/api/providers/patient/${id}`),
-        fetch(`/api/screening/history?patientId=${id}`),
+      const [patientsRes, screeningsRes] = await Promise.all([
+        fetch('/api/patients'),
+        fetch('/api/screenings'),
       ]);
-      if (patientRes.ok) {
-        const data = await patientRes.json();
-        setSelectedPatient(data.patient || data);
+      if (patientsRes.ok) {
+        const pData = await patientsRes.json();
+        setPatients(pData.patients || pData.data || []);
       }
       if (screeningsRes.ok) {
-        const data = await screeningsRes.json();
-        setPatientScreenings(data.screenings || data.data || []);
+        const sData = await screeningsRes.json();
+        setScreenings(sData.screenings || sData.data || []);
       }
-    } catch {}
+    } catch { setError('Failed to load data'); }
+    finally { setLoading(false); }
   }
 
-  async function submitScreening() {
-    if (!selectedPatient) return;
-    setSubmitting(true);
+  async function scanKit() {
+    const code = barcode.trim();
+    if (!code) return;
+    setKitLoading(true);
+    setKitError('');
+    setKitSuccess('');
+    setScannedKit(null);
     try {
-      const res = await fetch('/api/screening/submit', {
+      const res = await fetch(`/api/sample-kits/scan/${code}`);
+      if (res.ok) { setScannedKit(await res.json()); }
+      else if (res.status === 404) { setKitError('Kit not found. Check the barcode.'); }
+      else { setKitError('Failed to scan barcode'); }
+    } catch { setKitError('Network error'); }
+    finally { setKitLoading(false); }
+  }
+
+  async function handleKitPair() {
+    if (!scannedKit || !selectedKitPatient) return;
+    setKitLoading(true);
+    setKitError('');
+    try {
+      const patient = patients.find(p => p.id === selectedKitPatient);
+      const res = await fetch('/api/sample-kits', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          patientId: selectedPatient.id,
-          type: screeningForm.type,
-          findings: screeningForm.findings,
-          result: screeningForm.result || undefined,
-          riskLevel: screeningForm.riskLevel || undefined,
-          providerId: provider?.id,
+          action: 'pair', barcode: scannedKit.barcode, patientId: selectedKitPatient,
+          patientName: patient ? `${patient.firstName} ${patient.lastName}` : 'Unknown',
+          pairedBy: 'clinician', pairedByName: 'Clinician',
         }),
       });
-      if (!res.ok) throw new Error('Failed to submit screening');
-      setShowNewScreening(false);
-      setScreeningForm({ type: 'VIA', findings: '', result: '', riskLevel: '' });
-      viewPatient(selectedPatient.id);
-    } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed');
-    } finally {
-      setSubmitting(false);
-    }
+      if (res.ok) { setScannedKit(await res.json()); setKitSuccess('Kit paired successfully'); setKitAction(null); setSelectedKitPatient(''); }
+      else { const err = await res.json(); setKitError(err.message || 'Failed'); }
+    } catch { setKitError('Network error'); }
+    finally { setKitLoading(false); }
   }
 
-  const screeningTypes = [
-    { value: 'VIA', label: 'Visual Inspection with Acetic Acid' },
-    { value: 'PAP_SMEAR', label: 'Pap Smear' },
-    { value: 'HPV_DNA', label: 'HPV DNA Test' },
-    { value: 'COLPOSCOPY', label: 'Colposcopy' },
-  ];
-  const riskColors: Record<string, string> = {
-    LOW: 'bg-emerald-100 text-emerald-700',
-    MODERATE: 'bg-amber-100 text-amber-700',
-    HIGH: 'bg-red-100 text-red-700',
-    CRITICAL: 'bg-red-600 text-white',
-  };
+  async function handleKitCollect(method: string) {
+    if (!scannedKit) return;
+    setKitLoading(true);
+    setKitError('');
+    try {
+      const res = await fetch('/api/sample-kits', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'collect', barcode: scannedKit.barcode, collectedBy: 'clinician', collectedByName: 'Clinician',
+          collectionMethod: method, facilityId: 'clinic', notes: kitNotes,
+        }),
+      });
+      if (res.ok) { setScannedKit(await res.json()); setKitSuccess('Collection confirmed'); setKitAction(null); setKitNotes(''); }
+      else { const err = await res.json(); setKitError(err.message || 'Failed'); }
+    } catch { setKitError('Network error'); }
+    finally { setKitLoading(false); }
+  }
+
+  async function handleKitTransit() {
+    if (!scannedKit || !kitToLocation) return;
+    setKitLoading(true);
+    setKitError('');
+    try {
+      const res = await fetch('/api/sample-kits', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'transit', barcode: scannedKit.barcode, scannedBy: 'clinician', scannedByName: 'Clinician',
+          fromLocation: 'clinic', toLocation: kitToLocation, facilityId: 'clinic', notes: kitNotes,
+        }),
+      });
+      if (res.ok) { setScannedKit(await res.json()); setKitSuccess('Kit marked in transit'); setKitAction(null); setKitToLocation(''); setKitNotes(''); }
+      else { const err = await res.json(); setKitError(err.message || 'Failed'); }
+    } catch { setKitError('Network error'); }
+    finally { setKitLoading(false); }
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -124,166 +188,208 @@ export default function WorkspaceDashboard() {
             <span className="text-gray-300">|</span>
             <span className="text-sm font-medium text-gray-600">Clinician Workspace</span>
           </div>
-          <div className="flex items-center gap-4 text-sm">
-            {provider && <span className="text-gray-500">Dr. {provider.name || provider.firstName}</span>}
-            <Link href="/" className="text-gray-500 hover:text-sky-700">Home</Link>
-          </div>
+          <Link href="/" className="text-sm text-gray-500 hover:text-sky-700">Home</Link>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Patient List */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-xl border border-gray-200 p-4">
-              <h2 className="font-bold text-gray-900 mb-4">Patients</h2>
-              <div className="flex gap-2 mb-4">
-                <input value={search} onChange={(e) => setSearch(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && fetchPatients()}
-                  placeholder="Search by name or ID..."
-                  className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm" />
-                <button onClick={fetchPatients} className="bg-sky-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-sky-700">Search</button>
-              </div>
+        <div className="flex gap-2 mb-6">
+          <button onClick={() => setTab('patients')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${tab === 'patients' ? 'bg-sky-700 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
+            Patients
+          </button>
+          <button onClick={() => setTab('kits')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${tab === 'kits' ? 'bg-sky-700 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
+            Kit Scanner
+          </button>
+        </div>
 
-              {loading ? (
-                <div className="text-center py-8 text-gray-400 text-sm">Loading...</div>
-              ) : patients.length === 0 ? (
-                <div className="text-center py-8 text-gray-400 text-sm">No patients found</div>
-              ) : (
-                <div className="space-y-2 max-h-[600px] overflow-y-auto">
-                  {patients.map((p) => (
-                    <button key={p.id} onClick={() => viewPatient(p.id)}
-                      className={`w-full text-left p-3 rounded-lg border transition-colors ${
-                        selectedPatient?.id === p.id ? 'border-sky-300 bg-sky-50' : 'border-gray-100 hover:bg-gray-50'
-                      }`}>
-                      <div className="font-medium text-sm text-gray-900">{p.firstName} {p.lastName}</div>
-                      <div className="text-xs text-gray-500 mt-0.5">{p.nationalIdOrPassport} &middot; {p.gender}</div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+        {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-6 text-sm">{error}</div>}
 
-          {/* Patient Detail / Workspace */}
-          <div className="lg:col-span-2">
-            {!selectedPatient ? (
-              <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
-                <div className="w-16 h-16 bg-sky-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-sky-500" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-                  </svg>
-                </div>
-                <p className="text-gray-500 font-medium">Select a patient to begin</p>
-                <p className="text-sm text-gray-400 mt-1">Search and select from the patient list on the left</p>
+        {tab === 'patients' && (
+          loading ? (
+            <div className="text-center py-20 text-gray-400">Loading patients...</div>
+          ) : (
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-100">
+                <h2 className="font-semibold text-gray-900">Patient List ({patients.length})</h2>
               </div>
-            ) : (
-              <div className="space-y-6">
-                {/* Patient Info Card */}
-                <div className="bg-white rounded-xl border border-gray-200 p-6">
-                  <div className="flex items-start justify-between">
+              <div className="divide-y divide-gray-50">
+                {patients.map((p) => (
+                  <div key={p.id} className="px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
                     <div>
-                      <h2 className="text-xl font-bold text-gray-900">{selectedPatient.firstName} {selectedPatient.lastName}</h2>
-                      <div className="flex flex-wrap gap-4 mt-2 text-sm text-gray-500">
-                        <span>ID: {selectedPatient.nationalIdOrPassport}</span>
-                        <span>DOB: {new Date(selectedPatient.dateOfBirth).toLocaleDateString()}</span>
-                        <span>{selectedPatient.gender}</span>
-                        <span>{selectedPatient.phone}</span>
-                        <span>{selectedPatient.county}</span>
+                      <div className="font-medium text-sm text-gray-900">{p.firstName} {p.lastName}</div>
+                      <div className="text-xs text-gray-500">{p.nationalIdOrPassport} · {p.county}</div>
+                    </div>
+                    <button onClick={() => setSelectedPatient(p)}
+                      className="text-sky-600 text-sm font-medium hover:text-sky-700">View</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        )}
+
+        {tab === 'kits' && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-xl border border-gray-200 p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Scan Kit Barcode</h2>
+              <div className="flex gap-2">
+                <input type="text" value={barcode} onChange={(e) => setBarcode(e.target.value)}
+                  placeholder="Enter or scan kit barcode..."
+                  className="flex-1 border border-gray-200 rounded-lg px-4 py-3 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-sky-500"
+                  onKeyDown={(e) => e.key === 'Enter' && scanKit()} />
+                <button onClick={scanKit} disabled={!barcode.trim() || kitLoading}
+                  className="bg-sky-600 hover:bg-sky-700 disabled:bg-gray-300 text-white px-6 py-3 rounded-lg font-medium transition-colors">
+                  {kitLoading ? 'Scanning...' : 'Scan'}
+                </button>
+              </div>
+              <p className="text-gray-400 text-xs mt-2">Scan the kit barcode to pair, collect, or track samples</p>
+            </div>
+
+            {kitError && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">{kitError}</div>}
+            {kitSuccess && <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-xl text-sm">{kitSuccess}</div>}
+
+            {scannedKit && (
+              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <div className={`px-6 py-4 ${STATUS_BG[scannedKit.status] || 'bg-gray-50'}`}>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl font-bold text-gray-900 font-mono">{scannedKit.barcode}</span>
+                    <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[scannedKit.status] || 'bg-gray-100 text-gray-700'}`}>
+                      {scannedKit.status}
+                    </span>
+                  </div>
+                  <div className="text-sm text-gray-500 mt-1">{scannedKit.kitType} · {scannedKit.patientName || 'Unassigned'}</div>
+                </div>
+
+                <div className="p-6 space-y-3">
+                  {scannedKit.status === 'REGISTERED' && !kitAction && (
+                    <button onClick={() => setKitAction('pair')}
+                      className="w-full bg-amber-600 hover:bg-amber-700 text-white py-3 rounded-lg font-medium transition-colors">
+                      Pair to Patient
+                    </button>
+                  )}
+                  {scannedKit.status === 'PAIRED' && !kitAction && (
+                    <button onClick={() => setKitAction('collect')}
+                      className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-medium transition-colors">
+                      Confirm Collection
+                    </button>
+                  )}
+                  {(scannedKit.status === 'PAIRED' || scannedKit.status === 'COLLECTED') && !kitAction && (
+                    <button onClick={() => setKitAction('transit')}
+                      className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-lg font-medium transition-colors">
+                      Send to Lab / Collection Point
+                    </button>
+                  )}
+                  {scannedKit.status === 'PROCESSED' && (
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 text-center">
+                      <p className="text-emerald-700 font-bold">Results: {scannedKit.result}</p>
+                    </div>
+                  )}
+
+                  {kitAction === 'pair' && (
+                    <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                      <label className="block text-sm font-medium text-gray-700">Select Patient</label>
+                      <select value={selectedKitPatient} onChange={(e) => setSelectedKitPatient(e.target.value)}
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                        <option value="">Choose a patient...</option>
+                        {patients.map((p) => (
+                          <option key={p.id} value={p.id}>{p.firstName} {p.lastName} — {p.nationalIdOrPassport}</option>
+                        ))}
+                      </select>
+                      <div className="flex gap-3">
+                        <button onClick={() => { setKitAction(null); setSelectedKitPatient(''); }}
+                          className="flex-1 border border-gray-200 text-gray-700 px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100">Cancel</button>
+                        <button onClick={handleKitPair} disabled={!selectedKitPatient || kitLoading}
+                          className="flex-1 bg-amber-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-amber-700 disabled:opacity-50">
+                          {kitLoading ? 'Pairing...' : 'Pair Kit'}
+                        </button>
                       </div>
                     </div>
-                    <button onClick={() => setShowNewScreening(true)}
-                      className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700">
-                      + New Screening
-                    </button>
-                  </div>
-                </div>
+                  )}
 
-                {/* Screening History */}
-                <div className="bg-white rounded-xl border border-gray-200 p-6">
-                  <h3 className="font-bold text-gray-900 mb-4">Screening History</h3>
-                  {patientScreenings.length === 0 ? (
-                    <p className="text-sm text-gray-400">No screenings recorded yet</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {patientScreenings.map((s) => (
-                        <div key={s.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                          <div>
-                            <span className="text-sm font-medium text-gray-900">{s.type.replace('_', ' ')}</span>
-                            {s.findings && <p className="text-xs text-gray-500 mt-0.5">{s.findings}</p>}
+                  {kitAction === 'collect' && (
+                    <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                      <label className="block text-sm font-medium text-gray-700">Collection Method</label>
+                      <div className="space-y-2">
+                        {[{ id: 'HPV_CLINICIAN', label: 'Clinician-Collected Cervical Swab' },
+                          { id: 'HPV_SELF', label: 'Supervised Self-Collection' },
+                          { id: 'VIA', label: 'VIA (Visual Inspection)' }].map((m) => (
+                          <button key={m.id} onClick={() => handleKitCollect(m.id)}
+                            className="w-full text-left bg-white hover:bg-gray-100 border border-gray-200 rounded-lg p-3 text-sm font-medium text-gray-700 transition-colors">
+                            {m.label}
+                          </button>
+                        ))}
+                      </div>
+                      <label className="block text-sm font-medium text-gray-700 mt-2">Notes (optional)</label>
+                      <textarea value={kitNotes} onChange={(e) => setKitNotes(e.target.value)}
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none" rows={2} placeholder="Collection notes..." />
+                      <button onClick={() => { setKitAction(null); setKitNotes(''); }}
+                        className="w-full text-gray-500 hover:text-gray-700 text-sm py-2">Cancel</button>
+                    </div>
+                  )}
+
+                  {kitAction === 'transit' && (
+                    <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                      <label className="block text-sm font-medium text-gray-700">Destination</label>
+                      <input type="text" value={kitToLocation} onChange={(e) => setKitToLocation(e.target.value)}
+                        placeholder="e.g., County Referral Lab, Collection Point..."
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+                      <label className="block text-sm font-medium text-gray-700">Notes (optional)</label>
+                      <textarea value={kitNotes} onChange={(e) => setKitNotes(e.target.value)}
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none" rows={2} placeholder="Transit notes..." />
+                      <div className="flex gap-3">
+                        <button onClick={() => { setKitAction(null); setKitToLocation(''); setKitNotes(''); }}
+                          className="flex-1 border border-gray-200 text-gray-700 px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100">Cancel</button>
+                        <button onClick={handleKitTransit} disabled={!kitToLocation || kitLoading}
+                          className="flex-1 bg-purple-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-50">
+                          {kitLoading ? 'Processing...' : 'Send Kit'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {scannedKit.events && scannedKit.events.length > 0 && (
+                    <div className="border-t border-gray-100 pt-4 mt-4">
+                      <h4 className="text-sm font-medium text-gray-500 mb-3">Kit History</h4>
+                      <div className="space-y-2">
+                        {scannedKit.events.map((evt) => (
+                          <div key={evt.id} className="flex gap-3">
+                            <div className={`w-2 h-2 rounded-full mt-2 shrink-0 ${
+                              evt.action === 'PROCESSED' ? 'bg-emerald-500' :
+                              evt.action === 'IN_LAB' ? 'bg-cyan-500' :
+                              evt.action === 'IN_TRANSIT' ? 'bg-purple-500' :
+                              evt.action === 'COLLECTED' ? 'bg-green-500' : 'bg-sky-500'
+                            }`} />
+                            <div>
+                              <div className="text-sm font-medium text-gray-900">{evt.action}</div>
+                              <div className="text-xs text-gray-500">{evt.scannedByName} · {new Date(evt.timestamp).toLocaleString()}</div>
+                              {evt.notes && <div className="text-xs text-gray-400 mt-1">{evt.notes}</div>}
+                            </div>
                           </div>
-                          <div className="flex items-center gap-3">
-                            <span className="text-xs text-gray-400">{new Date(s.createdAt).toLocaleDateString()}</span>
-                            <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
-                              s.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-700' :
-                              s.status === 'PENDING' ? 'bg-amber-100 text-amber-700' :
-                              'bg-gray-100 text-gray-700'
-                            }`}>{s.status}</span>
-                            {s.result && (
-                              <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
-                                s.result === 'NORMAL' ? 'bg-emerald-100 text-emerald-700' :
-                                s.result === 'POSITIVE' ? 'bg-red-100 text-red-700' :
-                                'bg-amber-100 text-amber-700'
-                              }`}>{s.result}</span>
-                            )}
-                          </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
               </div>
             )}
           </div>
-        </div>
+        )}
       </main>
 
-      {/* New Screening Modal */}
-      {showNewScreening && selectedPatient && (
+      {selectedPatient && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl w-full max-w-lg p-6">
-            <h3 className="text-lg font-bold text-gray-900 mb-1">New Screening</h3>
-            <p className="text-sm text-gray-500 mb-6">{selectedPatient.firstName} {selectedPatient.lastName}</p>
-
-            <label className="block text-sm font-medium text-gray-700 mb-2">Screening Type</label>
-            <select value={screeningForm.type} onChange={(e) => setScreeningForm({ ...screeningForm, type: e.target.value })}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mb-4">
-              {screeningTypes.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </select>
-
-            <label className="block text-sm font-medium text-gray-700 mb-2">Clinical Findings</label>
-            <textarea value={screeningForm.findings} onChange={(e) => setScreeningForm({ ...screeningForm, findings: e.target.value })}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mb-4 resize-none" rows={3}
-              placeholder="Describe visual inspection findings, abnormal areas..." />
-
-            <label className="block text-sm font-medium text-gray-700 mb-2">Result</label>
-            <div className="grid grid-cols-3 gap-2 mb-4">
-              {['NORMAL', 'POSITIVE', 'INCONCLUSIVE'].map((r) => (
-                <button key={r} onClick={() => setScreeningForm({ ...screeningForm, result: r })}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
-                    screeningForm.result === r ? 'bg-sky-600 text-white border-sky-600' : 'border-gray-200 hover:bg-gray-50'
-                  }`}>{r}</button>
-              ))}
+            <h3 className="text-lg font-bold text-gray-900 mb-1">{selectedPatient.firstName} {selectedPatient.lastName}</h3>
+            <p className="text-sm text-gray-500 mb-4">ID: {selectedPatient.nationalIdOrPassport} · {selectedPatient.county}</p>
+            <div className="space-y-2 mb-6 text-sm">
+              <div className="flex justify-between"><span className="text-gray-500">Phone</span><span className="text-gray-900">{selectedPatient.phone}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">DOB</span><span className="text-gray-900">{selectedPatient.dateOfBirth}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Gender</span><span className="text-gray-900">{selectedPatient.gender}</span></div>
             </div>
-
-            <label className="block text-sm font-medium text-gray-700 mb-2">Risk Level</label>
-            <div className="grid grid-cols-4 gap-2 mb-6">
-              {['LOW', 'MODERATE', 'HIGH', 'CRITICAL'].map((r) => (
-                <button key={r} onClick={() => setScreeningForm({ ...screeningForm, riskLevel: r })}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
-                    screeningForm.riskLevel === r ? `${riskColors[r]} border-current` : 'border-gray-200 hover:bg-gray-50 text-gray-700'
-                  }`}>{r}</button>
-              ))}
-            </div>
-
-            <div className="flex gap-3">
-              <button onClick={() => setShowNewScreening(false)}
-                className="flex-1 border border-gray-200 text-gray-700 px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-50">Cancel</button>
-              <button onClick={submitScreening} disabled={!screeningForm.findings || submitting}
-                className="flex-1 bg-emerald-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50">
-                {submitting ? 'Saving...' : 'Save Screening'}
-              </button>
-            </div>
+            <button onClick={() => setSelectedPatient(null)}
+              className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2.5 rounded-lg text-sm font-medium">Close</button>
           </div>
         </div>
       )}
