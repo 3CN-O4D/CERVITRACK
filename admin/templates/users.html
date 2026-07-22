@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Users{% endblock %}
+{% block page_subtitle %}{{ filter_label if filter_label else 'All Registered Users' }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">{{ filter_label if filter_label else 'Users' }}</h1>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('users') }}" class="btn btn-sm {% if not filter_label %}btn-primary{% else %}btn-outline-primary{% endif %}">All</a>
+        <a href="{{ url_for('users_at_risk') }}" class="btn btn-sm {% if filter_label == 'At-Risk' %}btn-warning{% else %}btn-outline-warning{% endif %}">At-Risk</a>
+        <a href="{{ url_for('users_healthy') }}" class="btn btn-sm {% if filter_label == 'Healthy' %}btn-success{% else %}btn-outline-success{% endif %}">Healthy</a>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-body">
+        <form method="GET" class="row g-2 mb-3">
+            <div class="col-md-5">
+                <div class="input-group">
+                    <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+                    <input type="text" name="search" class="form-control" placeholder="Search by name or email..." value="{{ request.args.get('search', '') }}">
+                </div>
+            </div>
+            <div class="col-md-3">
+                <select name="role" class="form-select">
+                    <option value="">All Roles</option>
+                    <option value="patient" {% if request.args.get('role') == 'patient' %}selected{% endif %}>Patient</option>
+                    <option value="nurse" {% if request.args.get('role') == 'nurse' %}selected{% endif %}>Nurse</option>
+                    <option value="admin" {% if request.args.get('role') == 'admin' %}selected{% endif %}>Admin</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <select name="risk" class="form-select">
+                    <option value="">All Risk Status</option>
+                    <option value="HIGH" {% if request.args.get('risk') == 'HIGH' %}selected{% endif %}>High Risk</option>
+                    <option value="LOW" {% if request.args.get('risk') == 'LOW' %}selected{% endif %}>Low Risk</option>
+                </select>
+            </div>
+            <div class="col-md-1">
+                <button type="submit" class="btn btn-primary w-100"><i class="bi bi-funnel"></i></button>
+            </div>
+        </form>
+
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-3">
+                            <a href="?sort=name&dir={{ 'asc' if sort_by == 'name' and sort_dir == 'desc' else 'desc' }}{% if request.args.get('search') %}&search={{ request.args.get('search') }}{% endif %}{% if request.args.get('role') %}&role={{ request.args.get('role') }}{% endif %}{% if request.args.get('risk') %}&risk={{ request.args.get('risk') }}{% endif %}" class="text-decoration-none text-dark">
+                                Name {% if sort_by == 'name' %}<i class="bi bi-arrow-{{ 'up' if sort_dir == 'asc' else 'down' }}"></i>{% endif %}
+                            </a>
+                        </th>
+                        <th>Patient ID</th>
+                        <th>
+                            <a href="?sort=email&dir={{ 'asc' if sort_by == 'email' and sort_dir == 'desc' else 'desc' }}{% if request.args.get('search') %}&search={{ request.args.get('search') }}{% endif %}{% if request.args.get('role') %}&role={{ request.args.get('role') }}{% endif %}{% if request.args.get('risk') %}&risk={{ request.args.get('risk') }}{% endif %}" class="text-decoration-none text-dark">
+                                Email {% if sort_by == 'email' %}<i class="bi bi-arrow-{{ 'up' if sort_dir == 'asc' else 'down' }}"></i>{% endif %}
+                            </a>
+                        </th>
+                        <th>Gender</th>
+                        <th>
+                            <a href="?sort=role&dir={{ 'asc' if sort_by == 'role' and sort_dir == 'desc' else 'desc' }}{% if request.args.get('search') %}&search={{ request.args.get('search') }}{% endif %}{% if request.args.get('role') %}&role={{ request.args.get('role') }}{% endif %}{% if request.args.get('risk') %}&risk={{ request.args.get('risk') }}{% endif %}" class="text-decoration-none text-dark">
+                                Role {% if sort_by == 'role' %}<i class="bi bi-arrow-{{ 'up' if sort_dir == 'asc' else 'down' }}"></i>{% endif %}
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?sort=risk&dir={{ 'asc' if sort_by == 'risk' and sort_dir == 'desc' else 'desc' }}{% if request.args.get('search') %}&search={{ request.args.get('search') }}{% endif %}{% if request.args.get('role') %}&role={{ request.args.get('role') }}{% endif %}{% if request.args.get('risk') %}&risk={{ request.args.get('risk') }}{% endif %}" class="text-decoration-none text-dark">
+                                Risk {% if sort_by == 'risk' %}<i class="bi bi-arrow-{{ 'up' if sort_dir == 'asc' else 'down' }}"></i>{% endif %}
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?sort=last_screening&dir={{ 'asc' if sort_by == 'last_screening' and sort_dir == 'desc' else 'desc' }}{% if request.args.get('search') %}&search={{ request.args.get('search') }}{% endif %}{% if request.args.get('role') %}&role={{ request.args.get('role') }}{% endif %}{% if request.args.get('risk') %}&risk={{ request.args.get('risk') }}{% endif %}" class="text-decoration-none text-dark">
+                                Last Scr. {% if sort_by == 'last_screening' %}<i class="bi bi-arrow-{{ 'up' if sort_dir == 'asc' else 'down' }}"></i>{% endif %}
+                            </a>
+                        </th>
+                        <th class="pe-3">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for u in users %}
+                    <tr>
+                        <td class="ps-3">
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="rounded-circle bg-secondary bg-opacity-10 d-flex align-items-center justify-content-center" style="width:34px;height:34px;">
+                                    <i class="bi bi-person text-secondary"></i>
+                                </div>
+                                <a href="{{ url_for('user_detail', user_id=u.id) }}" class="text-decoration-none fw-semibold">{{ u.name }}</a>
+                            </div>
+                        </td>
+                        <td class="small text-muted font-monospace">{{ u.patient_id or '—' }}</td>
+                        <td class="small text-muted">{{ u.email }}</td>
+                        <td class="small">{{ u.gender or '—' }}</td>
+                        <td>
+                            {% if u.role == 'admin' %}
+                            <span class="badge bg-dark">Admin</span>
+                            {% elif u.role == 'nurse' %}
+                            <span class="badge bg-info text-dark">Nurse</span>
+                            {% else %}
+                            <span class="badge bg-primary">Patient</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if u.risk == 'HIGH' %}
+                            <span class="badge bg-danger">HIGH</span>
+                            {% elif u.risk == 'MODERATE' %}
+                            <span class="badge bg-warning text-dark">MODERATE</span>
+                            {% else %}
+                            <span class="badge bg-success">LOW</span>
+                            {% endif %}
+                        </td>
+                        <td class="small">{{ u.last_screening }}</td>
+                        <td class="pe-3">
+                            <a href="{{ url_for('user_detail', user_id=u.id) }}" class="btn btn-sm btn-outline-primary" title="View">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                            <a href="{{ url_for('user_report', user_id=u.id) }}" class="btn btn-sm btn-outline-secondary" title="Report">
+                                <i class="bi bi-file-text"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="8" class="text-center py-4 text-muted">No users found</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

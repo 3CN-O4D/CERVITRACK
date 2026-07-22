@@ -1,25 +1,61 @@
 {
   "expo": {
     "name": "CERVITRACK",
-    "slug": "CERVITRACK",
+    "slug": "cervitrack",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.ecnord.cervitrack"
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundImage": "./assets/android-icon-background.png"
       },
-      "predictiveBackGestureEnabled": false
+      "package": "com.ecnord.cervitrack",
+      "permissions": [
+        "CAMERA",
+        "INTERNET",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "RECORD_AUDIO",
+        "POST_NOTIFICATIONS",
+        "READ_EXTERNAL_STORAGE",
+        "READ_MEDIA_IMAGES",
+        "VIBRATE",
+        "WAKE_LOCK",
+        "SCHEDULE_EXACT_ALARM"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "newArchEnabled": false
+          },
+          "ios": {
+            "newArchEnabled": false
+          }
+        }
+      ]
+    ],
+  "extra": {
+    "eas": {
+      "projectId": "7c04a79f-c03a-4c9f-9e1e-4e9f147f7cb4"
+    },
+    "EXPO_PUBLIC_SUPABASE_URL": "https://your-project.supabase.co",
+    "EXPO_PUBLIC_SUPABASE_ANON_KEY": "your-anon-key-here",
+    "EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME": "your-cloud-name",
+    "EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET": "your-upload-preset"
+  },
+  "owner": "ecnord"
   }
 }

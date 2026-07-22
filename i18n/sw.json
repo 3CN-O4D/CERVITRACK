@@ -1,0 +1,156 @@
+{
+  "common": {
+    "appName": "CerviTrack",
+    "loading": "Inapakia...",
+    "error": "Hitilafu imetokea",
+    "retry": "Jaribu tena",
+    "save": "Hifadhi",
+    "cancel": "Ghairi",
+    "delete": "Futa",
+    "edit": "Hariri",
+    "back": "Nyuma",
+    "next": "Endelea",
+    "submit": "Wasilisha",
+    "search": "Tafuta",
+    "noData": "Hakuna data"
+  },
+  "auth": {
+    "login": "Ingia",
+    "register": "Jisajili",
+    "email": "Barua pepe",
+    "password": "Nywila",
+    "name": "Jina Kamili",
+    "phone": "Nambari ya Simu",
+    "role": "Wajibu",
+    "signIn": "Ingia",
+    "createAccount": "Unda Akaunti",
+    "forgotPassword": "Umesahau Nywila?",
+    "noAccount": "Huna akaunti?",
+    "hasAccount": "Tayari una akaunti?"
+  },
+  "home": {
+    "welcome": "Karibu",
+    "greeting": "Habari, {{name}}",
+    "yourStatus": "Hali yako ya Uchunguzi",
+    "riskLow": "Hatari ya Chini",
+    "riskHigh": "Hatari ya Juu",
+    "quickActions": "Vitendo vya Haraka"
+  },
+  "profile": {
+    "title": "Wasifu",
+    "editProfile": "Hariri Wasifu",
+    "changePhoto": "Badilisha Picha",
+    "hpvFreeDays": "Siku Bila HPV",
+    "birthDate": "Tarehe ya Kuzaliwa",
+    "lastTreated": "Tarehe ya Mwisho Kutibiwa",
+    "personalInfo": "Taarifa za Kibinafsi",
+    "saveChanges": "Hifadhi Mabadiliko"
+  },
+  "screening": {
+    "title": "Uchunguzi",
+    "startAssessment": "Anza Tathmini",
+    "question1": "Je, unapata damu kutoka ukeni isiyo ya kawaida?",
+    "question2": "Je, umekuwa na maumivu ya pelvic yasiyopungua?",
+    "question3": "Je, unapata maumivu wakati wa tendo la ndoa?",
+    "question4": "Je, umegundua uchafu wa uke usio wa kawaida?",
+    "question5": "Je, una historia ya saratani ya shingo ya kizazi kwenye familia?",
+    "question6": "Je, umekuwa na washirika wengi wa ngono?",
+    "question7": "Je, unavuta sigara au kutumia tumbaku?",
+    "question8": "Je, umewahi kupatiwa chanjo ya HPV?",
+    "question9": "Je, umewahi kupata matokeo yasiyo ya kawaida ya Pap smear?",
+    "question10": "Je, unapata maumivu ya mgongo wa chini?",
+    "resultLow": "Uchunguzi wako unaonyesha hatari ya chini. Endelea na ukaguzi wa kawaida.",
+    "resultHigh": "Uchunguzi wako unaonyesha hatari kubwa. Tafadhali wasiliana na mtaalamu wa afya mara moja.",
+    "doctorNote": "Ujumbe wa Daktari"
+  },
+  "vaccine": {
+    "title": "Chanjo",
+    "schedule": "Ratiba ya Chanjo",
+    "setReminder": "Weka Kikumbusho",
+    "alarm": "Kengele",
+    "noVaccines": "Hakuna chanjo zilizopangwa",
+    "hospitalData": "Taarifa za Hospitali",
+    "dayBefore": "Siku 1 kabla",
+    "dayOf": "Siku ya chanjo"
+  },
+  "sampling": {
+    "title": "Kujichukulia Sampuli",
+    "step1": "Hatua 1: Osha mikono yako vizuri",
+    "step2": "Hatua 2: Fungua kifaa cha sampuli kwa uangalifu",
+    "step3": "Hatua 3: Ingiza usufi kwa mujibu wa maelekezo",
+    "step4": "Hatua 4: Weka usufi kwenye chombo kilichotolewa",
+    "step5": "Hatua 5: Funga na rudisha sampuli kwenye kliniki"
+  },
+  "facility": {
+    "title": "Vituo vya Afya",
+    "nearestFacility": "Kituo cha Karibu",
+    "bookAppointment": "Panga Uteuzi",
+    "callNow": "Piga Sasa",
+    "directions": "Pata Mwelekeo"
+  },
+  "telehealth": {
+    "title": "Huduma ya Mbali",
+    "startChat": "Anza Mazungumzo",
+    "messageHint": "Andika ujumbe...",
+    "expertOnline": "Mtaalamu Yuko Mtandaoni",
+    "expertOffline": "Mtaalamu Hayuko Mtandaoni"
+  },
+  "library": {
+    "title": "Maktaba ya Afya",
+    "categories": "Kategoria",
+    "readMore": "Soma Zaidi",
+    "searchDocuments": "Tafuta nyaraka..."
+  },
+  "notifications": {
+    "title": "Arifa",
+    "markAllRead": "Weka Zote Kama Zimesomwa",
+    "noNotifications": "Hakuna arifa"
+  },
+  "settings": {
+    "title": "Mipangilio",
+    "darkMode": "Hali ya Giza",
+    "language": "Lugha",
+    "about": "Kuhusu",
+    "logout": "Toka"
+  },
+  "admin": {
+    "title": "Dashibodi ya Msimamizi",
+    "dashboard": "Dashibodi",
+    "users": "Watumiaji",
+    "atRisk": "Walio Hatarini",
+    "healthy": "Wenye Afya",
+    "generateReport": "Tengeneza Ripoti",
+    "sendNotification": "Tuma Arifa",
+    "stats": "Takwimu",
+    "totalUsers": "Jumla ya Watumiaji",
+    "screeningsToday": "Uchunguzi Leo",
+    "riskAlerts": "Tahadhari za Hatari"
+  },
+  "stats": {
+    "today": "Leo",
+    "thisWeek": "Wiki Hii",
+    "thisMonth": "Mwezi Huu",
+    "threeMonths": "Miezi 3",
+    "sixMonths": "Miezi 6",
+    "oneYear": "Mwaka 1"
+  },
+  "status": {
+    "collected": "Imekusanywa",
+    "submitted": "Imewasilishwa",
+    "receivedByLab": "Imepokelewa na Maabara",
+    "testing": "Inachunguzwa",
+    "resultsReady": "Matokeo Yako"
+  },
+  "risk": {
+    "low": "Chini",
+    "moderate": "Wastani",
+    "high": "Juu"
+  },
+  "roles": {
+    "patient": "Mgonjwa",
+    "chw": "Mfanyakazi wa Afya ya Jamii",
+    "nurse": "Muuguzi",
+    "lab": "Mtaalamu wa Maabara",
+    "admin": "Msimamizi"
+  }
+}

@@ -1,0 +1,277 @@
+{% extends "base.html" %}
+{% block title %}Chats{% endblock %}
+{% block page_subtitle %}Patient Messaging{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center">
+    <h1 class="page-title"><i class="bi bi-chat-dots me-2"></i>Messages</h1>
+</div>
+
+<div class="row g-0 border rounded-3 overflow-hidden shadow-sm" style="height: calc(100vh - 200px);">
+    <div class="col-4 border-end d-flex flex-column" style="background: #fff;">
+        <div class="p-3 border-bottom d-flex justify-content-between align-items-center" style="background: #f0f2f5;">
+            <h6 class="fw-bold mb-0"><i class="bi bi-chat-dots me-2"></i>Chats</h6>
+            <button class="btn btn-sm btn-outline-primary rounded-pill" data-bs-toggle="modal" data-bs-target="#newChatModal">
+                <i class="bi bi-plus-lg"></i> New
+            </button>
+        </div>
+        <div class="flex-grow-1 overflow-auto">
+            {% if conversations %}
+                {% for conv in conversations %}
+                <div class="conversation-item p-3 border-bottom d-flex align-items-center {% if selected_conv_id == conv.id|string %}selected{% endif %}"
+                     onclick="selectConversation('{{ conv.id }}', '{{ conv.user_name|e }}', '{{ conv.contact_name|e }}', '{{ conv.user_id }}')"
+                     style="cursor: pointer; transition: background 0.15s;">
+                    <div class="avatar-sm rounded-circle d-flex align-items-center justify-content-center text-white fw-bold me-3 flex-shrink-0"
+                         style="width: 48px; height: 48px; font-size: 16px; background: {% if conv.online %}#25D366{% else %}#bbb{% endif %};">
+                        {{ (conv.user_name or conv.contact_name)[:2]|upper }}
+                    </div>
+                    <div class="flex-grow-1 min-width-0">
+                        <div class="d-flex justify-content-between">
+                            <strong class="text-truncate">{{ conv.user_name }}</strong>
+                            <small class="text-muted text-nowrap ms-2" style="font-size: 11px;">{{ conv.last_time[:10] if conv.last_time else '' }}</small>
+                        </div>
+                        <div class="small text-muted">
+                            {% if conv.online %}<span class="text-success" style="font-size: 10px;">● online</span>{% endif %}
+                            <span class="text-secondary" style="font-size: 10px;">{{ conv.contact_role }}</span>
+                        </div>
+                        <div class="text-truncate small text-secondary" style="font-size: 13px;">{{ conv.last_message or 'No messages yet' }}</div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="p-4 text-center text-muted">
+                    <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                    No conversations yet
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="col-8 d-flex flex-column" style="background: #efeae2;">
+        <div class="p-3 border-bottom d-flex align-items-center" id="chatHeader" style="background: #f0f2f5; display: none !important;">
+            <div class="avatar-sm rounded-circle d-flex align-items-center justify-content-center text-white fw-bold me-3 flex-shrink-0"
+                 style="width: 40px; height: 40px; font-size: 14px; background: #25D366;" id="chatAvatar">?</div>
+            <div class="flex-grow-1">
+                <strong id="chatTitle">Select a conversation</strong>
+                <div class="small text-muted" id="chatSubtitle"></div>
+            </div>
+            <a href="#" id="viewProfileLink" class="btn btn-sm btn-outline-secondary rounded-pill ms-2" style="display:none;">
+                <i class="bi bi-person"></i> Profile
+            </a>
+        </div>
+        <div class="flex-grow-1 overflow-auto p-3" id="chatMessages"
+             style="background-image: url('data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cpath d=\'M30 5 L35 15 L45 15 L37 22 L40 32 L30 27 L20 32 L23 22 L15 15 L25 15 Z\' fill=\'%23e0ddd6\' fill-opacity=\'0.3\'/%3E%3C/svg%3E');">
+            <div class="text-center text-muted py-5">
+                <i class="bi bi-chat-square-dots fs-1 d-block mb-2"></i>
+                <p>Select a conversation to start messaging</p>
+            </div>
+        </div>
+        <div class="p-3" id="chatInput" style="background: #f0f2f5; display: none;">
+            <form id="messageForm" onsubmit="return sendMessage(event)" class="d-flex gap-2">
+                <input type="hidden" id="activeConvId" value="">
+                <input type="hidden" id="activeUserId" value="">
+                <input type="text" class="form-control rounded-pill border-0" id="messageInput"
+                       placeholder="Type a message..." required style="background: #fff; padding: 10px 16px;">
+                <button type="submit" class="btn rounded-circle d-flex align-items-center justify-content-center"
+                        style="width: 44px; height: 44px; background: #25D366; color: white; border: none;">
+                    <i class="bi bi-send-fill"></i>
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="newChatModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-person-plus me-2"></i>New Conversation</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="{{ url_for('chat_start') }}" method="POST">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Select Patient</label>
+                        <select name="user_id" class="form-select" required>
+                            <option value="">-- Choose a patient --</option>
+                            {% for u in users if u.role == 'patient' %}
+                            <option value="{{ u.id }}">{{ u.name }} ({{ u.email }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Assign Staff</label>
+                        <select name="contact_id" class="form-select" required>
+                            <option value="">-- Choose staff --</option>
+                            {% for u in users if u.role in ('nurse','admin','chw') %}
+                            <option value="{{ u.id }}">{{ u.name }} ({{ u.role|capitalize }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Initial Message</label>
+                        <textarea name="message" class="form-control" rows="2" placeholder="Optional: send a first message..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-chat-dots me-1"></i>Start Chat</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let activeConvId = null;
+let activeUserId = null;
+let pollInterval = null;
+
+function scrollToBottom() {
+    const el = document.getElementById('chatMessages');
+    if (el) el.scrollTop = el.scrollHeight;
+}
+
+function selectConversation(convId, userName, contactName, userId) {
+    activeConvId = convId;
+    activeUserId = userId;
+    document.getElementById('activeConvId').value = convId;
+    document.getElementById('activeUserId').value = userId || '';
+
+    const header = document.getElementById('chatHeader');
+    header.style.display = 'flex';
+    document.getElementById('chatTitle').textContent = userName;
+    document.getElementById('chatSubtitle').textContent = contactName;
+
+    const chatAvatar = document.getElementById('chatAvatar');
+    chatAvatar.textContent = (userName || '??').slice(0, 2).toUpperCase();
+
+    const profileLink = document.getElementById('viewProfileLink');
+    if (userId) {
+        profileLink.style.display = 'inline-flex';
+        profileLink.href = '/user/' + userId;
+    } else {
+        profileLink.style.display = 'none';
+    }
+
+    document.getElementById('chatInput').style.display = 'block';
+
+    const msgContainer = document.getElementById('chatMessages');
+    msgContainer.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-secondary" role="status"></div></div>';
+
+    loadMessages(convId);
+
+    if (pollInterval) clearInterval(pollInterval);
+    pollInterval = setInterval(() => loadMessages(convId, true), 5000);
+}
+
+function loadMessages(convId, silent) {
+    fetch(`/api/chats?conversation_id=${convId}`)
+        .then(r => r.json())
+        .then(messages => {
+            if (!silent) renderMessages(messages);
+            else {
+                const container = document.getElementById('chatMessages');
+                const existing = container.querySelectorAll('.message-bubble');
+                if (messages.length !== existing.length) renderMessages(messages);
+            }
+        })
+        .catch(() => {});
+}
+
+function renderMessages(messages) {
+    const container = document.getElementById('chatMessages');
+    if (!messages || messages.length === 0) {
+        container.innerHTML = '<div class="text-center text-muted py-5"><i class="bi bi-chat fs-1 d-block mb-2"></i>No messages yet.<br><small>Send a message to start the conversation.</small></div>';
+        return;
+    }
+    container.innerHTML = '';
+    messages.forEach((m, i) => {
+        const isStaff = m.sender_type === 'staff';
+        const div = document.createElement('div');
+        div.className = `d-flex ${isStaff ? 'justify-content-end' : 'justify-content-start'} mb-2 message-bubble`;
+        const prevMsg = messages[i - 1];
+        const showAvatar = !isStaff && (!prevMsg || prevMsg.sender_type === 'staff');
+        div.innerHTML = `
+            <div class="d-flex ${isStaff ? '' : 'flex-row-reverse'}" style="max-width: 75%;">
+                ${showAvatar ? '<div class="avatar-xs rounded-circle d-flex align-items-center justify-content-center text-white fw-bold me-2 mt-1 flex-shrink-0" style="width: 28px; height: 28px; font-size: 10px; background: #25D366;">' + (messages[0]?.sender_name?.[0] || '?') + '</div>' : '<div style="width: 36px;" class="flex-shrink-0"></div>'}
+                <div class="p-2 px-3 rounded-3 ${isStaff ? 'bg-white' : 'bg-white'}" style="box-shadow: 0 1px 1px rgba(0,0,0,0.05); ${isStaff ? '' : 'border-top-right-radius: 4px !important;'}">
+                    <div style="font-size: 14px; color: #111b21;">${escapeHtml(m.content || '')}</div>
+                    <div class="d-flex justify-content-end align-items-center gap-1" style="margin-top: 2px;">
+                        <small style="font-size: 11px; color: #667781;">${m.created_at ? m.created_at.slice(11, 16) : ''}</small>
+                        ${m.status === 'read' ? '<small style="color: #53bdeb; font-size: 11px;">✓✓</small>' : ''}
+                        ${m.status === 'delivered' ? '<small style="color: #8696a0; font-size: 11px;">✓✓</small>' : ''}
+                        ${m.status === 'sent' || !m.status ? '<small style="color: #8696a0; font-size: 11px;">✓</small>' : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+        container.appendChild(div);
+    });
+    scrollToBottom();
+}
+
+function sendMessage(e) {
+    e.preventDefault();
+    const convId = document.getElementById('activeConvId').value;
+    const input = document.getElementById('messageInput');
+    const content = input.value.trim();
+    if (!content || !convId) return false;
+
+    input.value = '';
+    const container = document.getElementById('chatMessages');
+
+    const emptyState = container.querySelector('.text-center.text-muted.py-5');
+    if (emptyState) container.innerHTML = '';
+
+    const div = document.createElement('div');
+    div.className = 'd-flex justify-content-end mb-2 message-bubble';
+    div.innerHTML = `
+        <div style="max-width: 75%;">
+            <div class="p-2 px-3 rounded-3 bg-white" style="box-shadow: 0 1px 1px rgba(0,0,0,0.05);">
+                <div style="font-size: 14px; color: #111b21;">${escapeHtml(content)}</div>
+                <div class="d-flex justify-content-end align-items-center gap-1" style="margin-top: 2px;">
+                    <small style="font-size: 11px; color: #667781;">now</small>
+                    <small style="color: #8696a0; font-size: 11px;">✓</small>
+                </div>
+            </div>
+        </div>
+    `;
+    container.appendChild(div);
+    scrollToBottom();
+
+    fetch('/api/chats/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversation_id: parseInt(convId), content, sender_id: 0 }),
+    }).then(r => r.json()).catch(() => {});
+
+    return false;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+{% if selected_conv_id %}
+document.addEventListener('DOMContentLoaded', function() {
+    selectConversation('{{ selected_conv_id }}', '{{ selected_user_name|e }}', '{{ selected_contact_name|e }}', '{{ selected_user_id }}');
+});
+{% endif %}
+</script>
+<style>
+.conversation-item:hover { background: #f5f6f6; }
+.conversation-item.selected { background: #f0f2f5; }
+[data-bs-theme="dark"] .conversation-item:hover { background: #2d3139; }
+[data-bs-theme="dark"] .conversation-item.selected { background: #2d3139; }
+[data-bs-theme="dark"] .bg-white { background: #1f232a !important; }
+[data-bs-theme="dark"] #chatMessages .bg-white { background: #2d3139 !important; color: #e6edf3; }
+[data-bs-theme="dark"] #chatMessages [style*="color: #111b21"] { color: #e6edf3 !important; }
+[data-bs-theme="dark"] [style*="background: #f0f2f5"] { background: #161a1f !important; }
+[data-bs-theme="dark"] [style*="background: #efeae2"] { background: #0d1117 !important; }
+</style>
+{% endblock %}

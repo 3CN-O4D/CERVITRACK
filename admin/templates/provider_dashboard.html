@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}Provider Dashboard{% endblock %}
+{% block page_subtitle %}Patient Management{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Provider Dashboard</h1>
+    <div class="d-flex align-items-center gap-2">
+        <span class="badge bg-info fs-6 px-3 py-2">
+            <i class="bi bi-person-badge me-1"></i> {{ provider_name }}
+        </span>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+        <form method="GET" action="{{ url_for('provider_dashboard') }}" class="row g-2 align-items-end">
+            <div class="col-md-5">
+                <label class="form-label small fw-semibold text-muted mb-1"><i class="bi bi-person me-1"></i>Patient Name</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+                    <input type="text" name="search" class="form-control" placeholder="Search by name, phone..." value="{{ request.args.get('search', '') }}">
+                </div>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-semibold text-muted mb-1"><i class="bi bi-geo-alt me-1"></i>Location</label>
+                <select name="location" class="form-select">
+                    <option value="">All locations</option>
+                    <option value="Nairobi" {% if request.args.get('location') == 'Nairobi' %}selected{% endif %}>Nairobi</option>
+                    <option value="Mombasa" {% if request.args.get('location') == 'Mombasa' %}selected{% endif %}>Mombasa</option>
+                    <option value="Kisumu" {% if request.args.get('location') == 'Kisumu' %}selected{% endif %}>Kisumu</option>
+                    <option value="Kiambu" {% if request.args.get('location') == 'Kiambu' %}selected{% endif %}>Kiambu</option>
+                    <option value="Nakuru" {% if request.args.get('location') == 'Nakuru' %}selected{% endif %}>Nakuru</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-semibold text-muted mb-1"><i class="bi bi-exclamation-triangle me-1"></i>Risk Index</label>
+                <select name="risk" class="form-select">
+                    <option value="">All risks</option>
+                    <option value="HIGH" {% if request.args.get('risk') == 'HIGH' %}selected{% endif %} class="text-danger fw-semibold">🔴 High</option>
+                    <option value="MODERATE" {% if request.args.get('risk') == 'MODERATE' %}selected{% endif %} class="text-warning fw-semibold">🟡 Moderate</option>
+                    <option value="LOW" {% if request.args.get('risk') == 'LOW' %}selected{% endif %} class="text-success fw-semibold">🟢 Low</option>
+                </select>
+            </div>
+            <div class="col-md-2 d-flex gap-1">
+                <button type="submit" class="btn btn-primary w-100"><i class="bi bi-search me-1"></i> Search</button>
+                <a href="{{ url_for('provider_dashboard') }}" class="btn btn-outline-secondary" title="Clear filters"><i class="bi bi-x-lg"></i></a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+        <h6 class="fw-bold mb-0"><i class="bi bi-people me-2"></i>Patients</h6>
+        <span class="badge bg-secondary">{{ patients|length }} patient{% if patients|length != 1 %}s{% endif %}</span>
+    </div>
+    <div class="card-body p-0">
+        {% if patients %}
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-3 small">Patient ID</th>
+                        <th class="small">Name</th>
+                        <th class="small">Phone</th>
+                        <th class="small">County</th>
+                        <th class="small">Risk Index</th>
+                        <th class="small">Last Screening</th>
+                        <th class="pe-3 small">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in patients %}
+                    <tr>
+                        <td class="ps-3 small text-muted">{{ p.id or p.patient_id or '—' }}</td>
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="rounded-circle bg-success bg-opacity-10 d-flex align-items-center justify-content-center" style="width:34px;height:34px;">
+                                    <i class="bi bi-person text-success"></i>
+                                </div>
+                                <a href="{{ url_for('provider_patient', patient_id=p.id or p.patient_id) }}" class="text-decoration-none fw-semibold">
+                                    {{ p.name or p.full_name or 'Unknown' }}
+                                </a>
+                            </div>
+                        </td>
+                        <td class="small">{{ p.phone or p.phone_number or '—' }}</td>
+                        <td class="small">{{ p.county or p.location or '—' }}</td>
+                        <td>
+                            {% set risk = (p.risk or p.risk_tier or p.risk_index or 'LOW')|upper %}
+                            {% if risk == 'HIGH' %}
+                            <span class="badge bg-danger">HIGH</span>
+                            {% elif risk == 'MODERATE' %}
+                            <span class="badge bg-warning text-dark">MODERATE</span>
+                            {% else %}
+                            <span class="badge bg-success">LOW</span>
+                            {% endif %}
+                        </td>
+                        <td class="small">{{ p.last_screening or p.last_screening_date or 'Never' }}</td>
+                        <td class="pe-3">
+                            <a href="{{ url_for('provider_patient', patient_id=p.id or p.patient_id) }}" class="btn btn-sm btn-outline-primary" title="View Patient">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                            <a href="{{ url_for('provider_messages', patient_id=p.id or p.patient_id) }}" class="btn btn-sm btn-outline-info" title="Messages">
+                                <i class="bi bi-chat-dots"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5 text-muted">
+            <i class="bi bi-inbox fs-1 d-block mb-3"></i>
+            <p class="fw-semibold">No patients found</p>
+            {% if request.args.get('search') %}
+            <p class="small">Try a different search term</p>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

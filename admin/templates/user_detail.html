@@ -1,0 +1,322 @@
+{% extends "base.html" %}
+{% block title %}{{ user.name }}{% endblock %}
+{% block page_subtitle %}User Profile &amp; Records{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">{{ user.name }}</h1>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('user_report', user_id=user.id) }}" class="btn btn-primary btn-sm">
+            <i class="bi bi-file-text"></i> Generate Report
+        </a>
+        <a href="{{ url_for('users') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left"></i> Back to Users
+        </a>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-4">
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-body text-center">
+                <div class="mx-auto rounded-circle bg-primary bg-opacity-10 d-flex align-items-center justify-content-center mb-3" style="width:80px;height:80px;">
+                    <i class="bi bi-person fs-1 text-primary"></i>
+                </div>
+                <h5 class="fw-bold mb-1">{{ user.name }}</h5>
+                <p class="text-muted small mb-2">{{ user.email }}</p>
+                {% if user.role == 'admin' %}
+                <span class="badge bg-dark">Admin</span>
+                {% elif user.role == 'nurse' %}
+                <span class="badge bg-info text-dark">Nurse</span>
+                {% else %}
+                <span class="badge bg-primary">Patient</span>
+                {% endif %}
+                <hr>
+                <div class="text-start small">
+                    <div class="mb-2"><i class="bi bi-telephone me-2 text-muted"></i>{{ user.phone }}</div>
+                    <div class="mb-2"><i class="bi bi-calendar me-2 text-muted"></i>DOB: {{ user.birthDate }}</div>
+                    {% if user.lastHealedDate %}
+                    <div><i class="bi bi-heart-pulse me-2 text-muted"></i>Last healed: {{ user.lastHealedDate }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-body text-center">
+                <div class="display-4 fw-bold text-success">{{ user.hpv_free_days }}</div>
+                <div class="text-muted small fw-semibold">Days HPV-Free</div>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white border-0 py-3">
+                <h6 class="fw-bold mb-0"><i class="bi bi-bell me-2"></i>Send Notification</h6>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('user_notify', user_id=user.id) }}">
+                    <div class="mb-2">
+                        <label class="form-label small fw-semibold">Title</label>
+                        <input type="text" name="title" class="form-control form-control-sm" placeholder="e.g. Screening Reminder" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Message</label>
+                        <textarea name="message" class="form-control form-control-sm" rows="3" placeholder="Type your message..." required></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-sm w-100">
+                        <i class="bi bi-send"></i> Send Notification
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-8">
+        <ul class="nav nav-tabs mb-3" id="userTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="screenings-tab" data-bs-toggle="tab" data-bs-target="#screenings" type="button" role="tab">
+                    <i class="bi bi-clock-history me-1"></i>Screenings
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="vaccines-tab" data-bs-toggle="tab" data-bs-target="#vaccines" type="button" role="tab">
+                    <i class="bi bi-syringe me-1"></i>Vaccines
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="appointments-tab" data-bs-toggle="tab" data-bs-target="#appointments" type="button" role="tab">
+                    <i class="bi bi-calendar-check me-1"></i>Appointments
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="lab-tab" data-bs-toggle="tab" data-bs-target="#lab_results" type="button" role="tab">
+                    <i class="bi bi-flask me-1"></i>Lab Results
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="followups-tab" data-bs-toggle="tab" data-bs-target="#followups" type="button" role="tab">
+                    <i class="bi bi-clipboard-check me-1"></i>Follow-ups
+                </button>
+            </li>
+        </ul>
+
+        <div class="tab-content">
+            <div class="tab-pane fade show active" id="screenings" role="tabpanel">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white border-0 py-3">
+                        <h6 class="fw-bold mb-0"><i class="bi bi-clock-history me-2"></i>Screening History</h6>
+                    </div>
+                    <div class="card-body p-0">
+                        {% if screenings %}
+                        <div class="list-group list-group-flush">
+                            {% for s in screenings %}
+                            <div class="list-group-item px-3 py-3 border-0 border-bottom">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <div class="fw-semibold">{{ s.date }}</div>
+                                        <div class="small text-muted">{{ s.verdict }} &middot; {{ s.risk_tier }} risk</div>
+                                    </div>
+                                    <div>
+                                        {% if s.risk_tier == 'HIGH' %}
+                                        <span class="badge bg-danger">{{ s.verdict }}</span>
+                                        {% else %}
+                                        <span class="badge bg-success">{{ s.verdict }}</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <div class="text-center py-4 text-muted">
+                            <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+                            No screening records found
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="vaccines" role="tabpanel">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white border-0 py-3">
+                        <h6 class="fw-bold mb-0"><i class="bi bi-syringe me-2"></i>Vaccines</h6>
+                    </div>
+                    <div class="card-body p-0">
+                        {% if vaccines %}
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="ps-3 small">Vaccine</th>
+                                        <th class="small">Hospital</th>
+                                        <th class="small">Date</th>
+                                        <th class="pe-3 small">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for v in vaccines %}
+                                    <tr>
+                                        <td class="ps-3 fw-semibold small">{{ v.name }}</td>
+                                        <td class="small">{{ v.hospital }}</td>
+                                        <td class="small">{{ v.date }}</td>
+                                        <td class="pe-3">
+                                            {% if v.status == 'done' %}
+                                            <span class="badge bg-success">Done</span>
+                                            {% elif v.status == 'missed' %}
+                                            <span class="badge bg-danger">Missed</span>
+                                            {% else %}
+                                            <span class="badge bg-warning text-dark">Upcoming</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="text-center py-4 text-muted">
+                            <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+                            No vaccines recorded
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="appointments" role="tabpanel">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white border-0 py-3">
+                        <h6 class="fw-bold mb-0"><i class="bi bi-calendar-check me-2"></i>Appointments</h6>
+                    </div>
+                    <div class="card-body p-0">
+                        {% if appointments %}
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="ps-3 small">Title</th>
+                                        <th class="small">Facility</th>
+                                        <th class="small">Date</th>
+                                        <th class="small">Notes</th>
+                                        <th class="pe-3 small">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for a in appointments %}
+                                    <tr>
+                                        <td class="ps-3 fw-semibold small">{{ a.title }}</td>
+                                        <td class="small">{{ a.facility }}</td>
+                                        <td class="small">{{ a.date }}</td>
+                                        <td class="small text-muted" style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ a.notes or '-' }}</td>
+                                        <td class="pe-3">
+                                            {% if a.status == 'completed' %}
+                                            <span class="badge bg-success">Completed</span>
+                                            {% elif a.status == 'cancelled' %}
+                                            <span class="badge bg-danger">Cancelled</span>
+                                            {% else %}
+                                            <span class="badge bg-warning text-dark">Upcoming</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="text-center py-4 text-muted">
+                            <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+                            No appointments found
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="lab_results" role="tabpanel">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white border-0 py-3">
+                        <h6 class="fw-bold mb-0"><i class="bi bi-flask me-2"></i>Lab Results</h6>
+                    </div>
+                    <div class="card-body p-0">
+                        {% if lab_results %}
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="ps-3 small">Patient</th>
+                                        <th class="small">Result</th>
+                                        <th class="small">Notes</th>
+                                        <th class="pe-3 small">Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for l in lab_results %}
+                                    <tr>
+                                        <td class="ps-3 fw-semibold small">{{ l.patient_name }}</td>
+                                        <td class="small">{{ l.result }}</td>
+                                        <td class="small text-muted" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ l.notes or '-' }}</td>
+                                        <td class="pe-3 small text-muted">{{ l.date }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="text-center py-4 text-muted">
+                            <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+                            No lab results found
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="followups" role="tabpanel">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white border-0 py-3">
+                        <h6 class="fw-bold mb-0"><i class="bi bi-clipboard-check me-2"></i>Follow-ups</h6>
+                    </div>
+                    <div class="card-body p-0">
+                        {% if followups %}
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="ps-3 small">Screening ID</th>
+                                        <th class="small">Status</th>
+                                        <th class="small">Completed At</th>
+                                        <th class="pe-3 small">Notes</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for f in followups %}
+                                    <tr>
+                                        <td class="ps-3 small">{{ f.screening_id }}</td>
+                                        <td>
+                                            {% if f.completed %}
+                                            <span class="badge bg-success">Completed</span>
+                                            {% else %}
+                                            <span class="badge bg-warning text-dark">Pending</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="small text-muted">{{ f.completed_at or '-' }}</td>
+                                        <td class="pe-3 small text-muted">{{ f.notes or '-' }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="text-center py-4 text-muted">
+                            <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+                            No follow-ups found
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

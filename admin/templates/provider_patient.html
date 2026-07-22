@@ -1,0 +1,342 @@
+{% extends "base.html" %}
+{% block title %}{{ patient.get('name', patient.get('full_name', 'Patient')) }}{% endblock %}
+{% block page_subtitle %}Patient Profile &amp; Medical History{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">{{ patient.get('name', patient.get('full_name', 'Patient')) }}</h1>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('provider_messages', patient_id=patient.get('id', patient.get('patient_id', 0))) }}" class="btn btn-info btn-sm text-white">
+            <i class="bi bi-chat-dots"></i> View Messages
+        </a>
+        <a href="{{ url_for('provider_schedule_form', patient_id=patient.get('id', patient.get('patient_id', 0))) }}" class="btn btn-primary btn-sm">
+            <i class="bi bi-calendar-plus"></i> Schedule Action
+        </a>
+        <a href="{{ url_for('provider_dashboard') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left"></i> Back to Patients
+        </a>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-4">
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-body text-center">
+                <div class="mx-auto rounded-circle bg-success bg-opacity-10 d-flex align-items-center justify-content-center mb-3" style="width:80px;height:80px;">
+                    <i class="bi bi-person fs-1 text-success"></i>
+                </div>
+                <h5 class="fw-bold mb-1">{{ patient.get('name', patient.get('full_name', 'Patient')) }}</h5>
+                <p class="text-muted small mb-2">{{ patient.get('email', '') }}</p>
+                {% set risk = (patient.get('risk', patient.get('risk_tier', patient.get('risk_index', 'LOW'))))|upper %}
+                {% if risk == 'HIGH' %}
+                <span class="badge bg-danger">HIGH RISK</span>
+                {% elif risk == 'MODERATE' %}
+                <span class="badge bg-warning text-dark">MODERATE RISK</span>
+                {% else %}
+                <span class="badge bg-success">LOW RISK</span>
+                {% endif %}
+                <hr>
+                <div class="text-start small">
+                    {% if patient.get('phone') or patient.get('phone_number') %}
+                    <div class="mb-2"><i class="bi bi-telephone me-2 text-muted"></i>{{ patient.get('phone') or patient.get('phone_number') }}</div>
+                    {% endif %}
+                    {% if patient.get('county') or patient.get('location') %}
+                    <div class="mb-2"><i class="bi bi-geo-alt me-2 text-muted"></i>{{ patient.get('county') or patient.get('location') }}</div>
+                    {% endif %}
+                    {% if patient.get('age') or patient.get('birthDate') or patient.get('dob') %}
+                    <div class="mb-2"><i class="bi bi-calendar me-2 text-muted"></i>{% if patient.get('age') %}Age: {{ patient.age }}{% else %}DOB: {{ patient.get('birthDate') or patient.get('dob') }}{% endif %}</div>
+                    {% endif %}
+                    {% if patient.get('gender') %}
+                    <div class="mb-2"><i class="bi bi-gender-ambiguous me-2 text-muted"></i>{{ patient.gender }}</div>
+                    {% endif %}
+                    {% if patient.get('lastHealedDate') or patient.get('last_healed') %}
+                    <div><i class="bi bi-heart-pulse me-2 text-muted"></i>Last healed: {{ patient.get('lastHealedDate') or patient.get('last_healed') }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        {% if patient.get('hpv_free_days') %}
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-body text-center">
+                <div class="display-4 fw-bold text-success">{{ patient.hpv_free_days }}</div>
+                <div class="text-muted small fw-semibold">Days HPV-Free</div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white border-0 py-3">
+                <h6 class="fw-bold mb-0"><i class="bi bi-bell me-2"></i>Send Notification</h6>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('provider_notify', patient_id=patient.get('id', patient.get('patient_id', 0))) }}">
+                    <div class="mb-2">
+                        <label class="form-label small fw-semibold">Title</label>
+                        <input type="text" name="title" class="form-control form-control-sm" placeholder="e.g. Screening Reminder" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Message</label>
+                        <textarea name="message" class="form-control form-control-sm" rows="3" placeholder="Type your message..." required></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-success btn-sm w-100">
+                        <i class="bi bi-send"></i> Send Notification
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-8">
+        <ul class="nav nav-tabs mb-3" id="patientTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="screenings-tab" data-bs-toggle="tab" data-bs-target="#screenings" type="button" role="tab">
+                    <i class="bi bi-clock-history me-1"></i>Screenings
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="vaccines-tab" data-bs-toggle="tab" data-bs-target="#vaccines" type="button" role="tab">
+                    <i class="bi bi-syringe me-1"></i>Vaccines
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="appointments-tab" data-bs-toggle="tab" data-bs-target="#appointments" type="button" role="tab">
+                    <i class="bi bi-calendar-check me-1"></i>Appointments
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="lab-tab" data-bs-toggle="tab" data-bs-target="#lab_results" type="button" role="tab">
+                    <i class="bi bi-flask me-1"></i>Lab Results
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="tests-tab" data-bs-toggle="tab" data-bs-target="#test_results" type="button" role="tab">
+                    <i class="bi bi-test-tube me-1"></i>Test Results
+                </button>
+            </li>
+        </ul>
+
+        <div class="tab-content">
+            <div class="tab-pane fade show active" id="screenings" role="tabpanel">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white border-0 py-3">
+                        <h6 class="fw-bold mb-0"><i class="bi bi-clock-history me-2"></i>Screening History</h6>
+                    </div>
+                    <div class="card-body p-0">
+                        {% set screenings = patient.get('screenings', patient.get('screening_history', [])) %}
+                        {% if screenings %}
+                        <div class="list-group list-group-flush">
+                            {% for s in screenings %}
+                            <div class="list-group-item px-3 py-3 border-0 border-bottom">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <div class="fw-semibold">{{ s.get('date', s.get('screening_date', '—')) }}</div>
+                                        <div class="small text-muted">{{ s.get('verdict', s.get('result', '—')) }} &middot; {{ s.get('risk_tier', s.get('risk', '—')) }} risk</div>
+                                    </div>
+                                    {% set sv = (s.get('verdict', s.get('result', '')))|upper %}
+                                    <div>
+                                        {% if sv == 'POSITIVE' %}
+                                        <span class="badge bg-danger">{{ sv }}</span>
+                                        {% else %}
+                                        <span class="badge bg-success">{{ sv if sv else 'NEGATIVE' }}</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <div class="text-center py-4 text-muted">
+                            <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+                            No screening records found
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="vaccines" role="tabpanel">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white border-0 py-3">
+                        <h6 class="fw-bold mb-0"><i class="bi bi-syringe me-2"></i>Vaccination History</h6>
+                    </div>
+                    <div class="card-body p-0">
+                        {% set vaccines = patient.get('vaccines', patient.get('vaccination_history', [])) %}
+                        {% if vaccines %}
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="ps-3 small">Vaccine</th>
+                                        <th class="small">Hospital</th>
+                                        <th class="small">Date</th>
+                                        <th class="pe-3 small">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for v in vaccines %}
+                                    <tr>
+                                        <td class="ps-3 fw-semibold small">{{ v.get('name', v.get('vaccine_name', '—')) }}</td>
+                                        <td class="small">{{ v.get('hospital', v.get('facility', '—')) }}</td>
+                                        <td class="small">{{ v.get('date', v.get('vaccine_date', '—')) }}</td>
+                                        <td class="pe-3">
+                                            {% set vs = v.get('status', '').lower() %}
+                                            {% if vs == 'done' or vs == 'completed' %}
+                                            <span class="badge bg-success">Done</span>
+                                            {% elif vs == 'missed' %}
+                                            <span class="badge bg-danger">Missed</span>
+                                            {% else %}
+                                            <span class="badge bg-warning text-dark">Upcoming</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="text-center py-4 text-muted">
+                            <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+                            No vaccination records found
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="appointments" role="tabpanel">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white border-0 py-3">
+                        <h6 class="fw-bold mb-0"><i class="bi bi-calendar-check me-2"></i>Appointment History</h6>
+                    </div>
+                    <div class="card-body p-0">
+                        {% set appointments = patient.get('appointments', patient.get('appointment_history', [])) %}
+                        {% if appointments %}
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="ps-3 small">Title</th>
+                                        <th class="small">Facility</th>
+                                        <th class="small">Date</th>
+                                        <th class="small">Notes</th>
+                                        <th class="pe-3 small">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for a in appointments %}
+                                    <tr>
+                                        <td class="ps-3 fw-semibold small">{{ a.get('title', a.get('appointment_title', '—')) }}</td>
+                                        <td class="small">{{ a.get('facility', a.get('hospital', '—')) }}</td>
+                                        <td class="small">{{ a.get('date', a.get('appointment_date', '—')) }}</td>
+                                        <td class="small text-muted" style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ a.get('notes', '—') }}</td>
+                                        <td class="pe-3">
+                                            {% set as = a.get('status', '').lower() %}
+                                            {% if as == 'completed' %}
+                                            <span class="badge bg-success">Completed</span>
+                                            {% elif as == 'cancelled' %}
+                                            <span class="badge bg-danger">Cancelled</span>
+                                            {% else %}
+                                            <span class="badge bg-warning text-dark">Upcoming</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="text-center py-4 text-muted">
+                            <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+                            No appointments found
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="lab_results" role="tabpanel">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white border-0 py-3">
+                        <h6 class="fw-bold mb-0"><i class="bi bi-flask me-2"></i>Lab Results</h6>
+                    </div>
+                    <div class="card-body p-0">
+                        {% set lab_results = patient.get('lab_results', patient.get('lab_result_history', [])) %}
+                        {% if lab_results %}
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="ps-3 small">Result</th>
+                                        <th class="small">Notes</th>
+                                        <th class="pe-3 small">Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for l in lab_results %}
+                                    <tr>
+                                        <td class="ps-3 fw-semibold small">{{ l.get('result', l.get('lab_result', '—')) }}</td>
+                                        <td class="small text-muted" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ l.get('notes', '—') }}</td>
+                                        <td class="pe-3 small text-muted">{{ l.get('date', l.get('result_date', '—')) }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="text-center py-4 text-muted">
+                            <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+                            No lab results found
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="test_results" role="tabpanel">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white border-0 py-3">
+                        <h6 class="fw-bold mb-0"><i class="bi bi-test-tube me-2"></i>Test Results</h6>
+                    </div>
+                    <div class="card-body p-0">
+                        {% set test_results = patient.get('test_results', patient.get('test_result_history', [])) %}
+                        {% if test_results %}
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="ps-3 small">Result</th>
+                                        <th class="small">Submitted</th>
+                                        <th class="pe-3 small">Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for t in test_results %}
+                                    <tr>
+                                        <td class="ps-3 fw-semibold small">{{ t.get('result', t.get('test_result', '—')) }}</td>
+                                        <td>
+                                            {% if t.get('submitted') %}
+                                            <span class="badge bg-success">Yes</span>
+                                            {% else %}
+                                            <span class="badge bg-warning text-dark">No</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="pe-3 small text-muted">{{ t.get('date', t.get('test_date', '—')) }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="text-center py-4 text-muted">
+                            <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+                            No test results found
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

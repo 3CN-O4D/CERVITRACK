@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Schedule - {{ patient.get('name', patient.get('full_name', 'Patient')) }}{% endblock %}
+{% block page_subtitle %}Schedule Vaccination or Screening{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">
+        <i class="bi bi-calendar-plus me-2"></i>
+        Schedule for {{ patient.get('name', patient.get('full_name', 'Patient')) }}
+    </h1>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('provider_patient', patient_id=patient.get('id', patient.get('patient_id', 0))) }}" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-person"></i> View Profile
+        </a>
+        <a href="{{ url_for('provider_dashboard') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left"></i> Back to Patients
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-6 mx-auto">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white border-0 py-3">
+                <h6 class="fw-bold mb-0"><i class="bi bi-calendar-check me-2"></i>Schedule Action</h6>
+            </div>
+            <div class="card-body">
+                <div class="d-flex align-items-center mb-4 p-3 rounded-3 bg-light">
+                    <div class="rounded-circle bg-success bg-opacity-10 d-flex align-items-center justify-content-center me-3" style="width:48px;height:48px;flex-shrink:0;">
+                        <i class="bi bi-person fs-4 text-success"></i>
+                    </div>
+                    <div>
+                        <div class="fw-bold">{{ patient.get('name', patient.get('full_name', 'Patient')) }}</div>
+                        <div class="small text-muted">
+                            {% if patient.get('phone') or patient.get('phone_number') %}
+                            {{ patient.get('phone') or patient.get('phone_number') }}
+                            {% endif %}
+                            {% if patient.get('county') or patient.get('location') %}
+                            &middot; {{ patient.get('county') or patient.get('location') }}
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <form method="POST" action="{{ url_for('provider_schedule', patient_id=patient.get('id', patient.get('patient_id', 0))) }}">
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Action Type</label>
+                        <select name="action_type" class="form-select" required>
+                            <option value="screening">Screening</option>
+                            <option value="vaccination">Vaccination</option>
+                            <option value="followup">Follow-up</option>
+                            <option value="consultation">Consultation</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Date</label>
+                        <input type="date" name="date" class="form-control" required min="{{ datetime.now().strftime('%Y-%m-%d') if datetime else '' }}">
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label small fw-semibold">Notes (optional)</label>
+                        <textarea name="notes" class="form-control" rows="3" placeholder="Add any notes or instructions..."></textarea>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary flex-fill">
+                            <i class="bi bi-calendar-check me-1"></i> Schedule
+                        </button>
+                        <a href="{{ url_for('provider_patient', patient_id=patient.get('id', patient.get('patient_id', 0))) }}" class="btn btn-outline-secondary">
+                            Cancel
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

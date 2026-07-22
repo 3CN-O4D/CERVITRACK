@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}Messages - {{ patient.get('name', patient.get('full_name', 'Patient')) }}{% endblock %}
+{% block page_subtitle %}Patient Communication{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">
+        <i class="bi bi-chat-dots me-2"></i>
+        {{ patient.get('name', patient.get('full_name', 'Patient')) }}
+    </h1>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('provider_patient', patient_id=patient.get('id', patient.get('patient_id', 0))) }}" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-person"></i> View Profile
+        </a>
+        <a href="{{ url_for('provider_dashboard') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left"></i> Back
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white border-0 py-3 d-flex align-items-center">
+                <div class="rounded-circle bg-success bg-opacity-10 d-flex align-items-center justify-content-center me-2" style="width:36px;height:36px;">
+                    <i class="bi bi-person text-success"></i>
+                </div>
+                <div>
+                    <div class="fw-bold small">{{ patient.get('name', patient.get('full_name', 'Patient')) }}</div>
+                    <div class="text-muted" style="font-size:11px;">Patient</div>
+                </div>
+            </div>
+            <div class="card-body p-0" style="height:450px;overflow-y:auto;background:#f8f9fa;" id="messageContainer">
+                <div class="d-flex flex-column p-3" id="messagesList">
+                    <div class="text-center text-muted py-4" id="loadingMessages">
+                        <i class="bi bi-arrow-repeat fs-3 d-block mb-2"></i>
+                        <small>Loading messages...</small>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer bg-white border-0">
+                <form id="messageForm" class="d-flex gap-2">
+                    <input type="hidden" name="patient_id" value="{{ patient.get('id', patient.get('patient_id', 0)) }}">
+                    <input type="text" id="messageInput" class="form-control" placeholder="Type your message..." required autocomplete="off">
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-send"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const patientId = '{{ patient.get("id", patient.get("patient_id", 0)) }}';
+const messageContainer = document.getElementById('messageContainer');
+const messagesList = document.getElementById('messagesList');
+const messageForm = document.getElementById('messageForm');
+const messageInput = document.getElementById('messageInput');
+
+function loadMessages() {
+    fetch(`/api/chats?conversation_id=${patientId}`)
+        .then(r => r.json())
+        .then(messages => {
+            const loading = document.getElementById('loadingMessages');
+            if (loading) loading.remove();
+            messagesList.innerHTML = '';
+            if (!messages || messages.length === 0) {
+                messagesList.innerHTML = '<div class="text-center text-muted py-4"><i class="bi bi-inbox fs-3 d-block mb-2"></i><small>No messages yet</small></div>';
+                return;
+            }
+            messages.forEach(msg => {
+                const isProvider = msg.sender_type === 'staff' || msg.sender_type === 'provider';
+                const div = document.createElement('div');
+                div.className = `d-flex ${isProvider ? 'justify-content-end' : 'justify-content-start'} mb-3`;
+                div.innerHTML = `
+                    <div class="px-3 py-2 rounded-3 ${isProvider ? 'bg-success text-white' : 'bg-white border'}" style="max-width:75%;">
+                        <div class="small">${msg.content}</div>
+                        <div class="small ${isProvider ? 'text-white-50' : 'text-muted'}" style="font-size:10px;margin-top:2px;">
+                            ${msg.created_at || ''}
+                            <span class="ms-1">${isProvider ? '(You)' : '(Patient)'}</span>
+                        </div>
+                    </div>
+                `;
+                messagesList.appendChild(div);
+            });
+            messageContainer.scrollTop = messageContainer.scrollHeight;
+        });
+}
+
+messageForm.addEventListener('submit', function(e) {
+    e.preventDefault();
+    const content = messageInput.value.trim();
+    if (!content) return;
+    fetch('/api/provider/send-message', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({patient_id: patientId, content: content, sender_type: 'staff'})
+    })
+    .then(r => r.json())
+    .then(() => {
+        messageInput.value = '';
+        loadMessages();
+    });
+});
+
+loadMessages();
+setInterval(loadMessages, 10000);
+</script>
+{% endblock %}

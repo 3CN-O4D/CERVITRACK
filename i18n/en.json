@@ -1,0 +1,156 @@
+{
+  "common": {
+    "appName": "CerviTrack",
+    "loading": "Loading...",
+    "error": "An error occurred",
+    "retry": "Retry",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "back": "Back",
+    "next": "Next",
+    "submit": "Submit",
+    "search": "Search",
+    "noData": "No data available"
+  },
+  "auth": {
+    "login": "Login",
+    "register": "Register",
+    "email": "Email",
+    "password": "Password",
+    "name": "Full Name",
+    "phone": "Phone Number",
+    "role": "Role",
+    "signIn": "Sign In",
+    "createAccount": "Create Account",
+    "forgotPassword": "Forgot Password?",
+    "noAccount": "Don't have an account?",
+    "hasAccount": "Already have an account?"
+  },
+  "home": {
+    "welcome": "Welcome",
+    "greeting": "Hello, {{name}}",
+    "yourStatus": "Your Screening Status",
+    "riskLow": "Low Risk",
+    "riskHigh": "High Risk",
+    "quickActions": "Quick Actions"
+  },
+  "profile": {
+    "title": "Profile",
+    "editProfile": "Edit Profile",
+    "changePhoto": "Change Photo",
+    "hpvFreeDays": "HPV-Free Days",
+    "birthDate": "Date of Birth",
+    "lastTreated": "Last Treated Date",
+    "personalInfo": "Personal Information",
+    "saveChanges": "Save Changes"
+  },
+  "screening": {
+    "title": "Screening",
+    "startAssessment": "Start Assessment",
+    "question1": "Do you experience any unusual vaginal bleeding?",
+    "question2": "Have you had persistent pelvic pain?",
+    "question3": "Do you experience pain during intercourse?",
+    "question4": "Have you noticed unusual vaginal discharge?",
+    "question5": "Do you have a family history of cervical cancer?",
+    "question6": "Have you had multiple sexual partners?",
+    "question7": "Do you smoke or use tobacco products?",
+    "question8": "Have you ever been vaccinated against HPV?",
+    "question9": "Have you had an abnormal Pap smear before?",
+    "question10": "Do you experience lower back pain?",
+    "resultLow": "Your screening indicates low risk. Continue regular checkups.",
+    "resultHigh": "Your screening indicates high risk. Please consult a healthcare provider immediately.",
+    "doctorNote": "Doctor's Note"
+  },
+  "vaccine": {
+    "title": "Vaccine",
+    "schedule": "Vaccination Schedule",
+    "setReminder": "Set Reminder",
+    "alarm": "Alarm",
+    "noVaccines": "No vaccines scheduled",
+    "hospitalData": "Hospital Data",
+    "dayBefore": "1 day before",
+    "dayOf": "Day of vaccination"
+  },
+  "sampling": {
+    "title": "Self-Sampling",
+    "step1": "Step 1: Wash your hands thoroughly",
+    "step2": "Step 2: Open the sampling kit carefully",
+    "step3": "Step 3: Insert the swab according to instructions",
+    "step4": "Step 4: Place the swab in the provided container",
+    "step5": "Step 5: Seal and return the sample to the clinic"
+  },
+  "facility": {
+    "title": "Facilities",
+    "nearestFacility": "Nearest Facility",
+    "bookAppointment": "Book Appointment",
+    "callNow": "Call Now",
+    "directions": "Get Directions"
+  },
+  "telehealth": {
+    "title": "Telehealth",
+    "startChat": "Start Chat",
+    "messageHint": "Type a message...",
+    "expertOnline": "Expert Online",
+    "expertOffline": "Expert Offline"
+  },
+  "library": {
+    "title": "Health Library",
+    "categories": "Categories",
+    "readMore": "Read More",
+    "searchDocuments": "Search documents..."
+  },
+  "notifications": {
+    "title": "Notifications",
+    "markAllRead": "Mark All Read",
+    "noNotifications": "No notifications"
+  },
+  "settings": {
+    "title": "Settings",
+    "darkMode": "Dark Mode",
+    "language": "Language",
+    "about": "About",
+    "logout": "Log Out"
+  },
+  "admin": {
+    "title": "Admin Dashboard",
+    "dashboard": "Dashboard",
+    "users": "Users",
+    "atRisk": "At Risk",
+    "healthy": "Healthy",
+    "generateReport": "Generate Report",
+    "sendNotification": "Send Notification",
+    "stats": "Statistics",
+    "totalUsers": "Total Users",
+    "screeningsToday": "Screenings Today",
+    "riskAlerts": "Risk Alerts"
+  },
+  "stats": {
+    "today": "Today",
+    "thisWeek": "This Week",
+    "thisMonth": "This Month",
+    "threeMonths": "3 Months",
+    "sixMonths": "6 Months",
+    "oneYear": "1 Year"
+  },
+  "status": {
+    "collected": "Collected",
+    "submitted": "Submitted",
+    "receivedByLab": "Received by Lab",
+    "testing": "Testing",
+    "resultsReady": "Results Ready"
+  },
+  "risk": {
+    "low": "Low",
+    "moderate": "Moderate",
+    "high": "High"
+  },
+  "roles": {
+    "patient": "Patient",
+    "chw": "Community Health Worker",
+    "nurse": "Nurse",
+    "lab": "Lab Technician",
+    "admin": "Administrator"
+  }
+}

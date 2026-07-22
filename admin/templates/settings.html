@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block page_subtitle %}Application Configuration{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Settings</h1>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-6">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white border-0 py-3">
+                <h6 class="fw-bold mb-0"><i class="bi bi-info-circle me-2"></i>Application Info</h6>
+            </div>
+            <div class="card-body">
+                <table class="table table-borderless small mb-0">
+                    <tr>
+                        <td class="fw-semibold text-muted ps-0">App Name</td>
+                        <td class="fw-bold">CerviTrack</td>
+                    </tr>
+                    <tr>
+                        <td class="fw-semibold text-muted ps-0">Version</td>
+                        <td>1.0.0</td>
+                    </tr>
+                    <tr>
+                        <td class="fw-semibold text-muted ps-0">Environment</td>
+                        <td><span class="badge bg-success">Production</span></td>
+                    </tr>
+                    <tr>
+                        <td class="fw-semibold text-muted ps-0">API Endpoint</td>
+                        <td class="font-monospace small">http://127.0.0.1:5000/api</td>
+                    </tr>
+                    <tr>
+                        <td class="fw-semibold text-muted ps-0">Database</td>
+                        <td>SQLite (cervitrack.db + chats.db)</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <form method="POST">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-0 py-3">
+                    <h6 class="fw-bold mb-0"><i class="bi bi-globe me-2"></i>Language</h6>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Default Language</label>
+                        <select name="language" class="form-select">
+                            <option value="en" {% if admin_lang == 'en' %}selected{% endif %}>English</option>
+                            <option value="sw" {% if admin_lang == 'sw' %}selected{% endif %}>Swahili (Kiswahili)</option>
+                        </select>
+                        <div class="form-text small">Controls the admin portal display language.</div>
+                    </div>
+                </div>
+            </div>
+            <div class="card border-0 shadow-sm mt-3">
+                <div class="card-header bg-white border-0 py-3">
+                    <h6 class="fw-bold mb-0"><i class="bi bi-palette me-2"></i>Appearance</h6>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Theme</label>
+                        <select name="theme" class="form-select">
+                            <option value="light" {% if admin_theme == 'light' %}selected{% endif %}>Light</option>
+                            <option value="dark" {% if admin_theme == 'dark' %}selected{% endif %}>Dark</option>
+                        </select>
+                        <div class="form-text small">Admin portal color scheme.</div>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-3">
+                <button type="submit" class="btn btn-primary px-4">
+                    <i class="bi bi-check-lg me-1"></i> Save Settings
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="{{ admin_theme }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CerviTrack Admin - {% block title %}Dashboard{% endblock %}</title>
+    <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap-icons.min.css') }}">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
+    <style>
+        :root {
+            --sidebar-bg: #1E1A4B;
+            --sidebar-width: 250px;
+            --accent: #6C5CE7;
+            --accent-light: #A29BFE;
+            --body-bg: #f4f6f9;
+            --content-bg: #fff;
+            --text-color: #1a1a2e;
+            --border-color: #e9ecef;
+        }
+        [data-bs-theme="dark"] {
+            --body-bg: #0d1117;
+            --content-bg: #161b22;
+            --text-color: #e6edf3;
+            --border-color: #30363d;
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--body-bg);
+            min-height: 100vh;
+        }
+        .wrapper { display: flex; min-height: 100vh; }
+        .sidebar {
+            width: var(--sidebar-width);
+            background: var(--sidebar-bg);
+            color: #fff;
+            position: fixed;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+        .sidebar-brand {
+            padding: 20px 20px 16px;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+        }
+        .sidebar-brand .brand-icon {
+            font-size: 24px;
+            color: var(--accent-light);
+            margin-right: 10px;
+        }
+        .sidebar-brand .brand-text {
+            font-size: 18px;
+            font-weight: 800;
+            letter-spacing: -0.3px;
+        }
+        .sidebar-brand .brand-sub {
+            font-size: 11px;
+            opacity: 0.6;
+            font-weight: 600;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+        .sidebar-nav { padding: 12px 0; flex: 1; }
+        .sidebar-nav .nav-item { display: block; }
+        .sidebar-nav .nav-link {
+            display: flex;
+            align-items: center;
+            padding: 11px 20px;
+            color: rgba(255,255,255,0.7);
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            border-left: 3px solid transparent;
+        }
+        .sidebar-nav .nav-link:hover {
+            color: #fff;
+            background: rgba(255,255,255,0.06);
+        }
+        .sidebar-nav .nav-link.active {
+            color: #fff;
+            background: rgba(255,255,255,0.1);
+            border-left-color: var(--accent-light);
+        }
+        .sidebar-nav .nav-link i {
+            width: 22px;
+            margin-right: 10px;
+            font-size: 16px;
+        }
+        .sidebar-nav .nav-divider {
+            height: 1px;
+            background: rgba(255,255,255,0.08);
+            margin: 8px 20px;
+        }
+        .sidebar-footer {
+            padding: 16px 20px;
+            border-top: 1px solid rgba(255,255,255,0.08);
+            font-size: 12px;
+            opacity: 0.5;
+        }
+        .main-content {
+            margin-left: var(--sidebar-width);
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        .topbar {
+            background: var(--content-bg);
+            padding: 12px 28px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border-color);
+            position: sticky;
+            top: 0;
+            z-index: 99;
+        }
+        .topbar-left { display: flex; align-items: center; gap: 12px; }
+        .topbar-toggle {
+            display: none;
+            background: none;
+            border: none;
+            font-size: 22px;
+            color: var(--text-color);
+            cursor: pointer;
+            padding: 4px;
+        }
+        .topbar-right { display: flex; align-items: center; gap: 16px; }
+        .topbar-user {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+        .topbar-user .avatar {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            background: var(--accent);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 14px;
+        }
+        .topbar-logout {
+            color: #dc3545;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .topbar-logout:hover { color: #b02a37; }
+        .page-content { padding: 24px 28px; flex: 1; }
+        .page-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .page-title {
+            font-size: 22px;
+            font-weight: 800;
+            color: var(--text-color);
+            margin: 0;
+            letter-spacing: -0.3px;
+        }
+        [data-bs-theme="dark"] .card {
+            background-color: var(--content-bg);
+            border-color: var(--border-color);
+        }
+        [data-bs-theme="dark"] .card-header {
+            background-color: var(--content-bg) !important;
+            border-color: var(--border-color);
+        }
+        [data-bs-theme="dark"] .table {
+            color: var(--text-color);
+        }
+        [data-bs-theme="dark"] .text-muted {
+            color: #8b949e !important;
+        }
+        [data-bs-theme="dark"] .table-borderless tr {
+            border-color: var(--border-color);
+        }
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s;
+            }
+            .sidebar.show { transform: translateX(0); }
+            .main-content { margin-left: 0; }
+            .topbar-toggle { display: block; }
+            .topbar { padding: 12px 16px; }
+            .page-content { padding: 16px; }
+        }
+    </style>
+    {% block head %}{% endblock %}
+</head>
+<body>
+<div class="wrapper">
+    <aside class="sidebar" id="sidebar">
+            <div class="sidebar-brand">
+            <div class="d-flex align-items-center gap-2">
+                <img src="{{ url_for('static', filename='img/logo.jpeg') }}" alt="CerviTrack" style="height:38px;width:38px;border-radius:10px;object-fit:cover;">
+                <div>
+                    <div class="brand-text">CerviTrack</div>
+                    <div class="brand-sub">{% if session.get('provider_logged_in') and not session.get('admin_logged_in') %}Provider Portal{% else %}Admin Portal{% endif %}</div>
+                </div>
+            </div>
+        </div>
+        <nav class="sidebar-nav">
+            <a class="nav-link {% if request.path == '/dashboard' %}active{% endif %}" href="{{ url_for('dashboard') }}">
+                <i class="bi bi-speedometer2"></i> Dashboard
+            </a>
+            <a class="nav-link {% if request.path.startswith('/users') and '/at-risk' not in request.path and '/healthy' not in request.path %}active{% endif %}" href="{{ url_for('users') }}">
+                <i class="bi bi-people"></i> Users
+            </a>
+            <a class="nav-link {% if '/users/at-risk' in request.path %}active{% endif %}" href="{{ url_for('users_at_risk') }}">
+                <i class="bi bi-exclamation-triangle"></i> At-Risk
+            </a>
+            <a class="nav-link {% if '/users/healthy' in request.path %}active{% endif %}" href="{{ url_for('users_healthy') }}">
+                <i class="bi bi-shield-check"></i> Healthy
+            </a>
+            <div class="nav-divider"></div>
+            <a class="nav-link {% if request.path == '/vaccines' %}active{% endif %}" href="{{ url_for('vaccines') }}">
+                <i class="bi bi-syringe"></i> Vaccines
+            </a>
+            <a class="nav-link {% if request.path == '/appointments' %}active{% endif %}" href="{{ url_for('appointments') }}">
+                <i class="bi bi-calendar-check"></i> Appointments
+            </a>
+            <a class="nav-link {% if request.path == '/lab-results' %}active{% endif %}" href="{{ url_for('lab_results') }}">
+                <i class="bi bi-flask"></i> Lab Results
+            </a>
+            <a class="nav-link {% if request.path == '/test-results' %}active{% endif %}" href="{{ url_for('test_results') }}">
+                <i class="bi bi-test-tube"></i> Test Results
+            </a>
+            <a class="nav-link {% if request.path == '/followups' %}active{% endif %}" href="{{ url_for('followups') }}">
+                <i class="bi bi-clipboard-check"></i> Follow-ups
+            </a>
+            <a class="nav-link {% if request.path == '/reports' %}active{% endif %}" href="{{ url_for('reports') }}">
+                <i class="bi bi-file-text"></i> Reports
+            </a>
+            <a class="nav-link {% if request.path == '/notifications' %}active{% endif %}" href="{{ url_for('notifications') }}">
+                <i class="bi bi-bell"></i> Notifications
+            </a>
+            <a class="nav-link {% if request.path == '/chats' %}active{% endif %}" href="{{ url_for('chats') }}">
+                <i class="bi bi-chat-dots"></i> Messages
+            </a>
+            <div class="nav-divider"></div>
+            <a class="nav-link {% if request.path == '/statistics' %}active{% endif %}" href="{{ url_for('statistics') }}">
+                <i class="bi bi-graph-up"></i> Statistics
+            </a>
+            <div class="nav-divider"></div>
+            <div class="sidebar-nav-section" style="padding: 4px 20px 2px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: rgba(255,255,255,0.35);">Access</div>
+            <a class="nav-link {% if request.path.startswith('/provider') %}active{% endif %}" href="{{ url_for('provider_dashboard') }}">
+                <i class="bi bi-person-badge"></i> Provider Portal
+            </a>
+            {% if session.get('admin_logged_in') %}
+            <a class="nav-link {% if request.path == '/settings' %}active{% endif %}" href="{{ url_for('settings') }}">
+                <i class="bi bi-gear"></i> Settings
+            </a>
+            {% endif %}
+        </nav>
+        <div class="sidebar-footer">CerviTrack v1.0</div>
+    </aside>
+
+    <div class="main-content">
+        <header class="topbar">
+            <div class="topbar-left">
+                <button class="topbar-toggle" onclick="document.getElementById('sidebar').classList.toggle('show')">
+                    <i class="bi bi-list"></i>
+                </button>
+                <div class="d-none d-sm-block text-muted small">{% block page_subtitle %}{% endblock %}</div>
+            </div>
+            <div class="topbar-right">
+                <div id="google_translate_element" class="me-2"></div>
+                <div class="topbar-user">
+                    <div class="avatar">{% if session.get('provider_logged_in') and not session.get('admin_logged_in') %}P{% else %}A{% endif %}</div>
+                    <span>{% if session.get('provider_logged_in') and not session.get('admin_logged_in') %}{{ session.get('provider_name', 'Provider') }}{% else %}{{ session.get('admin_name', 'Admin') }}{% endif %}</span>
+                    {% if session.get('provider_logged_in') %}
+                    <span class="badge bg-info text-dark ms-1" style="font-size:10px;">Provider</span>
+                    {% endif %}
+                </div>
+                {% if session.get('admin_logged_in') %}
+                <a href="{{ url_for('logout') }}" class="topbar-logout">
+                    <i class="bi bi-box-arrow-right"></i> Logout
+                </a>
+                {% else %}
+                <a href="{{ url_for('provider_logout') }}" class="topbar-logout">
+                    <i class="bi bi-box-arrow-right"></i> Logout
+                </a>
+                {% endif %}
+            </div>
+        </header>
+
+        <div class="page-content">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+              {% if messages %}
+                {% for category, message in messages %}
+                  <div class="alert alert-{{ category }} alert-dismissible fade show d-flex align-items-center" role="alert">
+                    <i class="bi bi-check-circle-fill me-2"></i>
+                    <div>{{ message }}</div>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                  </div>
+                {% endfor %}
+              {% endif %}
+            {% endwith %}
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script type="text/javascript">
+function googleTranslateElementInit() {
+    new google.translate.TranslateElement({
+        pageLanguage: 'en',
+        includedLanguages: 'en,sw,fr,es,ar,pt,de,zh-CN,hi,ja',
+        layout: google.translate.TranslateElement.InlineLayout.SIMPLE,
+        autoDisplay: false,
+    }, 'google_translate_element');
+}
+</script>
+<script type="text/javascript" src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

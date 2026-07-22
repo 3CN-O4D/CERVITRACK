@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Report - {{ user.name }}{% endblock %}
+{% block page_subtitle %}Generated Patient Report{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Patient Report</h1>
+    <a href="{{ url_for('user_detail', user_id=user.id) }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Back to Profile
+    </a>
+</div>
+
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+        <div class="row align-items-center">
+            <div class="col-auto">
+                <div class="rounded-circle bg-primary bg-opacity-10 d-flex align-items-center justify-content-center" style="width:64px;height:64px;">
+                    <i class="bi bi-person fs-2 text-primary"></i>
+                </div>
+            </div>
+            <div class="col">
+                <h4 class="fw-bold mb-1">{{ user.name }}</h4>
+                <p class="text-muted small mb-0">{{ user.email }} &middot; {{ user.phone }}</p>
+                <p class="text-muted small mb-0">DOB: {{ user.birthDate }} &middot; Role: {{ user.role|capitalize }}</p>
+            </div>
+            <div class="col-auto text-end">
+                <div class="text-success display-6 fw-bold">{{ hpv_free_days }}</div>
+                <div class="text-muted small fw-semibold">Days HPV-Free</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-white border-0 py-3">
+        <h6 class="fw-bold mb-0"><i class="bi bi-file-earmark-text me-2"></i>{{ report.type }}</h6>
+        <small class="text-muted">Generated on {{ report.date }}</small>
+    </div>
+    <div class="card-body">
+        <h6 class="fw-bold mb-3">Screening Summary</h6>
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Verdict</th>
+                    <th>Risk Tier</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in screenings %}
+                <tr>
+                    <td>{{ s.date }}</td>
+                    <td>
+                        {% if s.verdict == 'POSITIVE' %}
+                        <span class="badge bg-danger">POSITIVE</span>
+                        {% else %}
+                        <span class="badge bg-success">NEGATIVE</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if s.risk_tier == 'HIGH' %}
+                        <span class="badge bg-danger">HIGH</span>
+                        {% else %}
+                        <span class="badge bg-success">LOW</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="3" class="text-muted">No screening records</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <h6 class="fw-bold mb-3 mt-4">Vaccination Record</h6>
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    <th>Vaccine</th>
+                    <th>Hospital</th>
+                    <th>Date</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for v in vaccines %}
+                <tr>
+                    <td>{{ v.name }}</td>
+                    <td>{{ v.hospital }}</td>
+                    <td>{{ v.date }}</td>
+                    <td>
+                        {% if v.status == 'done' %}
+                        <span class="badge bg-success">Done</span>
+                        {% elif v.status == 'missed' %}
+                        <span class="badge bg-danger">Missed</span>
+                        {% else %}
+                        <span class="badge bg-warning text-dark">Upcoming</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="4" class="text-muted">No vaccine records</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="card-footer bg-white border-0 text-end">
+        <button class="btn btn-primary btn-sm" onclick="window.print()">
+            <i class="bi bi-printer"></i> Print Report
+        </button>
+    </div>
+</div>
+{% endblock %}
