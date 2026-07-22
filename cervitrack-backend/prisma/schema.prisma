@@ -1,0 +1,260 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums (using String with comments for SQLite compatibility) ───
+
+// Roles: patient, lab_technician, clinician, facility_admin, county_admin, national_admin, system_admin
+// Screening types: VIA, PAP_SMEAR, HPV_DNA, COLPOSCOPY, LEEP, CRYOTHERAPY
+// Screening statuses: PENDING, IN_PROGRESS, COMPLETED, REFERRED, CANCELLED
+// Referral statuses: PENDING, ACCEPTED, COMPLETED, REJECTED
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  password     String
+  role         String   // patient | lab_technician | clinician | facility_admin | county_admin | national_admin | system_admin
+  firstName    String
+  lastName     String
+  phone        String?
+  facilityId   String?
+  facility     Facility? @relation(fields: [facilityId], references: [id])
+  county       String?
+  subCounty    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  screenings       Screening[]       @relation("ProviderScreenings")
+  diagnoses        Diagnosis[]       @relation("DiagnosedBy")
+  treatments       Treatment[]       @relation("TreatedBy")
+  auditLogs        AuditLog[]
+  refreshTokens    RefreshToken[]
+
+  @@index([role])
+  @@index([facilityId])
+  @@index([county])
+}
+
+model Patient {
+  id                   String    @id @default(uuid())
+  nationalIdOrPassport String    @unique
+  firstName            String
+  lastName             String
+  dateOfBirth          DateTime
+  phone                String?
+  gender               String?
+  county               String?
+  subCounty            String?
+  ward                 String?
+  facilityId           String?
+  facility             Facility? @relation(fields: [facilityId], references: [id])
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  // Relations
+  screenings       Screening[]
+  diagnoses        Diagnosis[]
+  treatments       Treatment[]
+  referrals        Referral[]         @relation("PatientReferrals")
+  consentRecords   ConsentRecord[]
+
+  @@index([nationalIdOrPassport])
+  @@index([county, subCounty])
+  @@index([facilityId])
+}
+
+model Facility {
+  id        String   @id @default(uuid())
+  name      String
+  code      String   @unique
+  county    String
+  subCounty String
+  ward      String?
+  address   String?
+  phone     String?
+  latitude  Float?
+  longitude Float?
+  facilityType String? // hospital | health_center | dispensary | clinic
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  users      User[]
+  patients   Patient[]
+  screenings Screening[]
+
+  @@index([county, subCounty])
+  @@index([code])
+}
+
+model Screening {
+  id                String   @id @default(uuid())
+  patientId         String
+  patient           Patient  @relation(fields: [patientId], references: [id])
+  facilityId        String?
+  facility          Facility? @relation(fields: [facilityId], references: [id])
+  providerId        String?
+  provider          User?    @relation("ProviderScreenings", fields: [providerId], references: [id])
+
+  type              String   // VIA | PAP_SMEAR | HPV_DNA | COLPOSCOPY | LEEP | CRYOTHERAPY
+  status            String   @default("PENDING") // PENDING | IN_PROGRESS | COMPLETED | REFERRED | CANCELLED
+  findings          String?  // Free-text clinical findings
+  result            String?  // POSITIVE | NEGATIVE | INCONCLUSIVE | ABNORMAL | NORMAL
+  riskLevel         String?  // LOW | MODERATE | HIGH | CRITICAL
+  referralTriggered Boolean  @default(false)
+  syncedFromOffline Boolean  @default(false)
+  batchId           String?  // Groups offline batch uploads
+
+  // Colposcopy-specific
+  colposcopyFindings String?
+  biopsyTaken       Boolean?
+
+  // Treatment-specific (LEEP/Cryotherapy)
+  treatmentNotes    String?
+  specimenCollected Boolean?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  diagnoses  Diagnosis[]
+  treatments Treatment[]
+
+  @@index([patientId])
+  @@index([type])
+  @@index([status])
+  @@index([result])
+  @@index([facilityId])
+  @@index([createdAt])
+  @@index([batchId])
+}
+
+model Diagnosis {
+  id           String    @id @default(uuid())
+  patientId    String
+  patient      Patient   @relation(fields: [patientId], references: [id])
+  screeningId  String?
+  screening    Screening? @relation(fields: [screeningId], references: [id])
+  facilityId   String?
+  clinicianId  String?
+  clinician    User?     @relation("DiagnosedBy", fields: [clinicianId], references: [id])
+  diagnosis    String    // CIN1 | CIN2 | CIN3 | ICC | BENIGN | OTHER
+  notes        String?
+  createdAt    DateTime  @default(now())
+
+  // Relations
+  treatments  Treatment[]
+
+  @@index([patientId])
+  @@index([screeningId])
+}
+
+model Treatment {
+  id           String    @id @default(uuid())
+  patientId    String
+  patient      Patient   @relation(fields: [patientId], references: [id])
+  diagnosisId  String?
+  diagnosis    Diagnosis? @relation(fields: [diagnosisId], references: [id])
+  screeningId  String?
+  screening    Screening? @relation(fields: [screeningId], references: [id])
+  facilityId   String?
+  clinicianId  String?
+  clinician    User?     @relation("TreatedBy", fields: [clinicianId], references: [id])
+  treatmentType String   // LEEP | CRYOTHERAPY | SURGERY | RADIATION | CHEMOTHERAPY
+  status       String   @default("PLANNED") // PLANNED | IN_PROGRESS | COMPLETED | CANCELLED
+  notes        String?
+  outcome      String?  // SUCCESSFUL | PARTIAL | FAILED | ONGOING
+  followUpDate DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([patientId])
+  @@index([treatmentType])
+  @@index([status])
+}
+
+model Referral {
+  id               String   @id @default(uuid())
+  patientId        String
+  patient          Patient  @relation("PatientReferrals", fields: [patientId], references: [id])
+  fromFacilityId   String?
+  toFacilityId     String?
+  fromClinicianId  String?
+  toClinicianId    String?
+  screeningId      String?
+  reason           String
+  priority         String   @default("NORMAL") // NORMAL | URGENT | EMERGENCY
+  status           String   @default("PENDING") // PENDING | ACCEPTED | COMPLETED | REJECTED
+  notes            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([patientId])
+  @@index([status])
+  @@index([priority])
+}
+
+model SyncBatch {
+  id             String   @id @default(uuid())
+  batchId        String   @unique
+  facilityId     String?
+  uploadedBy     String?
+  recordCount    Int      @default(0)
+  successCount   Int      @default(0)
+  failureCount   Int      @default(0)
+  status         String   @default("PENDING") // PENDING | PROCESSING | COMPLETED | PARTIAL | FAILED
+  errors         String?  // JSON string of per-record errors
+  createdAt      DateTime @default(now())
+  completedAt    DateTime?
+
+  @@index([batchId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model ConsentRecord {
+  id           String   @id @default(uuid())
+  patientId    String
+  patient      Patient  @relation(fields: [patientId], references: [id])
+  consentType  String   // SCREENING | TREATMENT | DATA_SHARING | RESEARCH
+  accepted     Boolean  @default(true)
+  acceptedAt   DateTime @default(now())
+  ipAddress    String?
+
+  @@index([patientId])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String   // CREATE | READ | UPDATE | DELETE | LOGIN | LOGOUT | EXPORT
+  resource   String   // Patient | Screening | etc
+  resourceId String?
+  details    String?  // JSON string of changes (PHI stripped)
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([resource])
+  @@index([createdAt])
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([token])
+}
