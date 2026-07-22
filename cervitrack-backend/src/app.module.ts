@@ -8,6 +8,7 @@ import { PatientsModule } from './features/patients/patients.module';
 import { ScreeningsModule } from './features/screenings/screenings.module';
 import { FacilitiesModule } from './features/facilities/facilities.module';
 import { ReportsModule } from './features/reports/reports.module';
+import { TelemetryModule } from './features/telemetry/telemetry.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { ReportsModule } from './features/reports/reports.module';
     ScreeningsModule,
     FacilitiesModule,
     ReportsModule,
+    TelemetryModule,
   ],
 })
 export class AppModule implements NestModule {
