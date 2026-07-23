@@ -28,44 +28,45 @@ const TEST_USERS = [
 
 const wait = (ms: number) => new Promise(r => setTimeout(r, ms));
 
-async function adminFetch(path: string, options: RequestInit = {}) {
-  const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/${path}`, {
-    ...options,
-    headers: {
-      'apikey': SERVICE_KEY,
-      'Authorization': `Bearer ${SERVICE_KEY}`,
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  });
-  return res;
+function headers() {
+  return {
+    'apikey': SERVICE_KEY,
+    'Authorization': `Bearer ${SERVICE_KEY}`,
+    'Content-Type': 'application/json',
+  };
 }
 
 export async function POST() {
   const results: { email: string; status: string; message?: string }[] = [];
-
-  // Step 1: Delete all existing auth users
-  const listRes = await adminFetch('users');
-  const listData = await listRes.json();
   let deleted = 0;
+
+  // Step 1: Delete ALL auth users
+  const listRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/users?page_size=1000`, { headers: headers() });
+  const listData = await listRes.json();
   if (listData?.users) {
     for (const u of listData.users) {
-      const delRes = await adminFetch(`users/${u.id}`, { method: 'DELETE' });
-      if (delRes.ok) deleted++;
-      await wait(100);
+      try {
+        const r = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${u.id}`, { method: 'DELETE', headers: headers() });
+        if (r.ok) deleted++;
+      } catch {}
+      await wait(200);
     }
   }
 
-  // Step 2: Clear public users table
-  const { createClient } = await import('@supabase/supabase-js');
-  const sb = createClient(SUPABASE_URL, SERVICE_KEY);
-  await sb.from('users').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  // Step 2: Delete ALL rows from public users table via REST API
+  const delRes = await fetch(`${SUPABASE_URL}/rest/v1/users?id=neq.00000000-0000-0000-0000-000000000000`, {
+    method: 'DELETE',
+    headers: { ...headers(), 'Prefer': 'return=minimal' },
+  });
+  const usersCleared = delRes.ok;
 
-  // Step 3: Create users via REST API with delays
+  // Step 3: Create auth users + profile rows one by one with delays
   for (const user of TEST_USERS) {
     try {
-      const res = await adminFetch('users', {
+      // Create auth user via REST API
+      const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
         method: 'POST',
+        headers: headers(),
         body: JSON.stringify({
           email: user.email,
           password: user.password,
@@ -77,52 +78,66 @@ export async function POST() {
 
       const data = await res.json();
 
-      if (!res.ok || data.id === undefined) {
+      if (!res.ok || !data.id) {
         const msg = data.msg || data.error_description || data.message || JSON.stringify(data);
+        // Rate limited — wait longer and skip
+        if (msg.includes('JWT') || msg.includes('rate') || res.status === 429) {
+          await wait(2000);
+          results.push({ email: user.email, status: 'rate_limited', message: msg });
+          continue;
+        }
         results.push({ email: user.email, status: 'error', message: msg });
         await wait(500);
         continue;
       }
 
-      const userId = data.id;
+      await wait(200);
 
-      const { error: profileError } = await sb.from('users').insert({
-        id: userId,
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-        role: user.role,
-        county: user.county,
-        sub_county: user.sub_county,
-        ward: user.ward,
-        patient_id: user.patient_id,
-        password: 'password123',
-        consent_terms: true,
-        consent_medical: true,
-        consent_at: new Date().toISOString(),
-        created_at: new Date().toISOString(),
+      // Insert profile into users table via REST API
+      const profileRes = await fetch(`${SUPABASE_URL}/rest/v1/users`, {
+        method: 'POST',
+        headers: { ...headers(), 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify({
+          id: data.id,
+          name: user.name,
+          email: user.email,
+          phone: user.phone,
+          role: user.role,
+          county: user.county,
+          sub_county: user.sub_county,
+          ward: user.ward,
+          patient_id: user.patient_id,
+          password: 'password123',
+          consent_terms: true,
+          consent_medical: true,
+          consent_at: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+        }),
       });
 
-      if (profileError) {
-        results.push({ email: user.email, status: 'auth_ok_profile_error', message: profileError.message });
+      if (!profileRes.ok) {
+        const errText = await profileRes.text();
+        results.push({ email: user.email, status: 'auth_ok_profile_error', message: errText });
       } else {
-        results.push({ email: user.email, status: 'created', message: userId });
+        results.push({ email: user.email, status: 'created', message: data.id });
       }
     } catch (err: unknown) {
       results.push({ email: user.email, status: 'error', message: err instanceof Error ? err.message : 'unknown' });
     }
 
-    await wait(300);
+    await wait(500);
   }
 
   const created = results.filter(r => r.status === 'created').length;
-  const errors = results.filter(r => r.status.includes('error'));
+  const errors = results.filter(r => r.status === 'error' || r.status === 'auth_ok_profile_error');
+  const rateLimited = results.filter(r => r.status === 'rate_limited');
 
   return NextResponse.json({
-    summary: `Deleted ${deleted} old users. Created ${created}/20. ${errors.length} errors.`,
+    summary: `Deleted ${deleted} auth users, users_cleared: ${usersCleared}. Created ${created}/20. ${errors.length} errors, ${rateLimited.length} rate-limited.`,
     deleted,
+    usersCleared,
     created,
     errors,
-    results,
+    rateLimited,
   });
 }
