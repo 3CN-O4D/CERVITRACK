@@ -68,8 +68,22 @@ const portals = [
         <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 6.75h.75v.75h-.75v-.75zM6.75 16.5h.75v.75h-.75v-.75zM16.5 6.75h.75v.75h-.75v-.75zM13.5 13.5h.75v.75h-.75v-.75zM13.5 19.5h.75v.75h-.75v-.75zM19.5 13.5h.75v.75h-.75v-.75zM19.5 19.5h.75v.75h-.75v-.75zM16.5 16.5h.75v.75h-.75v-.75z" />
       </svg>
     ),
-    href: '/kits',
+    href: '/workspace?tab=kits',
     cta: 'Open Kit Tracker',
+  },
+  {
+    title: 'Clinician Portal',
+    subtitle: 'Doctor Dashboard',
+    desc: 'Manage your patients, chat with them, view records, book appointments, and handle scheduling — all in one place.',
+    features: ['Patient records & history', 'Secure messaging', 'Appointment management', 'Notification reminders'],
+    color: 'from-blue-500 to-blue-700',
+    icon: (
+      <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+      </svg>
+    ),
+    href: '/clinician',
+    cta: 'Open Clinician Portal',
   },
   {
     title: 'Administrative Panels',

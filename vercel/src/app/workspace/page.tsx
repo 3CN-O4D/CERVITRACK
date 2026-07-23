@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import BarcodeScanner from '@/components/BarcodeScanner';
 
 interface Patient {
   id: string;
@@ -73,6 +74,8 @@ export default function WorkspaceDashboard() {
   const [patientSortKey, setPatientSortKey] = useState<'name' | 'county' | 'nationalId'>('name');
   const [patientSortDir, setPatientSortDir] = useState<'asc' | 'desc'>('asc');
   const [kitPatientSearch, setKitPatientSearch] = useState('');
+  const [showCamera, setShowCamera] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState<any>(null);
 
   // Kit state
   const [barcode, setBarcode] = useState('');
@@ -87,6 +90,9 @@ export default function WorkspaceDashboard() {
 
   useEffect(() => {
     fetchData();
+    const handler = (e: Event) => { e.preventDefault(); setInstallPrompt(e); };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
   async function fetchData() {
@@ -137,6 +143,21 @@ export default function WorkspaceDashboard() {
   async function scanKit() {
     const code = barcode.trim();
     if (!code) return;
+    setKitLoading(true);
+    setKitError('');
+    setKitSuccess('');
+    setScannedKit(null);
+    try {
+      const res = await fetch(`/api/sample-kits/scan/${code}`);
+      if (res.ok) { setScannedKit(await res.json()); }
+      else if (res.status === 404) { setKitError('Kit not found. Check the barcode.'); }
+      else { setKitError('Failed to scan barcode'); }
+    } catch { setKitError('Network error'); }
+    finally { setKitLoading(false); }
+  }
+
+  async function scanKitWithCode(code: string) {
+    setBarcode(code);
     setKitLoading(true);
     setKitError('');
     setKitSuccess('');
@@ -210,26 +231,34 @@ export default function WorkspaceDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200 px-6 py-4">
+    <div className="min-h-screen bg-teal-50">
+      <header className="bg-teal-900 text-white px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Link href="/" className="text-lg font-bold text-sky-700">CerviTrack</Link>
-            <span className="text-gray-300">|</span>
-            <span className="text-sm font-medium text-gray-600">Clinician Workspace</span>
+            <Link href="/" className="text-lg font-bold">CerviTrack</Link>
+            <span className="text-teal-400">|</span>
+            <span className="text-sm font-medium text-teal-200">Clinician Workspace</span>
           </div>
-          <Link href="/" className="text-sm text-gray-500 hover:text-sky-700">Home</Link>
+          <div className="flex items-center gap-4">
+            {installPrompt && (
+              <button onClick={async () => { installPrompt.prompt(); const { outcome } = await installPrompt.userChoice; if (outcome === 'accepted') setInstallPrompt(null); }}
+                className="bg-teal-700 hover:bg-teal-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium border border-teal-500">
+                Install App
+              </button>
+            )}
+            <Link href="/" className="text-sm text-teal-200 hover:text-white">Home</Link>
+          </div>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-8">
         <div className="flex gap-2 mb-6">
           <button onClick={() => setTab('patients')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${tab === 'patients' ? 'bg-sky-700 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${tab === 'patients' ? 'bg-teal-700 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
             Patients
           </button>
           <button onClick={() => setTab('kits')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${tab === 'kits' ? 'bg-sky-700 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${tab === 'kits' ? 'bg-teal-700 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
             Kit Scanner
           </button>
         </div>
@@ -287,10 +316,17 @@ export default function WorkspaceDashboard() {
               <div className="flex gap-2">
                 <input type="text" value={barcode} onChange={(e) => setBarcode(e.target.value)}
                   placeholder="Enter or scan kit barcode..."
-                  className="flex-1 border border-gray-200 rounded-lg px-4 py-3 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-sky-500"
+                  className="flex-1 border border-gray-200 rounded-lg px-4 py-3 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-teal-500 font-mono"
                   onKeyDown={(e) => e.key === 'Enter' && scanKit()} />
+                <button onClick={() => setShowCamera(true)}
+                  className="bg-teal-100 hover:bg-teal-200 text-teal-700 px-4 py-3 rounded-lg font-medium transition-colors">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
+                  </svg>
+                </button>
                 <button onClick={scanKit} disabled={!barcode.trim() || kitLoading}
-                  className="bg-sky-600 hover:bg-sky-700 disabled:bg-gray-300 text-white px-6 py-3 rounded-lg font-medium transition-colors">
+                  className="bg-teal-600 hover:bg-teal-700 disabled:bg-gray-300 text-white px-6 py-3 rounded-lg font-medium transition-colors">
                   {kitLoading ? 'Scanning...' : 'Scan'}
                 </button>
               </div>
@@ -448,6 +484,22 @@ export default function WorkspaceDashboard() {
             </div>
             <button onClick={() => setSelectedPatient(null)}
               className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2.5 rounded-lg text-sm font-medium">Close</button>
+          </div>
+        </div>
+      )}
+
+      {showCamera && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-lg p-6">
+            <h3 className="text-lg font-bold text-gray-900 mb-4">Scan Barcode</h3>
+            <BarcodeScanner
+              onScan={(code) => { setBarcode(code); setShowCamera(false); scanKitWithCode(code); }}
+              onClose={() => setShowCamera(false)}
+            />
+            <button onClick={() => setShowCamera(false)}
+              className="w-full border border-gray-200 text-gray-700 px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-50 mt-4">
+              Close Scanner
+            </button>
           </div>
         </div>
       )}

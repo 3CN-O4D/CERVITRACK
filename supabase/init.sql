@@ -54,6 +54,24 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
+DO $$ BEGIN
+  CREATE TYPE batch_status AS ENUM ('receiving','testing','submitted');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE approval_status AS ENUM ('pending','approved','rejected');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE clinician_specialty AS ENUM (
+    'oncologist','gynecologist','nurse_practitioner',
+    'public_health_officer','pathologist','general_practitioner','other'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
 -- ============================================================
 -- 2. CORE TABLES
 -- ============================================================
@@ -121,12 +139,16 @@ CREATE TABLE IF NOT EXISTS vaccines (
 CREATE TABLE IF NOT EXISTS appointments (
   id               bigserial PRIMARY KEY,
   user_id          uuid REFERENCES users(id) ON DELETE CASCADE,
+  clinician_id     uuid REFERENCES users(id) ON DELETE SET NULL,
+  provider_id      uuid REFERENCES providers(id) ON DELETE SET NULL,
   title            text DEFAULT '',
   facility         text DEFAULT '',
   facility_name    text DEFAULT '',
   facility_location text DEFAULT '',
   date             text DEFAULT '',
+  time             text DEFAULT '',
   notes            text DEFAULT '',
+  custom_text      text DEFAULT '',
   status           appointment_status DEFAULT 'pending',
   created_at       timestamptz DEFAULT now()
 );
@@ -348,6 +370,54 @@ CREATE TABLE IF NOT EXISTS sample_kit_events (
 );
 
 -- ============================================================
+-- 5b. SAMPLE BATCHES (lab tech receives + processes batches)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS sample_batches (
+  id              bigserial PRIMARY KEY,
+  batch_code      text UNIQUE NOT NULL,
+  lab_tech_id     uuid REFERENCES users(id) ON DELETE SET NULL,
+  lab_tech_name   text DEFAULT '',
+  status          batch_status DEFAULT 'receiving',
+  sample_count    integer DEFAULT 0,
+  processed_count integer DEFAULT 0,
+  facility_id     text,
+  notes           text DEFAULT '',
+  submitted_at    timestamptz,
+  created_at      timestamptz DEFAULT now(),
+  updated_at      timestamptz DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS sample_batch_items (
+  id              bigserial PRIMARY KEY,
+  batch_id        bigint REFERENCES sample_batches(id) ON DELETE CASCADE,
+  kit_barcode     text NOT NULL,
+  kit_id          bigint REFERENCES sample_kits(id) ON DELETE SET NULL,
+  patient_id      uuid REFERENCES users(id) ON DELETE SET NULL,
+  patient_name    text DEFAULT '',
+  status          text DEFAULT 'pending',
+  result          text DEFAULT '',
+  result_notes    text DEFAULT '',
+  processed_at    timestamptz,
+  created_at      timestamptz DEFAULT now()
+);
+
+-- ============================================================
+-- 5c. CLINICIAN PROFILES (approval + specialization)
+-- ============================================================
+
+-- Add clinician approval columns to providers table
+ALTER TABLE providers ADD COLUMN IF NOT EXISTS approval_status approval_status DEFAULT 'pending';
+ALTER TABLE providers ADD COLUMN IF NOT EXISTS approved_by uuid;
+ALTER TABLE providers ADD COLUMN IF NOT EXISTS approved_at timestamptz;
+ALTER TABLE providers ADD COLUMN IF NOT EXISTS specialization clinician_specialty DEFAULT 'general_practitioner';
+ALTER TABLE providers ADD COLUMN IF NOT EXISTS county text DEFAULT '';
+ALTER TABLE providers ADD COLUMN IF NOT EXISTS sub_county text DEFAULT '';
+ALTER TABLE providers ADD COLUMN IF NOT EXISTS bio text DEFAULT '';
+ALTER TABLE providers ADD COLUMN IF NOT EXISTS photo text DEFAULT '';
+ALTER TABLE providers ADD COLUMN IF NOT EXISTS years_experience integer DEFAULT 0;
+
+-- ============================================================
 -- 6. SYNC LOG
 -- ============================================================
 
@@ -437,6 +507,28 @@ CREATE INDEX IF NOT EXISTS idx_sample_kits_created_at ON sample_kits (created_at
 -- Sample kit events: by kit_id
 CREATE INDEX IF NOT EXISTS idx_sample_kit_events_kit_id ON sample_kit_events (kit_id);
 
+-- Sample batches: by lab_tech_id, status, batch_code
+CREATE INDEX IF NOT EXISTS idx_sample_batches_lab_tech ON sample_batches (lab_tech_id);
+CREATE INDEX IF NOT EXISTS idx_sample_batches_status ON sample_batches (status);
+CREATE INDEX IF NOT EXISTS idx_sample_batches_code ON sample_batches (batch_code);
+CREATE INDEX IF NOT EXISTS idx_sample_batches_created_at ON sample_batches (created_at DESC);
+
+-- Sample batch items: by batch_id, kit_barcode, patient_id
+CREATE INDEX IF NOT EXISTS idx_batch_items_batch_id ON sample_batch_items (batch_id);
+CREATE INDEX IF NOT EXISTS idx_batch_items_kit_barcode ON sample_batch_items (kit_barcode);
+CREATE INDEX IF NOT EXISTS idx_batch_items_patient_id ON sample_batch_items (patient_id);
+CREATE INDEX IF NOT EXISTS idx_batch_items_status ON sample_batch_items (status);
+
+-- Providers: search by approval_status, specialization, hospital, county
+CREATE INDEX IF NOT EXISTS idx_providers_approval ON providers (approval_status);
+CREATE INDEX IF NOT EXISTS idx_providers_specialization ON providers (specialization);
+CREATE INDEX IF NOT EXISTS idx_providers_hospital ON providers (hospital);
+CREATE INDEX IF NOT EXISTS idx_providers_county ON providers (county);
+
+-- Appointments: by clinician_id, provider_id
+CREATE INDEX IF NOT EXISTS idx_appointments_clinician_id ON appointments (clinician_id);
+CREATE INDEX IF NOT EXISTS idx_appointments_provider_id ON appointments (provider_id);
+
 -- ============================================================
 -- 8. RPC FUNCTIONS
 -- ============================================================
@@ -488,6 +580,8 @@ ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE telehealth_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sample_kits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sample_kit_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sample_batches ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sample_batch_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sync_log ENABLE ROW LEVEL SECURITY;
 
 -- Allow anon read on public tables
@@ -545,6 +639,22 @@ CREATE POLICY "Users insert own chat_messages" ON chat_messages FOR INSERT WITH 
 -- Telehealth messages
 CREATE POLICY "Users read own telehealth" ON telehealth_messages FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users insert own telehealth" ON telehealth_messages FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+-- Sample batches: lab techs read/manage their own batches
+CREATE POLICY "Lab techs read own batches" ON sample_batches FOR SELECT USING (auth.uid() = lab_tech_id);
+CREATE POLICY "Lab techs insert batches" ON sample_batches FOR INSERT WITH CHECK (auth.uid() = lab_tech_id);
+CREATE POLICY "Lab techs update own batches" ON sample_batches FOR UPDATE USING (auth.uid() = lab_tech_id);
+
+-- Sample batch items: accessible via batch ownership
+CREATE POLICY "Lab techs read batch items" ON sample_batch_items FOR SELECT USING (
+  EXISTS (SELECT 1 FROM sample_batches sb WHERE sb.id = sample_batch_items.batch_id AND sb.lab_tech_id = auth.uid())
+);
+CREATE POLICY "Lab techs insert batch items" ON sample_batch_items FOR INSERT WITH CHECK (
+  EXISTS (SELECT 1 FROM sample_batches sb WHERE sb.id = sample_batch_items.batch_id AND sb.lab_tech_id = auth.uid())
+);
+CREATE POLICY "Lab techs update batch items" ON sample_batch_items FOR UPDATE USING (
+  EXISTS (SELECT 1 FROM sample_batches sb WHERE sb.id = sample_batch_items.batch_id AND sb.lab_tech_id = auth.uid())
+);
 
 -- ============================================================
 -- 10. SEED DATA — Articles (health library)
