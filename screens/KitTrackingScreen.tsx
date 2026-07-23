@@ -50,8 +50,41 @@ export default function KitTrackingScreen() {
   const [myKits, setMyKits] = useState<Kit[]>([]);
   const scanAnim = useRef(new Animated.Value(0)).current;
   const lastScanned = useRef<string>('');
+  const hidBuffer = useRef('');
+  const hidLastKeystroke = useRef(0);
+  const hidInputRef = useRef<TextInput>(null);
+
+  const HID_THRESHOLD_MS = 300;
+  const HID_MIN_LENGTH = 4;
+
+  const handleHidInput = (text: string) => {
+    const now = Date.now();
+    if (now - hidLastKeystroke.current > HID_THRESHOLD_MS) {
+      hidBuffer.current = '';
+    }
+    hidLastKeystroke.current = now;
+    hidBuffer.current += text;
+  };
+
+  const handleHidKeyPress = (key: string) => {
+    if (key === 'Enter' || key === 'Return') {
+      const code = hidBuffer.current.trim();
+      hidBuffer.current = '';
+      if (code.length >= HID_MIN_LENGTH) {
+        handleBarCodeScanned({ data: code });
+      }
+    }
+  };
 
   useEffect(() => { loadMyKits(); }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      hidInputRef.current?.focus();
+    }, 2000);
+    hidInputRef.current?.focus();
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     const anim = Animated.loop(
@@ -197,7 +230,27 @@ export default function KitTrackingScreen() {
         <Text style={[s.headerSub, { color: colors.textSecondary }]}>
           Scan barcode to track your sample kit
         </Text>
+        <View style={s.scannerModes}>
+          <View style={[s.modeIndicator, { backgroundColor: colors.success + '20' }]}>
+            <Ionicons name="hardware-chip-outline" size={12} color={colors.success} />
+            <Text style={[s.modeIndicatorText, { color: colors.success }]}>HID Scanner Ready</Text>
+          </View>
+          <View style={[s.modeIndicator, { backgroundColor: colors.primary + '20' }]}>
+            <Ionicons name="camera" size={12} color={colors.primary} />
+            <Text style={[s.modeIndicatorText, { color: colors.primary }]}>Camera</Text>
+          </View>
+        </View>
       </View>
+
+      {/* Hidden HID scanner input — captures USB/Bluetooth keyboard-wedge scanners */}
+      <TextInput
+        ref={hidInputRef}
+        style={{ position: 'absolute', opacity: 0, height: 1, width: 1, zIndex: -1 }}
+        value=""
+        onChangeText={handleHidInput}
+        onKeyPress={({ nativeEvent }) => handleHidKeyPress(nativeEvent.key)}
+        showSoftInputOnFocus={false}
+      />
 
       {/* Scanner */}
       {mode === 'camera' && permission?.granted && !kit && (
@@ -476,6 +529,9 @@ const styles = (colors: any) => StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   headerTitle: { fontSize: 22, fontWeight: '800' },
   headerSub: { fontSize: 13, fontWeight: '500', marginTop: 4 },
+  scannerModes: { flexDirection: 'row', gap: 8, marginTop: 8 },
+  modeIndicator: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
+  modeIndicatorText: { fontSize: 11, fontWeight: '600' },
 
   cameraWrap: { marginHorizontal: 20, height: 220, borderRadius: 20, overflow: 'hidden', marginBottom: 12 },
   camera: { flex: 1 },
