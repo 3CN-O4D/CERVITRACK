@@ -202,6 +202,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return { success: false, error: error?.message ?? 'Registration failed' };
         }
 
+        // If email confirmation is required, signIn directly so user doesn't hang
+        if (!data.session) {
+          const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
+          if (signInErr) {
+            // User created but needs email confirmation — tell them
+            return { success: false, error: 'Account created. Check your email to verify, then sign in.' };
+          }
+        }
+
         // Create profile row in users table
         const uid = data.user.id;
         const patientId = `PT-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9999)).padStart(4, '0')}`;

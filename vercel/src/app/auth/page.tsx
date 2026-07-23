@@ -1,12 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase-browser';
+import Image from 'next/image';
 
 export default function AuthPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirect = searchParams.get('redirect');
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -48,7 +51,7 @@ export default function AuthPage() {
         if (signUpError) {
           setError(signUpError.message);
         } else {
-          setSuccess('Registration successful! Please check your email for verification, then sign in.');
+          setSuccess('Registration successful! Please sign in.');
           setMode('login');
         }
       } else {
@@ -68,10 +71,14 @@ export default function AuthPage() {
         } else if (data.user) {
           const role = data.user.user_metadata?.role || data.user.app_metadata?.role;
 
-          if (role === 'admin') {
+          if (redirect) {
+            router.push(redirect);
+          } else if (role === 'admin' || role === 'system_admin' || role === 'national_admin' || role === 'county_admin') {
             router.push('/admin');
-          } else if (role === 'provider') {
-            router.push('/provider');
+          } else if (role === 'lab_technician') {
+            router.push('/lab');
+          } else if (role === 'clinician' || role === 'provider') {
+            router.push('/workspace');
           } else {
             setSuccess('Welcome! Please open the CerviTrack mobile app to continue.');
           }
@@ -87,10 +94,11 @@ export default function AuthPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-sky-50 to-white">
       <div className="w-full max-w-md p-8">
-        <Link href="/" className="text-sky-700 text-sm mb-6 inline-block hover:underline">
-          ← Back to home
+        <Link href="/" className="flex items-center justify-center gap-3 mb-8">
+          <Image src="/logo.jpeg" alt="CerviTrack" width={48} height={32} className="rounded-lg" />
+          <span className="text-2xl font-bold text-sky-800">CerviTrack</span>
         </Link>
-        <h1 className="text-3xl font-bold text-sky-900 mb-6">
+        <h1 className="text-3xl font-bold text-sky-900 mb-6 text-center">
           {mode === 'login' ? 'Welcome back' : 'Create account'}
         </h1>
 
@@ -141,7 +149,7 @@ export default function AuthPage() {
             disabled={loading}
             className="w-full bg-sky-700 text-white py-3 rounded-lg font-semibold hover:bg-sky-800 disabled:opacity-50 transition-colors"
           >
-            {loading ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Sign up'}
+            {loading ? 'Please wait...' : mode === 'login' ? 'Sign in' : 'Sign up'}
           </button>
         </form>
 
@@ -157,7 +165,7 @@ export default function AuthPage() {
 
         <div className="mt-8 pt-6 border-t border-gray-200 text-center">
           <Link href="/provider/login" className="text-sm text-gray-500 hover:text-sky-700">
-            Provider login →
+            Provider login
           </Link>
         </div>
       </div>

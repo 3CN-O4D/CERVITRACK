@@ -10,7 +10,6 @@ const stats = [
   { value: '17%', label: 'Current national screening coverage', color: 'text-amber-400' },
   { value: '90%', label: 'Preventable with early detection & HPV vaccination', color: 'text-emerald-400' },
   { value: '47', label: 'Counties connected to the registry', color: 'text-sky-300' },
-  { value: '100%', label: 'Free for all Kenyan women', color: 'text-white' },
 ];
 
 const portals = [
@@ -167,7 +166,7 @@ const features = [
 ];
 
 const faqs = [
-  { q: 'Is CerviTrack free?', a: 'Yes. CerviTrack is completely free for all users — patients, clinicians, and administrators. No hidden fees, no subscriptions.' },
+  { q: 'Is the CerviTrack app free?', a: 'Yes. The CerviTrack Patient APK is completely free for all women in Kenya. Hospital and facility portals (Lab PWA, Clinician Workspace, Admin Panel) are available as paid subscriptions for healthcare institutions.' },
   { q: 'Is my health data private?', a: 'Absolutely. Your health data is encrypted at rest and in transit. We comply with Kenya\'s Data Protection Act (2019) and never share data without your explicit consent.' },
   { q: 'Do I need internet to use the app?', a: 'The Patient APK and Lab PWA both work offline. Your data is stored securely on-device and syncs automatically when you reconnect to the internet.' },
   { q: 'What phones are supported?', a: 'The Patient APK works on any Android phone running Android 6.0 or later (~15 MB). The web panels work in any modern browser.' },
@@ -178,10 +177,10 @@ const faqs = [
 ];
 
 const timeline = [
-  { date: '2024', event: 'Project inception with Kenya MOH' },
-  { date: '2025 Q1', event: 'Pilot launch in 3 counties' },
-  { date: '2025 Q3', event: 'Expansion to 15 counties' },
-  { date: '2026', event: 'National rollout — all 47 counties' },
+  { date: 'March 2026', event: 'Project inception — 3C Network for Oncology & Digital Health (3CN-O4D)' },
+  { date: 'May 2026', event: 'Partnership with Solace Cancer Foundation' },
+  { date: 'September 2026', event: 'Pilot launch in 3 counties' },
+  { date: '2027', event: 'National rollout — all 47 counties' },
 ];
 
 export default function HomePage() {
@@ -190,17 +189,14 @@ export default function HomePage() {
       {/* ── Endorsement Banner ── */}
       <div className="bg-sky-900 text-sky-200 text-xs text-center py-2 px-4">
         <span className="font-semibold text-white">Supported by the Ministry of Health, Kenya</span>
+        {' '}&middot; In partnership with <a href="https://solacecancer.org" target="_blank" rel="noopener noreferrer" className="underline text-emerald-300">Solace Cancer Foundation</a>
         {' '}&middot; Aligned with Kenya Health Policy 2014-2030 &middot; WHO Cervical Cancer Elimination Strategy
       </div>
 
       {/* ── Nav ── */}
       <nav className="flex items-center justify-between px-6 py-4 max-w-7xl mx-auto border-b border-gray-100">
         <Link href="/" className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-sky-700 rounded-lg flex items-center justify-center">
-            <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
-            </svg>
-          </div>
+          <img src="/logo.jpeg" alt="CerviTrack" className="w-8 h-8 rounded-lg object-cover" />
           <span className="text-xl font-bold text-sky-800">CerviTrack</span>
         </Link>
         <div className="hidden md:flex items-center gap-6">
@@ -261,10 +257,8 @@ export default function HomePage() {
             <div className="relative">
               <div className="w-72 h-[520px] bg-gradient-to-b from-sky-100 via-sky-50 to-emerald-100 rounded-[3rem] border-4 border-gray-200 shadow-2xl flex items-center justify-center overflow-hidden">
                 <div className="text-center px-8">
-                  <div className="w-20 h-20 bg-sky-700 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-lg">
-                    <svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
-                    </svg>
+                  <div className="w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-lg overflow-hidden">
+                    <img src="/logo.jpeg" alt="CerviTrack" className="w-full h-full object-cover" />
                   </div>
                   <p className="font-bold text-sky-900 text-xl">CerviTrack</p>
                   <p className="text-sm text-gray-500 mt-2">Cervical Health Registry</p>
@@ -529,11 +523,7 @@ export default function HomePage() {
           <div className="grid md:grid-cols-4 gap-10 mb-10">
             <div>
               <div className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 bg-sky-700 rounded-lg flex items-center justify-center">
-                  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
-                  </svg>
-                </div>
+                <img src="/logo.jpeg" alt="CerviTrack" className="w-8 h-8 rounded-lg object-cover" />
                 <span className="text-lg font-bold text-sky-800">CerviTrack</span>
               </div>
               <p className="text-sm text-gray-500 leading-relaxed">
@@ -570,7 +560,7 @@ export default function HomePage() {
             </div>
           </div>
           <div className="border-t border-gray-200 pt-6 flex flex-col md:flex-row items-center justify-between gap-4">
-            <span className="text-gray-400 text-xs">&copy; {new Date().getFullYear()} CerviTrack. All rights reserved. A product of 3C Network for Oncology & Digital Health (3CN-O4D).</span>
+            <span className="text-gray-400 text-xs">&copy; {new Date().getFullYear()} CerviTrack. All rights reserved. A product of 3C Network for Oncology & Digital Health (3CN-O4D). In partnership with <a href="https://solacecancer.org" target="_blank" rel="noopener noreferrer" className="underline hover:text-sky-600">Solace Cancer Foundation</a>.</span>
             <div className="flex items-center gap-2 text-xs text-gray-400">
               <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
               System Status: Operational

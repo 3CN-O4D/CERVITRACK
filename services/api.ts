@@ -759,7 +759,10 @@ export interface KitEvent {
 
 export async function scanKit(barcode: string): Promise<Kit | null> {
   try {
-    const res = await fetch(`${KIT_API}/scan/${encodeURIComponent(barcode)}`);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch(`${KIT_API}/scan/${encodeURIComponent(barcode)}`, { signal: controller.signal });
+    clearTimeout(timer);
     if (res.ok) return await res.json();
     return null;
   } catch { return null; }
@@ -799,6 +802,37 @@ export async function collectKit(barcode: string, data: { collectedBy: string; c
     if (res.ok) return await res.json();
     return null;
   } catch { return null; }
+}
+
+export async function linkKit(barcode: string, data: {
+  patientId: string;
+  patientName: string;
+  linkedBy: string;
+  linkedByName: string;
+}): Promise<{ kit: Kit; notification: boolean } | null> {
+  try {
+    const res = await fetch(`${KIT_API}/link`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ barcode, ...data }),
+    });
+    if (res.ok) return await res.json();
+    return null;
+  } catch { return null; }
+}
+
+export async function searchPatients(query: string): Promise<Array<{ id: string; name: string; patient_id: string; phone: string; county: string }>> {
+  try {
+    const { supabase } = await import('../lib/supabase/client');
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, name, patient_id, phone, county')
+      .eq('role', 'patient')
+      .or(`name.ilike.%${query}%,patient_id.ilike.%${query}%,phone.ilike.%${query}%`)
+      .limit(20);
+    if (error || !data) return [];
+    return data;
+  } catch { return []; }
 }
 
 export async function getKitStats() {

@@ -15,7 +15,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
-import { scanKit, registerKit, pairKit, collectKit, type Kit, type KitEvent } from '../services/api';
+import { scanKit, registerKit, pairKit, collectKit, linkKit, searchPatients, type Kit, type KitEvent } from '../services/api';
 import { getItem, setItem } from '../services/storage';
 
 const { width } = Dimensions.get('window');
@@ -48,8 +48,13 @@ export default function KitTrackingScreen() {
   const [action, setAction] = useState<'register' | 'pair' | 'collect' | null>(null);
   const [collectionMethod, setCollectionMethod] = useState('');
   const [myKits, setMyKits] = useState<Kit[]>([]);
+  const [patientSearch, setPatientSearch] = useState('');
+  const [patientResults, setPatientResults] = useState<Array<{ id: string; name: string; patient_id: string; phone: string }>>([]);
+  const [searchingPatients, setSearchingPatients] = useState(false);
+  const [selectedPatient, setSelectedPatient] = useState<{ id: string; name: string; patient_id: string } | null>(null);
   const scanAnim = useRef(new Animated.Value(0)).current;
   const lastScanned = useRef<string>('');
+  const isScanning = useRef(false);
   const hidBuffer = useRef('');
   const hidLastKeystroke = useRef(0);
   const hidInputRef = useRef<TextInput>(null);
@@ -112,10 +117,13 @@ export default function KitTrackingScreen() {
   };
 
   const handleBarCodeScanned = useCallback(async ({ data }: { data: string }) => {
+    if (isScanning.current) return;
     if (data === lastScanned.current) return;
+    isScanning.current = true;
     lastScanned.current = data;
     setBarcode(data);
     await lookupKit(data);
+    isScanning.current = false;
   }, []);
 
   const lookupKit = async (code: string) => {
@@ -128,13 +136,12 @@ export default function KitTrackingScreen() {
 
     try {
       const found = await scanKit(code.trim());
-      if (found) {
+      if (found && found.barcode) {
         setKit(found);
       } else {
         setAction('register');
       }
     } catch {
-      setError('Network error — will work offline');
       setAction('register');
     } finally {
       setScanning(false);
@@ -208,6 +215,57 @@ export default function KitTrackingScreen() {
         saveMyKits(myKits.map(k => k.barcode === barcode ? result : k));
       } else {
         setError('Failed to confirm collection');
+      }
+    } catch {
+      setError('Network error');
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const isClinician = user?.role === 'clinician' || user?.role === 'nurse' || user?.role === 'lab_technician';
+
+  const handleSearchPatients = async (query: string) => {
+    setPatientSearch(query);
+    if (query.length < 2) { setPatientResults([]); return; }
+    setSearchingPatients(true);
+    try {
+      const results = await searchPatients(query);
+      setPatientResults(results);
+    } catch {
+      setPatientResults([]);
+    } finally {
+      setSearchingPatients(false);
+    }
+  };
+
+  const handleLinkToPatient = async (patient: { id: string; name: string; patient_id: string }) => {
+    if (!barcode) return;
+    setSelectedPatient(patient);
+    setAction('link-confirm');
+  };
+
+  const handleConfirmLink = async () => {
+    if (!barcode || !selectedPatient) return;
+    setScanning(true);
+    setError('');
+    try {
+      const result = await linkKit(barcode, {
+        patientId: selectedPatient.id,
+        patientName: selectedPatient.name,
+        linkedBy: user?.id || 'system',
+        linkedByName: user?.name || 'Clinician',
+      });
+      if (result?.kit) {
+        setKit(result.kit);
+        setAction(null);
+        setSelectedPatient(null);
+        setPatientSearch('');
+        setPatientResults([]);
+        setSuccess(`Kit linked to ${selectedPatient.name}`);
+        saveMyKits([result.kit, ...myKits.filter(k => k.barcode !== barcode)]);
+      } else {
+        setError('Failed to link kit — may already be linked');
       }
     } catch {
       setError('Network error');
@@ -393,10 +451,17 @@ export default function KitTrackingScreen() {
             {/* Action Buttons */}
             <View style={s.actions}>
               {kit.status === 'REGISTERED' && !action && (
-                <TouchableOpacity style={[s.actionBtn, { backgroundColor: '#2563EB' }]} onPress={handlePair} disabled={scanning}>
-                  <Ionicons name="link" size={18} color="#FFF" />
-                  <Text style={s.actionBtnText}>Pair to My Account</Text>
-                </TouchableOpacity>
+                isClinician ? (
+                  <TouchableOpacity style={[s.actionBtn, { backgroundColor: '#7C3AED' }]} onPress={() => setAction('link')}>
+                    <Ionicons name="person-add" size={18} color="#FFF" />
+                    <Text style={s.actionBtnText}>Link to Patient</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity style={[s.actionBtn, { backgroundColor: '#2563EB' }]} onPress={handlePair} disabled={scanning}>
+                    <Ionicons name="link" size={18} color="#FFF" />
+                    <Text style={s.actionBtnText}>Link to My Account</Text>
+                  </TouchableOpacity>
+                )
               )}
               {kit.status === 'PAIRED' && !action && (
                 <TouchableOpacity style={[s.actionBtn, { backgroundColor: '#16A34A' }]} onPress={() => setAction('collect')}>
