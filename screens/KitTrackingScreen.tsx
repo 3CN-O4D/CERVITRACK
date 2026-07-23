@@ -317,7 +317,7 @@ export default function KitTrackingScreen() {
             ref={cameraRef}
             style={s.camera}
             facing="back"
-            barcodeScannerSettings={{ barcodeTypes: ['qr', 'ean13', 'ean8', 'code128', 'code39'] }}
+            barcodeScannerSettings={{ barcodeTypes: ['qr', 'ean13', 'ean8', 'code128', 'code39', 'upc_a', 'upc_e', 'pdf417', 'aztec', 'data_matrix', 'interleaved2of5', 'codabar', 'itf'] }}
             onBarcodeScanned={scanning ? undefined : handleBarCodeScanned}
           >
             <View style={s.scanOverlay}>
