@@ -155,14 +155,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginByPhone = useCallback(async (phone: string) => {
     try {
-      const { data: { users }, error } = await supabase.auth.admin.listUsers();
-      if (error || !users) return { success: false, error: 'Login failed' };
-
-      const sbUser = users.find((u: any) => u.phone === phone.trim());
-      if (!sbUser) return { success: false, error: 'Phone number not registered' };
-
-      await supabase.auth.signInWithPassword({ email: sbUser.email!, password: '' });
-      // Force a refresh by triggering the onAuthStateChange listener
+      const { data: profile, error: profileErr } = await supabase
+        .from('users')
+        .select('email, password')
+        .eq('phone', phone.trim())
+        .maybeSingle();
+      if (profileErr || !profile?.email) {
+        return { success: false, error: 'Phone number not registered' };
+      }
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: profile.email,
+        password: profile.password || 'default123',
+      });
+      if (error || !data.user) {
+        return { success: false, error: error?.message ?? 'Login failed' };
+      }
       return { success: true };
     } catch {
       return { success: false, error: 'Login failed' };
@@ -194,6 +201,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (error || !data.user) {
           return { success: false, error: error?.message ?? 'Registration failed' };
         }
+
+        // Create profile row in users table
+        const uid = data.user.id;
+        const patientId = `PT-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9999)).padStart(4, '0')}`;
+        const { error: profileErr } = await supabase.from('users').upsert({
+          id: uid,
+          name,
+          email,
+          phone,
+          password,
+          role: role || 'patient',
+          photo: photoUri || null,
+          county: county || '',
+          sub_county: subCounty || '',
+          ward: ward || '',
+          patient_id: patientId,
+          consent_terms: true,
+          consent_medical: true,
+          consent_at: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+        }, { onConflict: 'id' });
+        if (profileErr) {
+          console.warn('Profile insert failed:', profileErr.message);
+        }
+
+        // Create consent log
+        await supabase.from('consent_log').insert({
+          user_id: uid,
+          consent_type: 'registration',
+          consent_terms: true,
+          consent_medical: true,
+          accepted: true,
+        });
+
         return { success: true };
       } catch {
         return { success: false, error: 'Registration failed' };

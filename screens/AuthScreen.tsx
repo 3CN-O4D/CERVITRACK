@@ -67,14 +67,6 @@ export default function AuthScreen() {
       const ref = isLogin ? loginOtpRefs.current[index + 1] : otpRefs.current[index + 1];
       ref?.focus();
     }
-    const filled = arr.every((d) => d !== '');
-    if (filled) {
-      if (isLogin) {
-        handleLoginWithOtp();
-      } else {
-        handleVerifyOtp();
-      }
-    }
   };
 
   const handleOtpKeyPress = (index: number, key: string, isLogin: boolean) => {
@@ -229,6 +221,17 @@ export default function AuthScreen() {
     <>
       <Text style={s.otpLabel}>Enter the 6-digit code sent to {phone}</Text>
       {renderOtpBoxes(true)}
+      <TouchableOpacity
+        style={[s.submitBtn, loading && s.submitBtnDisabled]}
+        onPress={handleLoginWithOtp}
+        disabled={loading || loginOtp.join('').length < 6}
+      >
+        {loading ? (
+          <ActivityIndicator color="#FFF" />
+        ) : (
+          <Text style={s.submitBtnText}>Verify & Sign In</Text>
+        )}
+      </TouchableOpacity>
       <TouchableOpacity onPress={() => setLoginShowOtpInput(false)} style={s.backLink}>
         <Text style={s.backLinkText}>Change phone number</Text>
       </TouchableOpacity>
@@ -425,6 +428,17 @@ export default function AuthScreen() {
         <Text style={s.otpInfoText}>Enter the 6-digit code sent to {phone}</Text>
       </View>
       {renderOtpBoxes(false)}
+      <TouchableOpacity
+        style={[s.submitBtn, loading && s.submitBtnDisabled]}
+        onPress={handleVerifyOtp}
+        disabled={loading || otp.join('').length < 6}
+      >
+        {loading ? (
+          <ActivityIndicator color="#FFF" />
+        ) : (
+          <Text style={s.submitBtnText}>Verify & Create Account</Text>
+        )}
+      </TouchableOpacity>
       <TouchableOpacity onPress={handleResendOtp} style={s.resendBtn}>
         <Text style={s.resendLink}>Resend OTP</Text>
       </TouchableOpacity>
