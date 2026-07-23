@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase-admin';
+
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 const TEST_USERS = [
   { email: 'patient1@cervitrack.app', password: 'password123', name: 'Grace Wanjiku', phone: '+254712000001', role: 'patient', county: 'Nairobi', sub_county: 'Westlands', ward: 'Parklands', patient_id: 'PT-2026-0001' },
@@ -24,41 +26,67 @@ const TEST_USERS = [
   { email: 'clinician4@cervitrack.app', password: 'password123', name: 'Dr. Peter Mwangi', phone: '+254744000046', role: 'clinician', county: 'Nakuru', sub_county: 'Nakuru Town', ward: 'CBD', patient_id: null },
 ];
 
+const wait = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+async function adminFetch(path: string, options: RequestInit = {}) {
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/${path}`, {
+    ...options,
+    headers: {
+      'apikey': SERVICE_KEY,
+      'Authorization': `Bearer ${SERVICE_KEY}`,
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+  return res;
+}
+
 export async function POST() {
   const results: { email: string; status: string; message?: string }[] = [];
 
-  // Step 1: Delete all existing auth users (except service role)
-  const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
+  // Step 1: Delete all existing auth users
+  const listRes = await adminFetch('users');
+  const listData = await listRes.json();
   let deleted = 0;
-  if (existingUsers?.users) {
-    for (const u of existingUsers.users) {
-      const { error } = await supabaseAdmin.auth.admin.deleteUser(u.id);
-      if (!error) deleted++;
+  if (listData?.users) {
+    for (const u of listData.users) {
+      const delRes = await adminFetch(`users/${u.id}`, { method: 'DELETE' });
+      if (delRes.ok) deleted++;
+      await wait(100);
     }
   }
 
-  // Step 2: Clear the public users table
-  await supabaseAdmin.from('users').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  // Step 2: Clear public users table
+  const { createClient } = await import('@supabase/supabase-js');
+  const sb = createClient(SUPABASE_URL, SERVICE_KEY);
+  await sb.from('users').delete().neq('id', '00000000-0000-0000-0000-000000000000');
 
-  // Step 3: Create all users
+  // Step 3: Create users via REST API with delays
   for (const user of TEST_USERS) {
     try {
-      const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-        email: user.email,
-        password: user.password,
-        email_confirm: true,
-        phone: user.phone,
-        user_metadata: { name: user.name, role: user.role },
+      const res = await adminFetch('users', {
+        method: 'POST',
+        body: JSON.stringify({
+          email: user.email,
+          password: user.password,
+          email_confirm: true,
+          phone: user.phone,
+          user_metadata: { name: user.name, role: user.role },
+        }),
       });
 
-      if (authError) {
-        results.push({ email: user.email, status: 'error', message: authError.message });
+      const data = await res.json();
+
+      if (!res.ok || data.id === undefined) {
+        const msg = data.msg || data.error_description || data.message || JSON.stringify(data);
+        results.push({ email: user.email, status: 'error', message: msg });
+        await wait(500);
         continue;
       }
 
-      const userId = authData.user.id;
+      const userId = data.id;
 
-      const { error: profileError } = await supabaseAdmin.from('users').insert({
+      const { error: profileError } = await sb.from('users').insert({
         id: userId,
         name: user.name,
         email: user.email,
@@ -83,6 +111,8 @@ export async function POST() {
     } catch (err: unknown) {
       results.push({ email: user.email, status: 'error', message: err instanceof Error ? err.message : 'unknown' });
     }
+
+    await wait(300);
   }
 
   const created = results.filter(r => r.status === 'created').length;
