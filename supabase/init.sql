@@ -38,7 +38,9 @@ END $$;
 
 DO $$ BEGIN
   CREATE TYPE sender_type AS ENUM ('patient','staff','system');
-EXCEPTION WHEN duplicate_object THEN NULL;
+EXCEPTION WHEN duplicate_object THEN
+  ALTER TYPE sender_type ADD VALUE IF NOT EXISTS 'patient';
+  ALTER TYPE sender_type ADD VALUE IF NOT EXISTS 'system';
 END $$;
 
 DO $$ BEGIN
