@@ -571,5 +571,23 @@ INSERT INTO chat_contacts (name, role, specialty, hospital, online) VALUES
 ON CONFLICT DO NOTHING;
 
 -- ============================================================
+-- Utility: cleanup orphaned auth users (used by /api/seed)
+-- ============================================================
+CREATE OR REPLACE FUNCTION cleanup_orphaned_auth_users()
+RETURNS void AS $$
+BEGIN
+  DELETE FROM auth.users
+  WHERE email IN ('patient1@cervitrack.app','patient2@cervitrack.app','patient3@cervitrack.app',
+    'patient4@cervitrack.app','patient5@cervitrack.app','patient6@cervitrack.app',
+    'patient7@cervitrack.app','patient8@cervitrack.app','patient9@cervitrack.app',
+    'patient10@cervitrack.app','nurse1@cervitrack.app','nurse2@cervitrack.app',
+    'lab1@cervitrack.app','lab2@cervitrack.app','admin1@cervitrack.app',
+    'admin2@cervitrack.app','clinician1@cervitrack.app','clinician2@cervitrack.app',
+    'clinician3@cervitrack.app','clinician4@cervitrack.app','test_debug@cervitrack.app',
+    'zzz_test_999@cervitrack.app');
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ============================================================
 -- DONE
 -- ============================================================
