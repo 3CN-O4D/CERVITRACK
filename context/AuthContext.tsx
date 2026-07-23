@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { supabase } from '../lib/supabase/client';
 import { getItem, setItem, removeItem } from '../services/storage';
+import { saveUser as saveUserToLocal } from '../services/localDb';
 import type { User } from './types';
 
 interface AuthContextType {
@@ -33,6 +34,9 @@ function mapSupabaseUser(sbUser: any, profile: any): User {
     birthDate: profile?.birth_date ?? '',
     lastHealedDate: profile?.last_healed_date ?? '',
     location: [profile?.county, profile?.sub_county, profile?.ward].filter(Boolean).join(', '),
+    county: profile?.county ?? '',
+    subCounty: profile?.sub_county ?? '',
+    ward: profile?.ward ?? '',
     createdAt: sbUser.created_at ?? new Date().toISOString(),
   };
 }
@@ -58,7 +62,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .select('*')
           .eq('id', session.user.id)
           .maybeSingle();
-        if (profile && mounted) setUser(mapSupabaseUser(session.user, profile));
+        if (profile && mounted) {
+          setUser(mapSupabaseUser(session.user, profile));
+          saveUserToLocal(profile);
+        }
       }
       if (mounted) setLoading(false);
     };
@@ -74,7 +81,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             .select('*')
             .eq('id', session.user.id)
             .maybeSingle();
-          if (profile) setUser(mapSupabaseUser(session.user, profile));
+          if (profile) {
+            setUser(mapSupabaseUser(session.user, profile));
+            saveUserToLocal(profile);
+          }
           // Sync consent if accepted locally but not in Supabase
           const consentVal = await getItem(CONSENT_KEY);
           if (consentVal === 'true') {
@@ -234,6 +244,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (profileErr) {
           console.warn('Profile insert failed:', profileErr.message);
         }
+
+        // Save user to local SQLite
+        saveUserToLocal({
+          id: uid, name, email, phone, password, role: role || 'patient',
+          photo: photoUri || null, county: county || '', sub_county: subCounty || '',
+          ward: ward || '', patient_id: patientId, created_at: new Date().toISOString(),
+        });
 
         // Create consent log
         await supabase.from('consent_log').insert({

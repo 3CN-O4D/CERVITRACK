@@ -12,18 +12,25 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { getItem, setItem } from '../services/storage';
 import { supabase } from '../lib/supabase/client';
+import { uploadToCloudinary } from '../lib/cloudinary';
+import * as ImagePicker from 'expo-image-picker';
+import { Audio } from 'expo-av';
+import { saveImageLocally, saveAudioLocally, uploadMediaToCloudinary } from '../services/mediaStore';
 import {
   getChatContacts,
   getConversations,
   getOrCreateConversation,
   getMessages,
   sendMessage as apiSendMessage,
+  sendImageMessage as apiSendImageMessage,
+  sendAudioMessage as apiSendAudioMessage,
   onMessagesInsert,
 } from '../services/api';
 
@@ -46,6 +53,8 @@ interface Message {
   id: string;
   type: 'text' | 'image' | 'audio';
   content: string;
+  fileUrl?: string;
+  localUri?: string;
   sent: boolean;
   time: string;
   status: 'sent' | 'delivered' | 'read';
@@ -116,7 +125,7 @@ export default function MessagesScreen({ navigation }: any) {
             role: 'Clinician',
             specialty: c.specialty || '',
             hospital: c.hospital || '',
-            online: true,
+            online: false,
             lastMessage: 'Tap to start chatting',
             lastTime: '',
             unread: 0,
@@ -254,6 +263,9 @@ export function ChatDetail({ navigation, route }: any) {
   const [inputText, setInputText] = useState('');
   const [loaded, setLoaded] = useState(false);
   const flatListRef = useRef<FlatList>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const [playingId, setPlayingId] = useState<string | null>(null);
 
   const uid = user?.id || 'default';
   const msgStorageKey = `@cervitrack_msgs_${uid}_${contact.id}`;
@@ -303,6 +315,8 @@ export function ChatDetail({ navigation, route }: any) {
                 id: String(m.id),
                 type: m.message_type || 'text',
                 content: m.content || '',
+                fileUrl: m.file_url || '',
+                localUri: m.local_uri || '',
                 sent: m.sender_id === user.id,
                 time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                 status: 'read' as const,
@@ -401,6 +415,123 @@ export function ChatDetail({ navigation, route }: any) {
     }, 3000);
   };
 
+  const handlePickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Please grant camera roll access to send images.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.7,
+      allowsEditing: true,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+
+    const asset = result.assets[0];
+    const now = Date.now();
+    const msgId = now.toString();
+
+    // Save locally first
+    const localPath = await saveImageLocally(asset.uri, msgId);
+
+    const newMsg: Message = {
+      id: msgId,
+      type: 'image',
+      content: 'Photo',
+      localUri: localPath,
+      sent: true,
+      time: getCurrentTime(),
+      status: 'sent',
+      createdAt: now,
+    };
+    setMessages((prev) => [...prev, newMsg]);
+    updateContactLastMessage('📷 Photo');
+
+    // Upload to Cloudinary + send to Supabase
+    if (conversationId && user?.id) {
+      try {
+        const cloudUrl = await uploadMediaToCloudinary(localPath, 'image');
+        const fileUrl = cloudUrl || localPath;
+        await apiSendImageMessage('Photo', conversationId, user.id, fileUrl, 'user');
+      } catch { /* sent locally, will sync later */ }
+    }
+  };
+
+  const handleStartRecording = async () => {
+    const { status } = await Audio.requestPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Please grant microphone access to record voice notes.');
+      return;
+    }
+    await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+    const { recording: newRecording } = await Audio.Recording.createAsync(
+      Audio.RecordingOptionsPresets.HIGH_QUALITY
+    );
+    setRecording(newRecording);
+    setIsRecording(true);
+  };
+
+  const handleStopRecording = async () => {
+    if (!recording) return;
+    setIsRecording(false);
+    await recording.stopAndUnloadAsync();
+    await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+    const uri = recording.getURI();
+    setRecording(null);
+    if (!uri) return;
+
+    const now = Date.now();
+    const msgId = now.toString();
+
+    // Save locally
+    const localPath = await saveAudioLocally(uri, msgId);
+
+    const newMsg: Message = {
+      id: msgId,
+      type: 'audio',
+      content: 'Voice note',
+      localUri: localPath,
+      sent: true,
+      time: getCurrentTime(),
+      status: 'sent',
+      createdAt: now,
+    };
+    setMessages((prev) => [...prev, newMsg]);
+    updateContactLastMessage('🎤 Voice note');
+
+    // Upload + send
+    if (conversationId && user?.id) {
+      try {
+        const cloudUrl = await uploadMediaToCloudinary(localPath, 'audio');
+        const fileUrl = cloudUrl || localPath;
+        await apiSendAudioMessage(conversationId, user.id, fileUrl, undefined, 'user');
+      } catch { /* sent locally, will sync later */ }
+    }
+  };
+
+  const handlePlayAudio = async (msg: Message) => {
+    const uri = msg.localUri || msg.fileUrl || msg.content;
+    if (!uri) return;
+
+    if (playingId === msg.id) {
+      setPlayingId(null);
+      return;
+    }
+
+    try {
+      const { sound } = await Audio.Sound.createAsync({ uri });
+      setPlayingId(msg.id);
+      await sound.playAsync();
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          setPlayingId(null);
+          sound.unloadAsync();
+        }
+      });
+    } catch { setPlayingId(null); }
+  };
+
   const renderMessage = ({ item }: { item: Message }) => (
     <View style={[s.msgRow, item.sent ? s.msgSent : s.msgReceived]}>
       {item.type === 'text' && (
@@ -417,14 +548,23 @@ export function ChatDetail({ navigation, route }: any) {
       )}
       {item.type === 'image' && (
         <View style={[s.imageBubble, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
-          <Ionicons name="image-outline" size={32} color={colors.textSecondary} />
-          <Text style={[s.imageLabel, { color: colors.textSecondary }]}>Image</Text>
+          {item.localUri || item.fileUrl ? (
+            <Image source={{ uri: item.localUri || item.fileUrl }} style={s.chatImage} resizeMode="cover" />
+          ) : (
+            <>
+              <Ionicons name="image-outline" size={32} color={colors.textSecondary} />
+              <Text style={[s.imageLabel, { color: colors.textSecondary }]}>Image</Text>
+            </>
+          )}
         </View>
       )}
       {item.type === 'audio' && (
         <View style={[s.audioBubble, { backgroundColor: item.sent ? colors.primary + '20' : colors.inputBg }]}>
-          <TouchableOpacity style={[s.playBtn, { backgroundColor: colors.primary }]}>
-            <Ionicons name="play" size={14} color="#FFF" />
+          <TouchableOpacity
+            style={[s.playBtn, { backgroundColor: colors.primary }]}
+            onPress={() => handlePlayAudio(item)}
+          >
+            <Ionicons name={playingId === item.id ? 'pause' : 'play'} size={14} color="#FFF" />
           </TouchableOpacity>
           <View style={s.audioWave}>
             <View style={[s.waveBar, { backgroundColor: item.sent ? colors.primary : colors.textSecondary }]} />
@@ -485,6 +625,9 @@ export function ChatDetail({ navigation, route }: any) {
       />
 
       <View style={[s.inputBar, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
+        <TouchableOpacity style={s.attachBtn} onPress={handlePickImage}>
+          <Ionicons name="attach" size={22} color={colors.textSecondary} />
+        </TouchableOpacity>
         <View style={[s.inputWrap, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
           <TextInput
             style={[s.chatInput, { color: colors.text }]}
@@ -496,11 +639,21 @@ export function ChatDetail({ navigation, route }: any) {
           />
         </View>
         {inputText.trim() ? (
-          <TouchableOpacity style={[s.sendBtn, { backgroundColor: colors.primary }]} onPress={handleSend}>
+          <TouchableOpacity
+            style={[s.sendBtn, { backgroundColor: colors.primary }]}
+            onPress={handleSend}
+          >
             <Ionicons name="send" size={18} color="#FFF" />
           </TouchableOpacity>
+        ) : isRecording ? (
+          <TouchableOpacity
+            style={[s.sendBtn, { backgroundColor: colors.danger }]}
+            onPress={handleStopRecording}
+          >
+            <Ionicons name="stop" size={18} color="#FFF" />
+          </TouchableOpacity>
         ) : (
-          <TouchableOpacity style={s.micBtn}>
+          <TouchableOpacity style={s.micBtn} onPress={handleStartRecording}>
             <Ionicons name="mic-outline" size={22} color={colors.textSecondary} />
           </TouchableOpacity>
         )}
@@ -610,13 +763,14 @@ const s = StyleSheet.create({
   msgBubble: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 18 },
   msgText: { fontSize: 15, fontWeight: '500', lineHeight: 20 },
   imageBubble: {
-    width: 160, height: 120,
+    width: 200, height: 220,
     borderRadius: 16,
-    borderWidth: 1,
+    borderWidth: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    borderStyle: 'dashed',
+    overflow: 'hidden',
   },
+  chatImage: { width: '100%', height: '100%', borderRadius: 16 },
   imageLabel: { fontSize: 11, fontWeight: '600', marginTop: 4 },
   audioBubble: {
     flexDirection: 'row',
@@ -652,4 +806,5 @@ const s = StyleSheet.create({
   chatInput: { flex: 1, fontSize: 15, fontWeight: '500', maxHeight: 80, paddingVertical: 8 },
   sendBtn: { width: 38, height: 38, borderRadius: 19, justifyContent: 'center', alignItems: 'center' },
   micBtn: { width: 38, height: 38, borderRadius: 19, justifyContent: 'center', alignItems: 'center' },
+  attachBtn: { width: 38, height: 38, borderRadius: 19, justifyContent: 'center', alignItems: 'center' },
 });

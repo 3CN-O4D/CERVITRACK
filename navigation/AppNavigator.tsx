@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, AppState, AppStateStatus } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -7,6 +7,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useNotifications } from '../context/NotificationContext';
+import BiometricLock, { isBiometricEnabled } from '../components/BiometricLock';
 import ConsentScreen from '../screens/ConsentScreen';
 import AuthScreen from '../screens/AuthScreen';
 import HomeScreen from '../screens/HomeScreen';
@@ -27,6 +28,7 @@ import ScreeningInfoScreen from '../screens/ScreeningInfoScreen';
 import KitTrackingScreen from '../screens/KitTrackingScreen';
 import SearchCliniciansScreen from '../screens/SearchCliniciansScreen';
 import MyResultsScreen from '../screens/MyResultsScreen';
+import RemindersScreen from '../screens/RemindersScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -113,6 +115,11 @@ function HomeStackScreen() {
       <HomeStack.Screen
         name="MyResults"
         component={MyResultsScreen}
+        options={{ headerShown: false }}
+      />
+      <HomeStack.Screen
+        name="Reminders"
+        component={RemindersScreen}
         options={{ headerShown: false }}
       />
     </HomeStack.Navigator>
@@ -270,6 +277,36 @@ function MainTabs() {
 export default function AppNavigator() {
   const { isAuthenticated, loading, consentAccepted, acceptConsent } = useAuth();
   const { colors, isDark } = useTheme();
+  const [locked, setLocked] = useState(false);
+  const [biometricReady, setBiometricReady] = useState(false);
+  const appState = useRef(AppState.currentState);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    // Check if biometric is enabled
+    isBiometricEnabled().then((enabled) => {
+      if (enabled) {
+        setLocked(true);
+        setBiometricReady(true);
+      } else {
+        setBiometricReady(true);
+      }
+    });
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !biometricReady) return;
+    const sub = AppState.addEventListener('change', (next: AppStateStatus) => {
+      if (appState.current.match(/inactive|background/) && next === 'active') {
+        // App came to foreground — check if biometric is enabled
+        isBiometricEnabled().then((enabled) => {
+          if (enabled) setLocked(true);
+        });
+      }
+      appState.current = next;
+    });
+    return () => sub.remove();
+  }, [isAuthenticated, biometricReady]);
 
   if (loading) {
     return (
@@ -281,6 +318,10 @@ export default function AppNavigator() {
 
   if (!consentAccepted) {
     return <ConsentScreen onAccept={acceptConsent} />;
+  }
+
+  if (isAuthenticated && locked) {
+    return <BiometricLock onUnlock={() => setLocked(false)} />;
   }
 
   return (

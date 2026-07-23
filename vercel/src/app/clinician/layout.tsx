@@ -2,7 +2,7 @@
 
 import AuthGuard from '@/components/AuthGuard';
 
-export default function WorkspaceLayout({ children }: { children: React.ReactNode }) {
+export default function ClinicianLayout({ children }: { children: React.ReactNode }) {
   return (
     <AuthGuard allowedRoles={['clinician', 'provider']} redirectTo="/login/clinician">
       {children}

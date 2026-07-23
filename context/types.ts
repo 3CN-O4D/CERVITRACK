@@ -9,6 +9,9 @@ export interface User {
   birthDate: string;
   lastHealedDate: string;
   location: string;
+  county: string;
+  subCounty: string;
+  ward: string;
   createdAt: string;
 }
 

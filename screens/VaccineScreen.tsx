@@ -19,7 +19,8 @@ import * as Notifications from 'expo-notifications';
 import { useTheme } from '../context/ThemeContext';
 import { useNotifications } from '../context/NotificationContext';
 import { useTranslation } from 'react-i18next';
-import { getVaccineData, syncVaccineReminder } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import { getVaccineData, addVaccine, updateVaccineStatus, syncVaccineReminder } from '../services/api';
 
 const { width } = Dimensions.get('window');
 
@@ -81,6 +82,7 @@ export default function VaccineScreen() {
   const { colors, isDark } = useTheme();
   const { addNotification } = useNotifications();
   const { t } = useTranslation();
+  const { user } = useAuth();
 
   const [vaccines, setVaccines] = useState<Vaccine[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>(toDateString(new Date()));
@@ -96,15 +98,15 @@ export default function VaccineScreen() {
 
   const loadVaccines = async () => {
     try {
-      const data = await getVaccineData();
-      const mapped: Vaccine[] = data.map((v) => ({
+      const data = await getVaccineData(user?.id);
+      const mapped: Vaccine[] = data.map((v: any) => ({
         id: String(v.id),
         name: v.name,
-        hospital: '',
-        date: v.dueDate,
-        status: getStatus(v.dueDate),
-        remindDayOf: false,
-        remindDayBefore: false,
+        hospital: v.hospital || '',
+        date: v.dueDate || v.date,
+        status: v.status === 'done' ? 'done' as const : v.status === 'missed' ? 'missed' as const : getStatus(v.dueDate || v.date),
+        remindDayOf: Boolean(v.reminder_day),
+        remindDayBefore: Boolean(v.reminder_before),
       }));
       setVaccines(mapped);
     } catch {
@@ -113,7 +115,23 @@ export default function VaccineScreen() {
   };
 
   const addVaccineLocally = useCallback(
-    (name: string, hospital: string, date: string) => {
+    async (name: string, hospital: string, date: string) => {
+      if (user?.id) {
+        try {
+          const saved = await addVaccine({ user_id: user.id, name, hospital, date, status: 'scheduled' } as any);
+          const v: Vaccine = {
+            id: String(saved.id),
+            name: saved.name,
+            hospital: saved.hospital || '',
+            date: saved.date,
+            status: getStatus(saved.date),
+            remindDayOf: false,
+            remindDayBefore: false,
+          };
+          setVaccines((prev) => [v, ...prev]);
+          return;
+        } catch {}
+      }
       const newVax: Vaccine = {
         id: Date.now().toString(36) + Math.random().toString(36).substring(2, 6),
         name,
@@ -125,14 +143,20 @@ export default function VaccineScreen() {
       };
       setVaccines((prev) => [...prev, newVax]);
     },
-    [],
+    [user?.id],
   );
 
-  const markAsDone = useCallback((id: string) => {
+  const markAsDone = useCallback(async (id: string) => {
+    const vaccine = vaccines.find(v => v.id === id);
+    if (!vaccine) return;
+    const newStatus = vaccine.status === 'done' ? 'scheduled' : 'done';
     setVaccines((prev) =>
-      prev.map((v) => (v.id === id ? { ...v, status: v.status === 'done' ? getStatus(v.date) : 'done' } : v)),
+      prev.map((v) => (v.id === id ? { ...v, status: v.status === 'done' ? 'scheduled' as any : 'done' as any } : v)),
     );
-  }, []);
+    if (user?.id && !isNaN(Number(id))) {
+      updateVaccineStatus(Number(id), newStatus === 'done' ? 'done' : 'scheduled').catch(() => {});
+    }
+  }, [vaccines, user?.id]);
 
   const updateReminder = useCallback(
     (id: string, dayOf: boolean, dayBefore: boolean) => {
@@ -145,12 +169,12 @@ export default function VaccineScreen() {
     [],
   );
 
-  const handleAddVaccine = useCallback(() => {
+  const handleAddVaccine = useCallback(async () => {
     if (!form.name.trim() || !form.date.trim()) {
       Alert.alert('Required', 'Please enter a vaccine name and date.');
       return;
     }
-    addVaccineLocally(form.name.trim(), form.hospital.trim(), form.date);
+    await addVaccineLocally(form.name.trim(), form.hospital.trim(), form.date);
     setForm(initialFormState);
     setShowAddModal(false);
     addNotification({
@@ -163,35 +187,50 @@ export default function VaccineScreen() {
   const handleSetReminder = useCallback(
     async (vaccine: Vaccine) => {
       try {
-        await syncVaccineReminder({
-          vaccineId: parseInt(vaccine.id, 36),
-          remindBeforeDays: vaccine.remindDayBefore ? 1 : 0,
-        });
+        if (!isNaN(Number(vaccine.id))) {
+          await syncVaccineReminder({
+            vaccineId: Number(vaccine.id),
+            remindBeforeDays: vaccine.remindDayBefore ? 1 : 0,
+            remindDayOf: vaccine.remindDayOf,
+          });
+        }
 
         const targetDate = new Date(vaccine.date + 'T09:00:00');
 
-        if (vaccine.remindDayOf) {
+        if (vaccine.remindDayOf && targetDate.getTime() > Date.now()) {
           await Notifications.scheduleNotificationAsync({
             content: {
               title: 'Vaccine Reminder',
               body: `${vaccine.name} is scheduled for today at ${vaccine.hospital || 'your clinic'}.`,
-              data: { vaccineId: vaccine.id },
+              sound: 'default',
+              priority: Notifications.AndroidNotificationPriority.HIGH,
             },
-            trigger: new Date(targetDate) as any,
+            trigger: {
+              type: Notifications.SchedulableTriggerInputTypes.DATE,
+              date: targetDate,
+              channelId: 'reminders',
+            },
           });
         }
 
         if (vaccine.remindDayBefore) {
           const dayBefore = new Date(targetDate);
           dayBefore.setDate(dayBefore.getDate() - 1);
-          await Notifications.scheduleNotificationAsync({
-            content: {
-              title: 'Vaccine Reminder',
-              body: `Reminder: ${vaccine.name} is tomorrow at ${vaccine.hospital || 'your clinic'}.`,
-              data: { vaccineId: vaccine.id },
-            },
-            trigger: { type: 'date', date: dayBefore.valueOf() } as any,
-          });
+          if (dayBefore.getTime() > Date.now()) {
+            await Notifications.scheduleNotificationAsync({
+              content: {
+                title: 'Vaccine Reminder',
+                body: `Reminder: ${vaccine.name} is tomorrow at ${vaccine.hospital || 'your clinic'}.`,
+                sound: 'default',
+                priority: Notifications.AndroidNotificationPriority.HIGH,
+              },
+              trigger: {
+                type: Notifications.SchedulableTriggerInputTypes.DATE,
+                date: dayBefore,
+                channelId: 'reminders',
+              },
+            });
+          }
         }
 
         addNotification({
@@ -201,8 +240,8 @@ export default function VaccineScreen() {
         });
 
         Alert.alert('Success', 'Reminder has been scheduled.');
-      } catch {
-        Alert.alert('Error', 'Failed to set reminder. Please try again.');
+      } catch (e: any) {
+        Alert.alert('Error', e?.message || 'Failed to set reminder. Please try again.');
       }
       setShowReminderId(null);
     },

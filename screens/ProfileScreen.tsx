@@ -10,12 +10,15 @@ import {
   ActivityIndicator,
   Image,
   Modal,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
+import { uploadToCloudinary } from '../lib/cloudinary';
 
 export default function ProfileScreen({ navigation }: any) {
   const { colors } = useTheme();
@@ -28,6 +31,9 @@ export default function ProfileScreen({ navigation }: any) {
   const [birthDate, setBirthDate] = useState(user?.birthDate || '');
   const [lastHealedDate, setLastHealedDate] = useState(user?.lastHealedDate || '');
   const [photo, setPhoto] = useState(user?.photo || '');
+  const [county, setCounty] = useState(user?.county || '');
+  const [subCounty, setSubCounty] = useState(user?.subCounty || '');
+  const [ward, setWard] = useState(user?.ward || '');
   const [saving, setSaving] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState<'birth' | 'healed' | null>(null);
   const [pickerYear, setPickerYear] = useState(2000);
@@ -42,6 +48,9 @@ export default function ProfileScreen({ navigation }: any) {
       setBirthDate(user.birthDate);
       setLastHealedDate(user.lastHealedDate);
       setPhoto(user.photo);
+      setCounty(user.county || '');
+      setSubCounty(user.subCounty || '');
+      setWard(user.ward || '');
     }
   }, [user]);
 
@@ -112,7 +121,16 @@ export default function ProfileScreen({ navigation }: any) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await updateProfile({ name, email, phone, birthDate, lastHealedDate, photo });
+      let photoUrl = photo;
+      if (photo && !photo.startsWith('http')) {
+        try {
+          photoUrl = await uploadToCloudinary(photo);
+        } catch {
+          // If upload fails, keep local URI (will vanish on logout but at least saves now)
+        }
+      }
+      await updateProfile({ name, email, phone, birthDate, lastHealedDate, photo: photoUrl, county, subCounty, ward });
+      setPhoto(photoUrl);
       Alert.alert('Success', 'Profile updated successfully.');
     } catch {
       Alert.alert('Error', 'Failed to update profile.');
@@ -124,6 +142,11 @@ export default function ProfileScreen({ navigation }: any) {
   const s = styles(colors);
 
   return (
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+    >
     <ScrollView
       contentContainerStyle={s.scroll}
       showsVerticalScrollIndicator={false}
@@ -228,6 +251,35 @@ export default function ProfileScreen({ navigation }: any) {
             {lastHealedDate || 'Select last treatment date'}
           </Text>
         </TouchableOpacity>
+
+        <Text style={[s.sectionTitle, { marginTop: 16 }]}>{t('profile.location') || 'Location'}</Text>
+
+        <Text style={s.fieldLabel}>{t('profile.county') || 'County'}</Text>
+        <TextInput
+          style={s.input}
+          value={county}
+          onChangeText={setCounty}
+          placeholder="e.g. Nairobi"
+          placeholderTextColor={colors.textSecondary}
+        />
+
+        <Text style={s.fieldLabel}>{t('profile.subCounty') || 'Sub-County'}</Text>
+        <TextInput
+          style={s.input}
+          value={subCounty}
+          onChangeText={setSubCounty}
+          placeholder="e.g. Westlands"
+          placeholderTextColor={colors.textSecondary}
+        />
+
+        <Text style={s.fieldLabel}>{t('profile.ward') || 'Ward'}</Text>
+        <TextInput
+          style={s.input}
+          value={ward}
+          onChangeText={setWard}
+          placeholder="e.g. Parklands"
+          placeholderTextColor={colors.textSecondary}
+        />
 
         <TouchableOpacity
           style={[s.saveBtn, saving && s.saveBtnDisabled]}

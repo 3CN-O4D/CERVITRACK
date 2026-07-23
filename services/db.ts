@@ -1,5 +1,6 @@
 import * as api from './api';
 import type { Session } from '@supabase/supabase-js';
+import * as localDb from './localDb';
 
 let currentSession: Session | null = null;
 
@@ -14,17 +15,21 @@ async function requireUser() {
 
 // ─── Facilities ───────────────────────────────────────────────
 export async function getFacilities() {
-  return api.getFacilities(); // falls back to seeded data inside
+  return api.getFacilities();
 }
 
 export async function replaceFacilities(facilities: any[]) {
-  const { data, error } = await (await import('../lib/supabase/client')).supabase
-    .from('facilities')
-    .upsert(facilities, { onConflict: 'id' });
-  if (error) throw error;
-  return data ?? [];
+  localDb.saveFacilities(facilities);
+  try {
+    const { data, error } = await (await import('../lib/supabase/client')).supabase
+      .from('facilities')
+      .upsert(facilities, { onConflict: 'id' });
+    if (error) throw error;
+    return data ?? [];
+  } catch { return facilities; }
 }
 
+// ─── Articles ─────────────────────────────────────────────────
 export async function getArticles() {
   return api.getArticles();
 }
@@ -34,11 +39,12 @@ export async function getArticleById(id: number) {
 }
 
 export async function replaceArticles(articles: any[]) {
-  const supabase = (await import('../lib/supabase/client')).supabase;
-  const { error } = await supabase
-    .from('articles')
-    .upsert(articles, { onConflict: 'id' });
-  if (error) throw error;
+  localDb.saveArticles(articles);
+  try {
+    const supabase = (await import('../lib/supabase/client')).supabase;
+    const { error } = await supabase.from('articles').upsert(articles, { onConflict: 'id' });
+    if (error) throw error;
+  } catch { /* local already saved */ }
 }
 
 // ─── Screenings ───────────────────────────────────────────────
@@ -64,16 +70,19 @@ export async function saveScreening(s: any) {
     family_history: s.family_history,
     score: s.score,
   };
-  const result = await api.submitScreening(user.id, payload);
-  return result;
+  return api.submitScreening(user.id, payload);
 }
 
 export async function getUnsyncedScreenings() {
-  return [];
+  try {
+    const { getDb } = await import('./localDb');
+    const db = getDb();
+    return db.getAllSync("SELECT * FROM screenings WHERE sync_status = 'pending'");
+  } catch { return []; }
 }
 
 export async function markScreeningSynced(_id: number) {
-  // no-op with Supabase — data is always synced
+  localDb.markSynced('screenings', _id);
 }
 
 // ─── Vaccines ─────────────────────────────────────────────────
@@ -113,15 +122,19 @@ export async function getNotifications(userId: number) {
 export async function saveNotification(n: any) {
   const user = await requireUser();
   if (!user) throw new Error('Not authenticated');
-  await (await import('../lib/supabase/client')).supabase
-    .from('notifications')
-    .insert({ ...n, user_id: user.id });
+  localDb.saveNotification({ ...n, user_id: user.id }, 'pending');
+  try {
+    await (await import('../lib/supabase/client')).supabase
+      .from('notifications')
+      .insert({ ...n, user_id: user.id });
+  } catch { /* queued */ }
 }
 
 export async function markNotificationRead(id: number) {
   const user = await requireUser();
   if (!user) return;
-  await api.markNotificationRead(id, user.id);
+  localDb.markNotificationRead(id);
+  return api.markNotificationRead(id, user.id);
 }
 
 // ─── Chat contacts ────────────────────────────────────────────
@@ -157,25 +170,28 @@ export async function saveMessage(m: any) {
 }
 
 export async function updateConversationLastMessage(conversationId: number, lastMessage: string) {
-  const supabase = (await import('../lib/supabase/client')).supabase;
-  await supabase
-    .from('conversations')
-    .update({ last_message: lastMessage, last_time: new Date().toISOString() })
-    .eq('id', conversationId);
+  localDb.updateConversationLastMessage(conversationId, lastMessage);
+  try {
+    const supabase = (await import('../lib/supabase/client')).supabase;
+    await supabase
+      .from('conversations')
+      .update({ last_message: lastMessage, last_time: new Date().toISOString() })
+      .eq('id', conversationId);
+  } catch { /* queued */ }
 }
 
 // ─── Sync tracking ────────────────────────────────────────────
 export async function getLastSync(tableName: string) {
-  return api.getLastFullSync();
+  return localDb.getSyncMeta('last_full_sync');
 }
 
 export async function setLastSync(tableName: string) {
-  // no-op: not needed with Supabase real-time
+  localDb.setSyncMeta('last_full_sync', new Date().toISOString());
 }
 
 // ─── Legacy initDatabase entry point ──────────────────────────
 export async function initDatabase() {
-  // no-op: kept for App.tsx compatibility
+  localDb.initLocalDb();
 }
 
 export async function getDatabase() {

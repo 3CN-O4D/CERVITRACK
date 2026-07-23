@@ -1,29 +1,36 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  ReactNode,
+} from 'react';
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
+import { supabase } from '../lib/supabase/client';
 import { getItem, setItem } from '../services/storage';
-import { getNotifications as apiGetNotifications, markNotificationRead as apiMarkRead, markAllNotificationsRead as apiMarkAllRead } from '../services/api';
-import { useAuth } from './AuthContext';
+import { fireLocalNotification } from '../services/notifications';
 
-export interface Notification {
+export interface AppNotification {
   id: string;
   title: string;
   message: string;
-  type: 'screening' | 'vaccine' | 'appointment' | 'reminder' | 'alert';
+  type?: string;
   read: boolean;
   createdAt: string;
 }
 
 interface NotificationContextType {
-  notifications: Notification[];
+  notifications: AppNotification[];
   unreadCount: number;
-  addNotification: (n: Omit<Notification, 'id' | 'read' | 'createdAt'>) => void;
+  addNotification: (n: Omit<AppNotification, 'id' | 'read' | 'createdAt'>) => void;
   markRead: (id: string) => void;
   markAllRead: () => void;
 }
 
 const NotificationContext = createContext<NotificationContextType | null>(null);
-
 const NOTIF_KEY = '@cervitrack_notifications';
 
 function generateId() {
@@ -31,102 +38,50 @@ function generateId() {
 }
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const { user } = useAuth();
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
 
+  // Load cached notifications from AsyncStorage on mount
   useEffect(() => {
     (async () => {
       const raw = await getItem(NOTIF_KEY);
-      if (raw) {
-        try {
-          setNotifications(JSON.parse(raw));
-        } catch {
-          // ignore
-        }
-      }
+      if (!raw) return;
+      try {
+        const parsed = JSON.parse(raw) as AppNotification[];
+        if (Array.isArray(parsed)) setNotifications(parsed);
+      } catch { /* corrupted cache — ignore */ }
     })();
   }, []);
 
-  // Try to fetch from API when user is available
-  useEffect(() => {
-    if (!user?.id) return;
-    (async () => {
-      try {
-        const serverNotifs = await apiGetNotifications(user.id);
-        if (serverNotifs && serverNotifs.length > 0) {
-          const mapped = serverNotifs.map((n: any) => ({
-            id: String(n.id),
-            title: n.title,
-            message: n.message,
-            type: n.type,
-            read: Boolean(n.read),
-            createdAt: n.created_at,
-          }));
-
-          // Find new unread notifications and show Android notification
-          const oldIds = new Set(notifications.map(n => n.id));
-          const newUnread = mapped.filter((n: Notification) => !n.read && !oldIds.has(n.id));
-          if (newUnread.length > 0 && Platform.OS === 'android') {
-            for (const notif of newUnread.slice(0, 3)) {
-              await Notifications.scheduleNotificationAsync({
-                content: {
-                  title: notif.title,
-                  body: notif.message,
-                  sound: 'default',
-                  priority: Notifications.AndroidNotificationPriority.HIGH,
-                },
-                trigger: null as any,
-              });
-            }
-          }
-
-          setNotifications(mapped);
-          await setItem(NOTIF_KEY, JSON.stringify(mapped));
-        }
-      } catch {
-        // offline — local data already loaded
-      }
-    })();
-  }, [user?.id]);
-
-  const persist = useCallback(async (items: Notification[]) => {
+  const persist = useCallback(async (items: AppNotification[]) => {
     setNotifications(items);
-    await setItem(NOTIF_KEY, JSON.stringify(items));
+    await setItem(NOTIF_KEY, JSON.stringify(items)).catch(() => {});
   }, []);
 
   const addNotification = useCallback(
-    (n: Omit<Notification, 'id' | 'read' | 'createdAt'>) => {
-      const newNotif: Notification = {
+    (n: Omit<AppNotification, 'id' | 'read' | 'createdAt'>) => {
+      const newNotif: AppNotification = {
         ...n,
         id: generateId(),
         read: false,
         createdAt: new Date().toISOString(),
       };
       persist([newNotif, ...notifications]);
+      fireLocalNotification(n.title, n.message, n.type).catch(() => {});
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [notifications, persist],
   );
 
   const markRead = useCallback(
     (id: string) => {
-      const updated = notifications.map((n) =>
-        n.id === id ? { ...n, read: true } : n,
-      );
-      persist(updated);
-      if (user?.id) {
-        apiMarkRead(Number(id), user.id).catch(() => {});
-      }
+      persist(notifications.map((n) => (n.id === id ? { ...n, read: true } : n)));
     },
-    [notifications, persist, user?.id],
+    [notifications, persist],
   );
 
   const markAllRead = useCallback(() => {
-    const updated = notifications.map((n) => ({ ...n, read: true }));
-    persist(updated);
-    if (user?.id) {
-      apiMarkAllRead(user.id).catch(() => {});
-    }
-  }, [notifications, persist, user?.id]);
+    persist(notifications.map((n) => ({ ...n, read: true })));
+  }, [notifications, persist]);
 
   const unreadCount = useMemo(
     () => notifications.filter((n) => !n.read).length,
@@ -135,13 +90,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   return (
     <NotificationContext.Provider
-      value={{
-        notifications,
-        unreadCount,
-        addNotification,
-        markRead,
-        markAllRead,
-      }}
+      value={{ notifications, unreadCount, addNotification, markRead, markAllRead }}
     >
       {children}
     </NotificationContext.Provider>

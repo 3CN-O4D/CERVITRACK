@@ -75,14 +75,38 @@ export async function getKitStats(facilityId?: string) {
   if (facilityId) q = q.eq('facility_id', facilityId);
   const { data } = await q;
 
+  // Also get kit_requests count
+  const { count: requestedCount } = await supabaseAdmin
+    .from('kit_requests')
+    .select('id', { count: 'exact', head: true })
+    .in('status', ['pending', 'contacted', 'arranged']);
+
   const list = data || [];
   const byStatus: Record<string, number> = {};
   for (const k of list) byStatus[k.status] = (byStatus[k.status] || 0) + 1;
+
+  const total = list.length;
+  const registered = byStatus['REGISTERED'] || 0;
+  const paired = byStatus['PAIRED'] || 0;
+  const collected = byStatus['COLLECTED'] || 0;
+  const inTransit = byStatus['IN_TRANSIT'] || 0;
+  const inLab = byStatus['IN_LAB'] || 0;
+  const processed = byStatus['PROCESSED'] || 0;
+  const unregistered = byStatus['UNREGISTERED'] || 0;
+
+  // Available = registered but not yet paired/given out
+  const available = registered;
+  // Given out = paired + collected + in_transit + in_lab + processed
+  const givenOut = paired + collected + inTransit + inLab + processed;
+  // In pipeline = collected + in_transit + in_lab (samples being processed)
+  const inPipeline = collected + inTransit + inLab;
+  // Pending requests
+  const requested = requestedCount || 0;
+
   return {
-    total: list.length, byStatus,
-    registered: byStatus['REGISTERED'] || 0, paired: byStatus['PAIRED'] || 0,
-    collected: byStatus['COLLECTED'] || 0, inTransit: byStatus['IN_TRANSIT'] || 0,
-    inLab: byStatus['IN_LAB'] || 0, processed: byStatus['PROCESSED'] || 0,
+    total, byStatus,
+    registered, paired, collected, inTransit, inLab, processed, unregistered,
+    available, givenOut, inPipeline, requested,
   };
 }
 
@@ -195,4 +219,76 @@ export async function enterResults(barcode: string, data: { technicianId: string
 
   await addEvent(kit.id, 'PROCESSED', data.technicianId, data.technicianName, undefined, data.facilityId, `Results: ${data.result}. ${data.notes || ''}`);
   return { kit: await getKit(barcode) };
+}
+
+export async function bulkRegisterKits(barcodes: string[], data: { facilityId?: string; registeredBy?: string; registeredByName?: string; kitType?: string }) {
+  const results = { registered: 0, skipped: 0, errors: 0, details: [] as any[] };
+
+  for (const barcode of barcodes) {
+    try {
+      const existing = await getKit(barcode);
+      if (existing) {
+        results.skipped++;
+        results.details.push({ barcode, status: 'skipped', reason: 'Already registered' });
+        continue;
+      }
+
+      const { data: kit, error } = await supabaseAdmin
+        .from('sample_kits')
+        .insert({
+          barcode,
+          kit_type: data.kitType || 'HPV_DNA_SELF',
+          status: 'REGISTERED',
+          facility_id: data.facilityId || 'home',
+          registered_by: data.registeredBy || 'system',
+          registered_by_name: data.registeredByName || 'System',
+        })
+        .select()
+        .single();
+
+      if (error) {
+        results.errors++;
+        results.details.push({ barcode, status: 'error', reason: error.message });
+        continue;
+      }
+
+      await addEvent(kit.id, 'REGISTERED', data.registeredBy || 'system', data.registeredByName || 'System', undefined, data.facilityId, 'Kit registered (bulk)');
+      results.registered++;
+      results.details.push({ barcode, status: 'registered' });
+    } catch (e: any) {
+      results.errors++;
+      results.details.push({ barcode, status: 'error', reason: e.message });
+    }
+  }
+
+  return results;
+}
+
+export async function getKitLedger(query: { status?: string; facilityId?: string; search?: string; page?: number; limit?: number }) {
+  const { status, facilityId, search, page = 1, limit = 50 } = query;
+  let q = supabaseAdmin.from('sample_kits').select('*', { count: 'exact' });
+  if (status) q = q.eq('status', status);
+  if (facilityId) q = q.eq('facility_id', facilityId);
+  if (search) q = q.or(`barcode.ilike.%${search}%,patient_name.ilike.%${search}%`);
+  q = q.order('created_at', { ascending: false });
+
+  const start = (page - 1) * limit;
+  q = q.range(start, start + limit - 1);
+
+  const { data, count } = await q;
+  const mapped = (data || []).map((k: any) => ({
+    id: k.id,
+    barcode: k.barcode,
+    kitType: k.kit_type,
+    status: k.status,
+    facilityId: k.facility_id,
+    patientName: k.patient_name || '—',
+    collectionMethod: k.collection_method,
+    result: k.result || '—',
+    currentLocation: k.current_location,
+    createdAt: k.created_at,
+    updatedAt: k.updated_at,
+  }));
+
+  return { data: mapped, total: count || 0, page, limit, totalPages: Math.ceil((count || 0) / limit) };
 }

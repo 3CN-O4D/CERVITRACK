@@ -17,6 +17,8 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { scanKit, registerKit, pairKit, collectKit, linkKit, searchPatients, type Kit, type KitEvent } from '../services/api';
 import { getItem, setItem } from '../services/storage';
+import { supabase } from '../lib/supabase/client';
+import { scheduleLocalNotification, fireLocalNotification } from '../services/notifications';
 
 const { width } = Dimensions.get('window');
 
@@ -43,6 +45,7 @@ export default function KitTrackingScreen() {
   const [barcode, setBarcode] = useState('');
   const [scanning, setScanning] = useState(false);
   const [kit, setKit] = useState<Kit | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [action, setAction] = useState<'register' | 'pair' | 'collect' | null>(null);
@@ -386,6 +389,28 @@ export default function KitTrackingScreen() {
       ) : null}
 
       <ScrollView style={s.scrollView} contentContainerStyle={s.scrollContent}>
+        {/* Barcode Confirmation Card */}
+        {!kit && barcode && !confirmed && (
+          <View style={[s.confirmCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[s.confirmTitle, { color: colors.text }]}>Is this your kit?</Text>
+            <Text style={[s.confirmBarcode, { color: colors.primary }]}>{barcode}</Text>
+            <View style={s.confirmActions}>
+              <TouchableOpacity
+                style={[s.confirmBtn, { backgroundColor: colors.danger }]}
+                onPress={() => { setBarcode(''); setConfirmed(false); }}
+              >
+                <Text style={s.confirmBtnText}>No</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.confirmBtn, { backgroundColor: colors.primary }]}
+                onPress={() => setConfirmed(true)}
+              >
+                <Text style={s.confirmBtnText}>Yes</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
         {/* Kit Status Card */}
         {kit && (
           <View style={[s.kitCard, { backgroundColor: colors.card, borderColor: colors.border }]}>

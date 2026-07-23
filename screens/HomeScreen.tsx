@@ -71,6 +71,7 @@ export default function HomeScreen({ navigation }: any) {
     { icon: 'flask-outline', label: 'Lab Results', color: colors.warning, sub: 'View results' },
     { icon: 'barcode-outline', label: 'Kit Tracker', color: '#0891B2', sub: 'Scan & track' },
     { icon: 'syringe-outline', label: 'Vaccines', color: colors.danger, sub: 'Track doses' },
+    { icon: 'notifications-outline', label: 'Reminders', color: '#F59E0B', sub: 'View scheduled' },
     { icon: 'test-tube-outline', label: 'Self-Sampling', color: '#8B5CF6', sub: 'Step-by-step' },
     { icon: 'document-text-outline', label: 'Self-Assessment', color: '#EC4899', sub: 'Risk check' },
     { icon: 'book-outline', label: 'Health Library', color: '#06B6D4', sub: 'Learn more' },
@@ -113,6 +114,9 @@ export default function HomeScreen({ navigation }: any) {
         break;
       case 'Find Clinician':
         navigation.navigate('SearchClinicians');
+        break;
+      case 'Reminders':
+        navigation.navigate('Reminders');
         break;
     }
   };

@@ -5,6 +5,7 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'CerviTrack — Cervical Health for Kenyan Women',
   description: 'Track screenings, vaccines, appointments, and get AI-powered cervical health guidance.',
+  manifest: '/manifest.json',
 };
 
 export const viewport: Viewport = {

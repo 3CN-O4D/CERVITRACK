@@ -23,7 +23,20 @@ export default function AuthGuard({ children, allowedRoles, redirectTo = '/auth'
           router.push(redirectTo);
           return;
         }
-        const role = session.user.user_metadata?.role || session.user.app_metadata?.role || '';
+
+        // Check auth metadata first (fast)
+        let role = session.user.user_metadata?.role || session.user.app_metadata?.role || '';
+
+        // If no role in metadata, look up from public.users table
+        if (!role) {
+          const { data: profile } = await supabase
+            .from('users')
+            .select('role')
+            .eq('id', session.user.id)
+            .maybeSingle();
+          role = profile?.role || '';
+        }
+
         if (allowedRoles.includes(role) || role === 'system_admin' || role === 'national_admin') {
           setAllowed(true);
         } else {

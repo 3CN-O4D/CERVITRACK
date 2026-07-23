@@ -49,6 +49,7 @@ export default function AuthScreen() {
 
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const otpRefs = useRef<(TextInput | null)[]>([]);
+  const [showPassword, setShowPassword] = useState(false);
 
   const [loginShowOtpInput, setLoginShowOtpInput] = useState(false);
   const [loginOtp, setLoginOtp] = useState(['', '', '', '', '', '']);
@@ -256,9 +257,15 @@ export default function AuthScreen() {
           placeholderTextColor={colors.textSecondary}
           value={password}
           onChangeText={setPassword}
-          secureTextEntry
+          secureTextEntry={!showPassword}
           autoCapitalize="none"
         />
+        <TouchableOpacity
+          onPress={() => setShowPassword(!showPassword)}
+          style={{ position: 'absolute', right: 12, top: 0, bottom: 0, justifyContent: 'center' }}
+        >
+          <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={20} color={colors.textSecondary} />
+        </TouchableOpacity>
       </View>
       <TouchableOpacity
         style={[s.submitBtn, loading && s.submitBtnDisabled]}

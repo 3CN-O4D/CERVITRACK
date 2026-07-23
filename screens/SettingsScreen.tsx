@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,8 @@ import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
+import { isBiometricEnabled, setBiometricEnabled } from '../components/BiometricLock';
+import * as LocalAuthentication from 'expo-local-authentication';
 
 const APP_VERSION = '1.0.0';
 
@@ -25,6 +27,33 @@ export default function SettingsScreen() {
   const { language, setLanguage } = useLanguage();
   const { logout } = useAuth();
   const { t } = useTranslation();
+  const [biometricOn, setBiometricOn] = useState(false);
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const compatible = await LocalAuthentication.hasHardwareAsync();
+      const enrolled = await LocalAuthentication.isEnrolledAsync();
+      setBiometricAvailable(compatible && enrolled);
+      setBiometricOn(await isBiometricEnabled());
+    })();
+  }, []);
+
+  const toggleBiometric = async (val: boolean) => {
+    if (val) {
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: 'Verify to enable app lock',
+        disableDeviceFallback: false,
+      });
+      if (result.success) {
+        await setBiometricEnabled(true);
+        setBiometricOn(true);
+      }
+    } else {
+      await setBiometricEnabled(false);
+      setBiometricOn(false);
+    }
+  };
 
   const handleLogout = () => {
     Alert.alert(
@@ -67,6 +96,28 @@ export default function SettingsScreen() {
           />
         </View>
       </View>
+
+      {biometricAvailable && (
+        <View style={s.section}>
+          <View style={s.row}>
+            <View style={s.rowIcon}>
+              <Ionicons name="finger-print" size={20} color={colors.primary} />
+            </View>
+            <View style={s.rowContent}>
+              <Text style={s.rowLabel}>App Lock</Text>
+              <Text style={s.rowHint}>
+                {biometricOn ? 'Biometric lock active' : 'Lock app with fingerprint / face'}
+              </Text>
+            </View>
+            <Switch
+              value={biometricOn}
+              onValueChange={toggleBiometric}
+              trackColor={{ false: colors.border, true: colors.primary + '60' }}
+              thumbColor={biometricOn ? colors.primary : colors.textSecondary}
+            />
+          </View>
+        </View>
+      )}
 
       <View style={s.section}>
         <Text style={s.sectionTitle}>{t('settings.language')}</Text>

@@ -378,6 +378,22 @@ CREATE TABLE IF NOT EXISTS sync_log (
   last_synced_at  timestamptz DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS kit_requests (
+  id              bigserial PRIMARY KEY,
+  user_id         uuid REFERENCES users(id) ON DELETE CASCADE,
+  user_name       text DEFAULT '',
+  user_phone      text DEFAULT '',
+  user_county     text DEFAULT '',
+  user_sub_county text DEFAULT '',
+  user_ward       text DEFAULT '',
+  status          text DEFAULT 'pending' CHECK (status IN ('pending', 'contacted', 'arranged', 'delivered', 'cancelled')),
+  notes           text DEFAULT '',
+  admin_notes     text DEFAULT '',
+  contacted_at    timestamptz,
+  delivered_at    timestamptz,
+  created_at      timestamptz DEFAULT now()
+);
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_users_name_trgm ON users USING gin (name gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_users_email_trgm ON users USING gin (email gin_trgm_ops);
@@ -443,6 +459,9 @@ CREATE INDEX IF NOT EXISTS idx_providers_sub_county ON providers (sub_county);
 CREATE INDEX IF NOT EXISTS idx_providers_ward ON providers (ward);
 CREATE INDEX IF NOT EXISTS idx_appointments_clinician_id ON appointments (clinician_id);
 CREATE INDEX IF NOT EXISTS idx_appointments_provider_id ON appointments (provider_id);
+CREATE INDEX IF NOT EXISTS idx_kit_requests_user_id ON kit_requests (user_id);
+CREATE INDEX IF NOT EXISTS idx_kit_requests_status ON kit_requests (status);
+CREATE INDEX IF NOT EXISTS idx_kit_requests_created_at ON kit_requests (created_at DESC);
 
 -- RPC Functions
 CREATE OR REPLACE FUNCTION increment_screenings(uid uuid) RETURNS void AS $$ BEGIN UPDATE users SET total_screenings = total_screenings + 1, last_screening_date = now()::text WHERE id = uid; END; $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -467,6 +486,8 @@ ALTER TABLE articles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chat_contacts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chat_conversations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE kit_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE telehealth_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sample_kits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sample_kit_events ENABLE ROW LEVEL SECURITY;
@@ -478,6 +499,7 @@ ALTER TABLE sync_log ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Public read facilities" ON facilities FOR SELECT USING (true);
 CREATE POLICY "Public read articles" ON articles FOR SELECT USING (true);
 CREATE POLICY "Public read chat_contacts" ON chat_contacts FOR SELECT USING (true);
+CREATE POLICY "Public read approved providers" ON providers FOR SELECT USING (approval_status = 'approved');
 
 -- Service role
 CREATE POLICY "Service role all users" ON users FOR ALL USING (auth.role() = 'service_role');
@@ -535,6 +557,12 @@ CREATE POLICY "Lab techs update own batches" ON sample_batches FOR UPDATE USING 
 CREATE POLICY "Lab techs read batch items" ON sample_batch_items FOR SELECT USING (EXISTS (SELECT 1 FROM sample_batches sb WHERE sb.id = sample_batch_items.batch_id AND sb.lab_tech_id = auth.uid()));
 CREATE POLICY "Lab techs insert batch items" ON sample_batch_items FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM sample_batches sb WHERE sb.id = sample_batch_items.batch_id AND sb.lab_tech_id = auth.uid()));
 CREATE POLICY "Lab techs update batch items" ON sample_batch_items FOR UPDATE USING (EXISTS (SELECT 1 FROM sample_batches sb WHERE sb.id = sample_batch_items.batch_id AND sb.lab_tech_id = auth.uid()));
+
+-- Kit requests policies
+CREATE POLICY "Users read own kit_requests" ON kit_requests FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users insert own kit_requests" ON kit_requests FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users update own kit_requests" ON kit_requests FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Service role all kit_requests" ON kit_requests FOR ALL USING (auth.role() = 'service_role');
 
 -- Seed: Articles
 INSERT INTO articles (title, summary, content, category, tags, read_time) VALUES

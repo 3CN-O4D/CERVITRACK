@@ -9,10 +9,14 @@ import {
   Alert,
   ActivityIndicator,
   RefreshControl,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import * as Notifications from 'expo-notifications';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { useNotifications } from '../context/NotificationContext';
 import { searchClinicians, requestAppointment, getPatientAppointments } from '../services/api';
 
 interface Appointment {
@@ -40,6 +44,7 @@ function isPast(dateStr: string): boolean {
 export default function AppointmentBookingScreen() {
   const { colors } = useTheme();
   const { user } = useAuth();
+  const { addNotification } = useNotifications();
 
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -90,15 +95,16 @@ export default function AppointmentBookingScreen() {
     setRefreshing(false);
   };
 
-  const generateFallbackDates = (count = 5): string[] => {
+  const generateFallbackDates = (count = 14): string[] => {
     const dates: string[] = [];
     const start = new Date();
-    while (dates.length < count) {
-      start.setDate(start.getDate() + Math.floor(Math.random() * 7) + 1);
-      const d = start.toISOString().split('T')[0];
-      if (!dates.includes(d)) dates.push(d);
+    for (let i = 1; i <= count && dates.length < count; i++) {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      const iso = d.toISOString().split('T')[0];
+      dates.push(iso);
     }
-    return dates.sort();
+    return dates;
   };
 
   const openBookingForm = () => {
@@ -111,8 +117,8 @@ export default function AppointmentBookingScreen() {
   };
 
   const handleBook = async () => {
-    if (!selectedDoctor || !selectedDate) {
-      Alert.alert('Required', 'Please select a doctor and date.');
+    if (!selectedDate) {
+      Alert.alert('Required', 'Please select a date.');
       return;
     }
     if (!user?.id) {
@@ -121,17 +127,62 @@ export default function AppointmentBookingScreen() {
     }
     setBookingLoading(true);
     try {
+      const providerId = selectedDoctor?.id === 'any' ? '' : selectedDoctor?.id || '';
+      const doctorName = selectedDoctor?.id === 'any' ? 'Any Available Clinician' : selectedDoctor?.name || 'Clinician';
       await requestAppointment(
         user.id,
-        selectedDoctor.id,
+        providerId,
         selectedDate,
         '09:00',
-        `Appointment with ${selectedDoctor.name}`,
+        `Appointment with ${doctorName}`,
         bookingNotes,
         patientNote,
       );
       setShowBooking(false);
-      Alert.alert('Appointment Requested', `Your request for ${formatDate(selectedDate)} with ${selectedDoctor.name} has been sent.`);
+      Alert.alert('Appointment Requested', `Your request for ${formatDate(selectedDate)} with ${doctorName} has been sent.`);
+
+      // Schedule day-before reminder
+      const apptDate = new Date(selectedDate + 'T09:00:00');
+      const dayBefore = new Date(apptDate);
+      dayBefore.setDate(dayBefore.getDate() - 1);
+      if (dayBefore.getTime() > Date.now()) {
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: 'Appointment Reminder',
+            body: `You have an appointment with ${doctorName} tomorrow at ${apptDate.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}.`,
+            sound: 'default',
+            priority: Notifications.AndroidNotificationPriority.HIGH,
+          },
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.DATE,
+            date: dayBefore,
+            channelId: 'reminders',
+          },
+        });
+      }
+      // Schedule day-of reminder (1 hour before)
+      if (apptDate.getTime() > Date.now()) {
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: 'Appointment Today',
+            body: `Your appointment with ${doctorName} is today at ${apptDate.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}.`,
+            sound: 'default',
+            priority: Notifications.AndroidNotificationPriority.HIGH,
+          },
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.DATE,
+            date: new Date(apptDate.getTime() - 60 * 60 * 1000),
+            channelId: 'reminders',
+          },
+        });
+      }
+
+      addNotification({
+        title: 'Appointment Booked',
+        message: `Appointment with ${doctorName} on ${formatDate(selectedDate)}`,
+        type: 'appointment',
+      });
+
       await loadData();
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'Failed to book appointment');
@@ -230,6 +281,10 @@ export default function AppointmentBookingScreen() {
 
       {showBooking && (
         <View style={s.bookingOverlay}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={{ flex: 1, justifyContent: 'flex-end' }}
+          >
           <View style={[s.bookingModal, { backgroundColor: colors.card }]}>
             <ScrollView showsVerticalScrollIndicator={false}>
               <View style={s.bookingHeader}>
@@ -243,6 +298,21 @@ export default function AppointmentBookingScreen() {
               {doctors.length === 0 && (
                 <Text style={{ color: colors.textSecondary, fontSize: 13, marginBottom: 8 }}>No clinicians available. Try again later.</Text>
               )}
+              <TouchableOpacity
+                style={[s.doctorItem, { backgroundColor: colors.inputBg, borderColor: colors.border }, selectedDoctor === null && selectedDoctor !== undefined && { borderColor: colors.primary, backgroundColor: colors.primary + '10' }]}
+                onPress={() => setSelectedDoctor({ id: 'any', name: 'Any Available Clinician' } as any)}
+              >
+                <View style={[s.avatar, { backgroundColor: colors.success + '20' }]}>
+                  <Ionicons name="people" size={20} color={colors.success} />
+                </View>
+                <View style={s.doctorInfo}>
+                  <Text style={[s.doctorName, { color: colors.text }]}>Any Available Clinician</Text>
+                  <Text style={[s.doctorSpecialty, { color: colors.textSecondary }]}>First available will be assigned</Text>
+                </View>
+                {selectedDoctor?.id === 'any' && (
+                  <MaterialCommunityIcons name="check-circle" size={22} color={colors.primary} />
+                )}
+              </TouchableOpacity>
               {doctors.map((doc) => (
                 <TouchableOpacity
                   key={doc.id}
@@ -313,9 +383,9 @@ export default function AppointmentBookingScreen() {
               />
 
               <TouchableOpacity
-                style={[s.submitBtn, { backgroundColor: (!selectedDoctor || !selectedDate) ? colors.border : colors.primary }, bookingLoading && { opacity: 0.6 }]}
+                style={[s.submitBtn, { backgroundColor: !selectedDate ? colors.border : colors.primary }, bookingLoading && { opacity: 0.6 }]}
                 onPress={handleBook}
-                disabled={bookingLoading || !selectedDoctor || !selectedDate}
+                disabled={bookingLoading || !selectedDate}
               >
                 {bookingLoading ? (
                   <ActivityIndicator color="#FFF" />
@@ -325,6 +395,7 @@ export default function AppointmentBookingScreen() {
               </TouchableOpacity>
             </ScrollView>
           </View>
+          </KeyboardAvoidingView>
         </View>
       )}
     </View>

@@ -9,11 +9,13 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
-import { scanKit, pairKit, collectKit } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import { scanKit, pairKit, collectKit, createKitRequest } from '../services/api';
 
 interface Step {
   number: number;
@@ -23,6 +25,8 @@ interface Step {
   instruction: string;
   tip: string;
 }
+
+const VIDEO_URL = 'https://youtu.be/njsHSnDGcDk';
 
 const STEPS: Step[] = [
   {
@@ -101,11 +105,43 @@ const FAQS = [
 export default function SelfSamplingScreen() {
   const { colors, isDark } = useTheme();
   const { t } = useTranslation();
+  const { user } = useAuth();
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
   const [barcode, setBarcode] = useState('');
   const [kitStatus, setKitStatus] = useState<string | null>(null);
   const [kitLoading, setKitLoading] = useState(false);
   const [kitMessage, setKitMessage] = useState('');
+  const [requestingKit, setRequestingKit] = useState(false);
+  const [kitRequested, setKitRequested] = useState(false);
+
+  const handleRequestKit = async () => {
+    if (!user?.id) {
+      Alert.alert('Error', 'Please log in to request a kit.');
+      return;
+    }
+    Alert.alert(
+      'Request Self-Sampling Kit',
+      'A kit will be prepared for you. You will be contacted when it is ready for pickup or delivery.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Request Kit',
+          onPress: async () => {
+            setRequestingKit(true);
+            try {
+              await createKitRequest(user.id);
+              setKitRequested(true);
+              Alert.alert('Kit Requested', 'Your request has been submitted. We will contact you shortly.');
+            } catch {
+              Alert.alert('Error', 'Failed to submit request. Please try again.');
+            } finally {
+              setRequestingKit(false);
+            }
+          },
+        },
+      ],
+    );
+  };
 
   const handleScanKit = async () => {
     if (!barcode.trim()) return;
@@ -168,12 +204,27 @@ export default function SelfSamplingScreen() {
           </Text>
         </View>
 
-        <TouchableOpacity style={styles.videoGuideBtn}>
+        <TouchableOpacity style={styles.videoGuideBtn} onPress={() => Linking.openURL(VIDEO_URL)}>
           <View style={styles.videoIconWrap}>
             <Ionicons name="play" size={20} color="#FFF" />
           </View>
           <Text style={styles.videoGuideText}>Watch Video Guide</Text>
           <MaterialCommunityIcons name="chevron-right" size={20} color={colors.primary} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.requestKitBtn, { backgroundColor: kitRequested ? '#10B981' : colors.primary }]}
+          onPress={handleRequestKit}
+          disabled={requestingKit || kitRequested}
+        >
+          {requestingKit ? (
+            <ActivityIndicator size="small" color="#FFF" />
+          ) : (
+            <Ionicons name={kitRequested ? 'checkmark-circle' : 'cube-outline'} size={20} color="#FFF" />
+          )}
+          <Text style={styles.requestKitText}>
+            {kitRequested ? 'Kit Requested' : 'Request a Kit'}
+          </Text>
         </TouchableOpacity>
 
         <Text style={styles.sectionTitle}>Step-by-Step Instructions</Text>
@@ -335,6 +386,23 @@ const makeStyles = (colors: any, isDark: boolean) =>
       fontWeight: '700',
       color: colors.primary,
       flex: 1,
+    },
+
+    requestKitBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginHorizontal: 20,
+      paddingVertical: 14,
+      paddingHorizontal: 20,
+      borderRadius: 14,
+      marginBottom: 24,
+      gap: 10,
+    },
+    requestKitText: {
+      fontSize: 15,
+      fontWeight: '700',
+      color: '#FFF',
     },
 
     sectionTitle: {
