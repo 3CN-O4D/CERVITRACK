@@ -189,7 +189,7 @@ export default function KitInventoryPage() {
         <div className="flex items-center gap-2 overflow-x-auto pb-2">
           {['REGISTERED', 'PAIRED', 'COLLECTED', 'IN_TRANSIT', 'IN_LAB', 'PROCESSED'].map((st, i) => {
             const cfg = STATUS_CONFIG[st];
-            const count = stats?.byStatus?.[st] || 0;
+            const count = stats?.[st.toLowerCase() as keyof KitStats] || 0;
             return (
               <div key={st} className="flex items-center">
                 <div className="flex flex-col items-center min-w-[100px]">
