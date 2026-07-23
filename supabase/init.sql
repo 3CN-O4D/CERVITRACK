@@ -5,27 +5,10 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
--- 2. Create enum types
-DO $$ BEGIN CREATE TYPE user_role AS ENUM ('patient','lab_technician','clinician','facility_admin','county_admin','national_admin','system_admin'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-DO $$ BEGIN CREATE TYPE risk_tier AS ENUM ('low','medium','high','critical'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-DO $$ BEGIN CREATE TYPE vaccine_status AS ENUM ('scheduled','done','missed','cancelled'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-DO $$ BEGIN CREATE TYPE appointment_status AS ENUM ('pending','upcoming','completed','cancelled'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-DO $$ BEGIN CREATE TYPE notification_type AS ENUM ('info','reminder','alert','appointment','screening','admin','provider'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-DO $$ BEGIN CREATE TYPE message_type AS ENUM ('text','image','audio'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-DO $$ BEGIN CREATE TYPE kit_status AS ENUM ('UNREGISTERED','REGISTERED','PAIRED','COLLECTED','IN_TRANSIT','IN_LAB','PROCESSED'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-DO $$ BEGIN CREATE TYPE batch_status AS ENUM ('receiving','testing','submitted'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-DO $$ BEGIN CREATE TYPE approval_status AS ENUM ('pending','approved','rejected'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-DO $$ BEGIN CREATE TYPE clinician_specialty AS ENUM ('oncologist','gynecologist','nurse_practitioner','public_health_officer','pathologist','general_practitioner','other'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+-- 2. Create extension first
+-- (extensions already created above)
 
--- Fix sender_type if old schema created it with wrong values
-DO $$ BEGIN
-  CREATE TYPE sender_type AS ENUM ('patient','staff','system');
-EXCEPTION WHEN duplicate_object THEN
-  BEGIN ALTER TYPE sender_type ADD VALUE IF NOT EXISTS 'patient'; EXCEPTION WHEN duplicate_object THEN NULL; END;
-  BEGIN ALTER TYPE sender_type ADD VALUE IF NOT EXISTS 'system'; EXCEPTION WHEN duplicate_object THEN NULL; END;
-END $$;
-
--- 3. Drop tables that reference providers first
+-- 3. Drop ALL tables first (so enum types can be dropped)
 DROP TABLE IF EXISTS sample_batch_items CASCADE;
 DROP TABLE IF EXISTS sample_batches CASCADE;
 DROP TABLE IF EXISTS sample_kit_events CASCADE;
@@ -48,40 +31,40 @@ DROP TABLE IF EXISTS appointments CASCADE;
 DROP TABLE IF EXISTS vaccines CASCADE;
 DROP TABLE IF EXISTS screenings CASCADE;
 DROP TABLE IF EXISTS sync_log CASCADE;
+DROP TABLE IF EXISTS providers CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
 DROP TABLE IF EXISTS messages CASCADE;
 DROP TABLE IF EXISTS conversations CASCADE;
 
--- 4. Create providers BEFORE anything references it
-CREATE TABLE IF NOT EXISTS providers (
-  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  name            text NOT NULL DEFAULT '',
-  email           text UNIQUE,
-  phone           text DEFAULT '',
-  password        text,
-  role            text DEFAULT 'clinician',
-  specialty       text DEFAULT '',
-  hospital        text DEFAULT '',
-  license_number  text DEFAULT '',
-  approval_status approval_status DEFAULT 'pending',
-  approved_by     uuid,
-  approved_at     timestamptz,
-  specialization  clinician_specialty DEFAULT 'general_practitioner',
-  county          text DEFAULT '',
-  sub_county      text DEFAULT '',
-  ward            text DEFAULT '',
-  bio             text DEFAULT '',
-  photo           text DEFAULT '',
-  years_experience integer DEFAULT 0,
-  created_at      timestamptz DEFAULT now()
-);
+-- 4. Now drop old enum types (safe since no tables reference them)
+DROP TYPE IF EXISTS risk_tier CASCADE;
+DROP TYPE IF EXISTS user_role CASCADE;
+DROP TYPE IF EXISTS vaccine_status CASCADE;
+DROP TYPE IF EXISTS appointment_status CASCADE;
+DROP TYPE IF EXISTS notification_type CASCADE;
+DROP TYPE IF EXISTS message_type CASCADE;
+DROP TYPE IF EXISTS kit_status CASCADE;
+DROP TYPE IF EXISTS batch_status CASCADE;
+DROP TYPE IF EXISTS approval_status CASCADE;
+DROP TYPE IF EXISTS clinician_specialty CASCADE;
+DROP TYPE IF EXISTS sender_type CASCADE;
 
--- 5. Now drop providers (safe since nothing references it anymore)
-DROP TABLE IF EXISTS providers CASCADE;
+-- 5. Create enum types with correct values
+CREATE TYPE user_role AS ENUM ('patient','lab_technician','clinician','facility_admin','county_admin','national_admin','system_admin');
+CREATE TYPE risk_tier AS ENUM ('low','medium','high','critical');
+CREATE TYPE vaccine_status AS ENUM ('scheduled','done','missed','cancelled');
+CREATE TYPE appointment_status AS ENUM ('pending','upcoming','completed','cancelled');
+CREATE TYPE notification_type AS ENUM ('info','reminder','alert','appointment','screening','admin','provider');
+CREATE TYPE message_type AS ENUM ('text','image','audio');
+CREATE TYPE kit_status AS ENUM ('UNREGISTERED','REGISTERED','PAIRED','COLLECTED','IN_TRANSIT','IN_LAB','PROCESSED');
+CREATE TYPE batch_status AS ENUM ('receiving','testing','submitted');
+CREATE TYPE approval_status AS ENUM ('pending','approved','rejected');
+CREATE TYPE clinician_specialty AS ENUM ('oncologist','gynecologist','nurse_practitioner','public_health_officer','pathologist','general_practitioner','other');
+CREATE TYPE sender_type AS ENUM ('patient','staff','system');
 
--- 6. Now drop users (safe since providers is gone)
-DROP TABLE IF EXISTS users CASCADE;
+-- 6. Create tables in correct FK order
 
--- 7. Create everything in correct order
+-- USERS (patients + admins)
 CREATE TABLE IF NOT EXISTS users (
   id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name            text NOT NULL DEFAULT '',
