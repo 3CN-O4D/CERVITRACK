@@ -110,6 +110,29 @@ CREATE TABLE IF NOT EXISTS users (
   created_at      timestamptz DEFAULT now()
 );
 
+-- PROVIDERS (clinician login, separate from users)
+CREATE TABLE IF NOT EXISTS providers (
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name            text NOT NULL DEFAULT '',
+  email           text UNIQUE,
+  phone           text DEFAULT '',
+  password        text,
+  role            text DEFAULT 'clinician',
+  specialty       text DEFAULT '',
+  hospital        text DEFAULT '',
+  license_number  text DEFAULT '',
+  approval_status approval_status DEFAULT 'pending',
+  approved_by     uuid,
+  approved_at     timestamptz,
+  specialization  clinician_specialty DEFAULT 'general_practitioner',
+  county          text DEFAULT '',
+  sub_county      text DEFAULT '',
+  bio             text DEFAULT '',
+  photo           text DEFAULT '',
+  years_experience integer DEFAULT 0,
+  created_at      timestamptz DEFAULT now()
+);
+
 -- SCREENINGS
 CREATE TABLE IF NOT EXISTS screenings (
   id            bigserial PRIMARY KEY,
@@ -246,20 +269,6 @@ CREATE TABLE IF NOT EXISTS consent_log (
   consent_medical boolean DEFAULT false,
   accepted        boolean DEFAULT false,
   accepted_at     timestamptz DEFAULT now()
-);
-
--- PROVIDERS (clinician login, separate from users)
-CREATE TABLE IF NOT EXISTS providers (
-  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  name            text NOT NULL DEFAULT '',
-  email           text UNIQUE,
-  phone           text DEFAULT '',
-  password        text,
-  role            text DEFAULT 'clinician',
-  specialty       text DEFAULT '',
-  hospital        text DEFAULT '',
-  license_number  text DEFAULT '',
-  created_at      timestamptz DEFAULT now()
 );
 
 -- FACILITIES
@@ -413,17 +422,6 @@ CREATE TABLE IF NOT EXISTS sample_batch_items (
 -- ============================================================
 -- 5c. CLINICIAN PROFILES (approval + specialization)
 -- ============================================================
-
--- Add clinician approval columns to providers table
-ALTER TABLE providers ADD COLUMN IF NOT EXISTS approval_status approval_status DEFAULT 'pending';
-ALTER TABLE providers ADD COLUMN IF NOT EXISTS approved_by uuid;
-ALTER TABLE providers ADD COLUMN IF NOT EXISTS approved_at timestamptz;
-ALTER TABLE providers ADD COLUMN IF NOT EXISTS specialization clinician_specialty DEFAULT 'general_practitioner';
-ALTER TABLE providers ADD COLUMN IF NOT EXISTS county text DEFAULT '';
-ALTER TABLE providers ADD COLUMN IF NOT EXISTS sub_county text DEFAULT '';
-ALTER TABLE providers ADD COLUMN IF NOT EXISTS bio text DEFAULT '';
-ALTER TABLE providers ADD COLUMN IF NOT EXISTS photo text DEFAULT '';
-ALTER TABLE providers ADD COLUMN IF NOT EXISTS years_experience integer DEFAULT 0;
 
 -- ============================================================
 -- 6. SYNC LOG
