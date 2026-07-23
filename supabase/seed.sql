@@ -3,48 +3,9 @@
 -- Run AFTER init.sql in Supabase SQL Editor
 -- 20 test users across all roles
 -- All passwords: password123
--- ============================================================
-
--- Enable pgcrypto for password hashing
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
-
--- ============================================================
--- 1. AUTH USERS (APK login via supabase.auth.signInWithPassword)
--- Patients, Nurses, Lab Techs, Admins
--- ============================================================
-
-DO $$
-DECLARE
-  ph text := crypt('password123', gen_salt('bf', 10));
-BEGIN
-  INSERT INTO auth.users (id, aud, role, email, encrypted_password, email_confirmed_at, raw_user_meta_data, created_at, updated_at)
-  VALUES
-    -- PATIENTS (10)
-    ('11111111-1111-1111-1111-111111111101'::uuid, 'authenticated', 'authenticated', 'patient1@cervitrack.app', ph, now(), '{"name":"Grace Wanjiku","phone":"+254712000001","role":"patient"}'::jsonb, '2026-01-15'::timestamptz, now()),
-    ('11111111-1111-1111-1111-111111111102'::uuid, 'authenticated', 'authenticated', 'patient2@cervitrack.app', ph, now(), '{"name":"Faith Achieng","phone":"+254722000002","role":"patient"}'::jsonb, '2026-02-01'::timestamptz, now()),
-    ('11111111-1111-1111-1111-111111111103'::uuid, 'authenticated', 'authenticated', 'patient3@cervitrack.app', ph, now(), '{"name":"Mary Njeri","phone":"+254733000003","role":"patient"}'::jsonb, '2026-01-20'::timestamptz, now()),
-    ('11111111-1111-1111-1111-111111111104'::uuid, 'authenticated', 'authenticated', 'patient4@cervitrack.app', ph, now(), '{"name":"Esther Muthoni","phone":"+254744000004","role":"patient"}'::jsonb, '2026-03-01'::timestamptz, now()),
-    ('11111111-1111-1111-1111-111111111105'::uuid, 'authenticated', 'authenticated', 'patient5@cervitrack.app', ph, now(), '{"name":"Rose Adhiambo","phone":"+254755000005","role":"patient"}'::jsonb, '2026-02-15'::timestamptz, now()),
-    ('11111111-1111-1111-1111-111111111106'::uuid, 'authenticated', 'authenticated', 'patient6@cervitrack.app', ph, now(), '{"name":"Jane Wairimu","phone":"+254766000006","role":"patient"}'::jsonb, '2026-01-10'::timestamptz, now()),
-    ('11111111-1111-1111-1111-111111111107'::uuid, 'authenticated', 'authenticated', 'patient7@cervitrack.app', ph, now(), '{"name":"Agnes Nyambura","phone":"+254777000007","role":"patient"}'::jsonb, '2026-04-01'::timestamptz, now()),
-    ('11111111-1111-1111-1111-111111111108'::uuid, 'authenticated', 'authenticated', 'patient8@cervitrack.app', ph, now(), '{"name":"Lucy Akinyi","phone":"+254788000008","role":"patient"}'::jsonb, '2026-03-15'::timestamptz, now()),
-    ('11111111-1111-1111-1111-111111111109'::uuid, 'authenticated', 'authenticated', 'patient9@cervitrack.app', ph, now(), '{"name":"Diana Chebet","phone":"+254799000009","role":"patient"}'::jsonb, '2026-02-20'::timestamptz, now()),
-    ('11111111-1111-1111-1111-111111111110'::uuid, 'authenticated', 'authenticated', 'patient10@cervitrack.app', ph, now(), '{"name":"Alice Mwikali","phone":"+254700000010","role":"patient"}'::jsonb, '2026-05-01'::timestamptz, now()),
-    -- NURSES (2) — role=clinician in DB
-    ('22222222-2222-2222-2222-222222222201'::uuid, 'authenticated', 'authenticated', 'nurse1@cervitrack.app', ph, now(), '{"name":"Nurse Sarah Kimani","phone":"+254711000011","role":"clinician"}'::jsonb, '2026-01-05'::timestamptz, now()),
-    ('22222222-2222-2222-2222-222222222202'::uuid, 'authenticated', 'authenticated', 'nurse2@cervitrack.app', ph, now(), '{"name":"Nurse Rose Omondi","phone":"+254722000022","role":"clinician"}'::jsonb, '2026-01-05'::timestamptz, now()),
-    -- LAB TECHNICIANS (2) — pending approval
-    ('33333333-3333-3333-3333-333333333301'::uuid, 'authenticated', 'authenticated', 'lab1@cervitrack.app', ph, now(), '{"name":"Lab Tech John Kipchoge","phone":"+254733000033","role":"lab_technician"}'::jsonb, '2026-06-01'::timestamptz, now()),
-    ('33333333-3333-3333-3333-333333333302'::uuid, 'authenticated', 'authenticated', 'lab2@cervitrack.app', ph, now(), '{"name":"Lab Tech Mary Nyokabi","phone":"+254744000044","role":"lab_technician"}'::jsonb, '2026-06-15'::timestamptz, now()),
-    -- ADMINS (2)
-    ('44444444-4444-4444-4444-444444444401'::uuid, 'authenticated', 'authenticated', 'admin1@cervitrack.app', ph, now(), '{"name":"System Admin","phone":"+254755000055","role":"facility_admin"}'::jsonb, '2026-01-01'::timestamptz, now()),
-    ('44444444-4444-4444-4444-444444444402'::uuid, 'authenticated', 'authenticated', 'admin2@cervitrack.app', ph, now(), '{"name":"County Admin Nairobi","phone":"+254766000066","role":"county_admin"}'::jsonb, '2026-01-01'::timestamptz, now())
-  ON CONFLICT (id) DO NOTHING;
-END $$;
-
--- ============================================================
--- 2. USERS TABLE (web login + profile data)
--- Web login queries: SELECT * FROM users WHERE email = ? AND password = ?
+--
+-- NOTE: Auth users are created via POST /api/seed (Supabase Admin API)
+-- This file seeds the public tables (users, screenings, vaccines, etc.)
 -- ============================================================
 
 INSERT INTO users (id, name, email, phone, password, role, county, sub_county, ward, patient_id, consent_terms, consent_medical, consent_at, total_screenings, total_vaccines, risk_index, created_at) VALUES
