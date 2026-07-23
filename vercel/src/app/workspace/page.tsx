@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase-browser';
+import PatientSearch from '@/components/PatientSearch';
 
 interface Patient {
   id: string;
@@ -111,6 +112,12 @@ export default function WorkspaceDashboard() {
       setLoading(false);
     }
   }
+
+  const patientMap = useMemo(() => {
+    const m: Record<string, Patient> = {};
+    patients.forEach(p => { m[p.id] = p; });
+    return m;
+  }, [patients]);
 
   const filteredPatients = useMemo(() => {
     if (!search) return patients;
@@ -289,6 +296,9 @@ export default function WorkspaceDashboard() {
                   <div className="flex items-center justify-between">
                     <div>
                       <span className="font-medium text-sm text-gray-900">{s.screening_type}</span>
+                      {patientMap[s.profile_id] && (
+                        <span className="text-xs text-emerald-600 ml-2">{patientMap[s.profile_id].name}</span>
+                      )}
                       <span className="text-xs text-gray-500 ml-2">{s.screening_date || new Date(s.created_at).toLocaleDateString()}</span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -321,13 +331,7 @@ export default function WorkspaceDashboard() {
               <form onSubmit={handleNewScreening} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Patient</label>
-                  <select value={screeningPatient} onChange={(e) => setScreeningPatient(e.target.value)} required
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
-                    <option value="">Select patient...</option>
-                    {patients.map(p => (
-                      <option key={p.id} value={p.id}>{p.name} ({p.patient_id})</option>
-                    ))}
-                  </select>
+                  <PatientSearch patients={patients} value={screeningPatient} onChange={setScreeningPatient} />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -407,13 +411,7 @@ export default function WorkspaceDashboard() {
               <form onSubmit={handleNewAppointment} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Patient</label>
-                  <select value={apptPatient} onChange={(e) => setApptPatient(e.target.value)} required
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
-                    <option value="">Select patient...</option>
-                    {patients.map(p => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
+                  <PatientSearch patients={patients} value={apptPatient} onChange={setApptPatient} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Reason</label>

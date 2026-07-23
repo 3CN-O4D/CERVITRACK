@@ -1,43 +1,76 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
-    const body = await request.json();
-    const { name, email, phone, password, role, county, sub_county, ward, consent_terms, consent_medical } = body;
+    const { email, password, name, phone, role } = await req.json();
 
-    const patient_id = Math.random().toString(36).substring(2, 10).toUpperCase();
+    if (!email || !password || !name) {
+      return NextResponse.json({ error: 'Email, password, and name are required.' }, { status: 400 });
+    }
 
-    const { data: user, error } = await supabaseAdmin
-      .from('users')
-      .insert({
-        patient_id,
+    const userRole = role || 'patient';
+
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      phone: phone || undefined,
+      user_metadata: {
         name,
-        email,
-        phone,
-        password,
-        role: role || 'patient',
-        county,
-        sub_county,
-        ward,
-        total_screenings: 0,
-        total_vaccines: 0,
-      })
-      .select()
-      .single();
+        role: userRole,
+        consent_terms: true,
+        consent_medical: true,
+        consent_at: new Date().toISOString(),
+      },
+    });
 
-    if (error) throw error;
+    if (authError) {
+      return NextResponse.json({ error: authError.message }, { status: 400 });
+    }
 
-    if (consent_terms || consent_medical) {
-      await supabaseAdmin.from('consent_log').insert({
-        user_id: user.id,
-        consent_terms: !!consent_terms,
-        consent_medical: !!consent_medical,
+    const userId = authData.user.id;
+    const patientId = userRole === 'patient' ? `PT-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9999)).padStart(4, '0')}` : null;
+
+    const { error: profileError } = await supabaseAdmin.from('users').insert({
+      id: userId,
+      name,
+      email,
+      phone: phone || null,
+      role: userRole,
+      patient_id: patientId,
+      consent_terms: true,
+      consent_medical: true,
+      consent_at: new Date().toISOString(),
+      county: null,
+      sub_county: null,
+      ward: null,
+      created_at: new Date().toISOString(),
+    });
+
+    if (profileError) {
+      return NextResponse.json({ error: profileError.message }, { status: 500 });
+    }
+
+    const { data: signInData, error: signInError } = await supabaseAdmin.auth.admin.generateLink({
+      type: 'magiclink',
+      email,
+    });
+
+    if (signInError) {
+      return NextResponse.json({
+        user: authData.user,
+        profile: { id: userId, name, email, role: userRole },
+        message: 'Account created. Please sign in.',
       });
     }
 
-    return NextResponse.json(user, { status: 201 });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json({
+      user: authData.user,
+      profile: { id: userId, name, email, role: userRole },
+      message: 'Account created successfully.',
+    });
+  } catch (err) {
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }
 }

@@ -42,26 +42,24 @@ function AuthForm() {
           return;
         }
 
-        const { error: signUpError } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              name,
-              phone: phone || null,
-              role: 'patient',
-              consent_terms: true,
-              consent_medical: true,
-              consent_at: new Date().toISOString(),
-            },
-          },
+        const res = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, name, phone: phone || null, role: 'patient' }),
         });
+        const data = await res.json();
 
-        if (signUpError) {
-          setError(signUpError.message);
+        if (!res.ok || data.error) {
+          setError(data.error || 'Registration failed.');
         } else {
-          setSuccess('Registration successful! Please sign in.');
-          setMode('login');
+          setSuccess('Account created! Signing you in...');
+          const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+          if (signInError) {
+            setSuccess('Account created! Please sign in.');
+            setMode('login');
+          } else {
+            router.push('/workspace');
+          }
         }
       } else {
         if (!email || !password) {
