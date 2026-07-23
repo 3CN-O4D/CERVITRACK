@@ -589,8 +589,15 @@ CREATE POLICY "Public read facilities" ON facilities FOR SELECT USING (true);
 CREATE POLICY "Public read articles" ON articles FOR SELECT USING (true);
 CREATE POLICY "Public read chat_contacts" ON chat_contacts FOR SELECT USING (true);
 
+-- Service role bypass (default in Supabase, explicit for clarity)
+CREATE POLICY "Service role all users" ON users FOR ALL USING (auth.role() = 'service_role');
+
 -- Authenticated users: read own data
 CREATE POLICY "Users read own profile" ON users FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "Users read all profiles" ON users FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Users insert own profile" ON users FOR INSERT WITH CHECK (auth.uid() = id);
+CREATE POLICY "Users update own profile" ON users FOR UPDATE USING (auth.uid() = id);
+CREATE POLICY "Users upsert own profile" ON users FOR ALL USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
 CREATE POLICY "Users read own screenings" ON screenings FOR SELECT USING (auth.uid() = profile_id);
 CREATE POLICY "Users read own vaccines" ON vaccines FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users read own appointments" ON appointments FOR SELECT USING (auth.uid() = user_id);
