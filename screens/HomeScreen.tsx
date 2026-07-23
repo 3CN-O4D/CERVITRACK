@@ -61,6 +61,7 @@ export default function HomeScreen({ navigation }: any) {
     { icon: 'calendar-outline', label: 'Appointments', color: colors.primary, sub: 'View schedule' },
     { icon: 'chatbubbles-outline', label: 'Talk to Nurse', color: colors.success, sub: 'Online now' },
     { icon: 'flask-outline', label: 'Lab Results', color: colors.warning, sub: 'View results' },
+    { icon: 'barcode-outline', label: 'Kit Tracker', color: '#0891B2', sub: 'Scan & track' },
     { icon: 'syringe-outline', label: 'Vaccines', color: colors.danger, sub: 'Track doses' },
     { icon: 'test-tube-outline', label: 'Self-Sampling', color: '#8B5CF6', sub: 'Step-by-step' },
     { icon: 'document-text-outline', label: 'Self-Assessment', color: '#EC4899', sub: 'Risk check' },
@@ -78,6 +79,9 @@ export default function HomeScreen({ navigation }: any) {
         break;
       case 'Lab Results':
         navigation.navigate('LabResults');
+        break;
+      case 'Kit Tracker':
+        navigation.navigate('KitTracking');
         break;
       case 'Vaccines':
         navigation.navigate('Vaccines');

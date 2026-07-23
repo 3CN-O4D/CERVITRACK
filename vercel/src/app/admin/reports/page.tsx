@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import UserSearch from '../../../components/UserSearch';
 
 interface Report {
   id: string;
@@ -10,8 +11,15 @@ interface Report {
   created_at: string;
 }
 
+interface SelectedUser {
+  id: string;
+  name: string;
+  email: string;
+  photo?: string;
+}
+
 export default function AdminReportsPage() {
-  const [userId, setUserId] = useState('');
+  const [selectedUser, setSelectedUser] = useState<SelectedUser | null>(null);
   const [reportType, setReportType] = useState('general');
   const [generating, setGenerating] = useState(false);
   const [reports, setReports] = useState<Report[]>([]);
@@ -26,39 +34,31 @@ export default function AdminReportsPage() {
       if (!res.ok) throw new Error('Failed to load reports');
       const json = await res.json();
       setReports(json.reports || json || []);
-    } catch {
-      setReports([]);
-    } finally {
-      setLoadingReports(false);
-    }
+    } catch { setReports([]); }
+    finally { setLoadingReports(false); }
   }, []);
 
   useEffect(() => {
-    if (userId) fetchReports(userId);
-  }, [userId, fetchReports]);
+    if (selectedUser) fetchReports(selectedUser.id);
+  }, [selectedUser, fetchReports]);
 
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userId) {
-      setMessage({ type: 'error', text: 'User ID is required' });
-      return;
-    }
+    if (!selectedUser) { setMessage({ type: 'error', text: 'Select a user first' }); return; }
     setGenerating(true);
     setMessage({ type: '', text: '' });
     try {
       const res = await fetch('/api/admin/report/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId, type: reportType }),
+        body: JSON.stringify({ user_id: selectedUser.id, type: reportType }),
       });
       if (!res.ok) throw new Error('Failed to generate report');
-      setMessage({ type: 'success', text: 'Report generated successfully' });
-      fetchReports(userId);
+      setMessage({ type: 'success', text: `Report generated for ${selectedUser.name}` });
+      fetchReports(selectedUser.id);
     } catch (err: unknown) {
-      setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to generate report' });
-    } finally {
-      setGenerating(false);
-    }
+      setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed' });
+    } finally { setGenerating(false); }
   };
 
   return (
@@ -71,42 +71,39 @@ export default function AdminReportsPage() {
 
           {message.text && (
             <div className={`px-4 py-3 rounded-lg text-sm mb-4 ${
-              message.type === 'success'
-                ? 'bg-emerald-50 border border-emerald-200 text-emerald-700'
-                : 'bg-red-50 border border-red-200 text-red-700'
-            }`}>
-              {message.text}
-            </div>
+              message.type === 'success' ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-red-50 border border-red-200 text-red-700'
+            }`}>{message.text}</div>
           )}
 
           <form onSubmit={handleGenerate} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">User ID</label>
-              <input
-                type="text"
-                value={userId}
-                onChange={(e) => setUserId(e.target.value)}
-                placeholder="Enter user UUID"
-                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
-              />
+              <label className="block text-sm font-medium text-gray-700 mb-1">Patient</label>
+              <UserSearch onSelect={(u) => setSelectedUser(u)} placeholder="Search by name, email, or ID…" />
+              {selectedUser && (
+                <div className="mt-2 flex items-center gap-2 bg-sky-50 border border-sky-200 rounded-lg px-3 py-2">
+                  {selectedUser.photo ? (
+                    <img src={selectedUser.photo} alt="" className="w-6 h-6 rounded-full object-cover" />
+                  ) : (
+                    <div className="w-6 h-6 rounded-full bg-sky-600 flex items-center justify-center text-white text-[10px] font-bold">
+                      {selectedUser.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                    </div>
+                  )}
+                  <span className="text-sm text-sky-800 font-medium">{selectedUser.name}</span>
+                  <button type="button" onClick={() => setSelectedUser(null)} className="ml-auto text-sky-400 hover:text-sky-600">×</button>
+                </div>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Report Type</label>
-              <select
-                value={reportType}
-                onChange={(e) => setReportType(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
-              >
+              <select value={reportType} onChange={(e) => setReportType(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500">
                 <option value="general">General</option>
                 <option value="screening">Screening</option>
                 <option value="vaccination">Vaccination</option>
               </select>
             </div>
-            <button
-              type="submit"
-              disabled={generating}
-              className="bg-sky-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-sky-800 disabled:opacity-50"
-            >
+            <button type="submit" disabled={generating || !selectedUser}
+              className="bg-sky-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-sky-800 disabled:opacity-50">
               {generating ? 'Generating…' : 'Generate Report'}
             </button>
           </form>
@@ -114,21 +111,12 @@ export default function AdminReportsPage() {
 
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <h2 className="font-semibold text-gray-900 mb-4">Existing Reports</h2>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">User ID</label>
-            <input
-              type="text"
-              value={userId}
-              onChange={(e) => setUserId(e.target.value)}
-              placeholder="Enter user UUID to view reports"
-              className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 mb-4"
-            />
-          </div>
-
-          {loadingReports ? (
+          {!selectedUser ? (
+            <p className="text-sm text-gray-400">Select a patient to view their reports</p>
+          ) : loadingReports ? (
             <p className="text-sm text-gray-400">Loading…</p>
           ) : reports.length === 0 ? (
-            <p className="text-sm text-gray-400">No reports found for this user</p>
+            <p className="text-sm text-gray-400">No reports found for {selectedUser.name}</p>
           ) : (
             <div className="space-y-3 max-h-80 overflow-y-auto">
               {reports.map((r) => (

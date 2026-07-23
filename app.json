@@ -45,17 +45,18 @@
             "newArchEnabled": false
           }
         }
-      ]
+      ],
+      "expo-sqlite"
     ],
-  "extra": {
-    "eas": {
-      "projectId": "7c04a79f-c03a-4c9f-9e1e-4e9f147f7cb4"
+    "extra": {
+      "eas": {
+        "projectId": "7c04a79f-c03a-4c9f-9e1e-4e9f147f7cb4"
+      },
+      "EXPO_PUBLIC_SUPABASE_URL": "https://vikujluvquznpjepdhxk.supabase.co",
+      "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_NDsrxmJUmIy9Qzi0NFOSUQ_YfoNecLU",
+      "EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME": "fdusgrsg",
+      "EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET": "ml_default"
     },
-    "EXPO_PUBLIC_SUPABASE_URL": "https://your-project.supabase.co",
-    "EXPO_PUBLIC_SUPABASE_ANON_KEY": "your-anon-key-here",
-    "EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME": "your-cloud-name",
-    "EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET": "your-upload-preset"
-  },
-  "owner": "ecnord"
+    "owner": "ecnord"
   }
 }

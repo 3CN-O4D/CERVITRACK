@@ -39,6 +39,7 @@ interface PatientData {
 }
 
 type Tab = 'screenings' | 'vaccines' | 'appointments' | 'lab-results';
+type SortKey = 'date' | 'verdict' | 'risk_tier' | 'status';
 
 export default function ProviderPatientDetailPage() {
   const router = useRouter();
@@ -49,6 +50,9 @@ export default function ProviderPatientDetailPage() {
   const [tab, setTab] = useState<Tab>('screenings');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [sortKey, setSortKey] = useState<SortKey>('date');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [filterText, setFilterText] = useState('');
 
   const [notifTitle, setNotifTitle] = useState('');
   const [notifMessage, setNotifMessage] = useState('');
@@ -129,6 +133,28 @@ export default function ProviderPatientDetailPage() {
     }
   }, [patientId, scheduleDate, scheduleAction]);
 
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortKey(key); setSortDir('desc'); }
+  };
+  const SortIcon = ({ col }: { col: SortKey }) => (
+    <span className="ml-1 text-gray-400 cursor-pointer hover:text-gray-600" onClick={() => handleSort(col)}>
+      {sortKey === col ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}
+    </span>
+  );
+
+  const sortArr = <T extends Record<string, any>>(arr: T[], key: string) => {
+    if (!arr) return [];
+    let list = filterText ? arr.filter((item: any) => Object.values(item).some(v => String(v).toLowerCase().includes(filterText.toLowerCase()))) : arr;
+    return [...list].sort((a: any, b: any) => {
+      let av = a[key] ?? '', bv = b[key] ?? '';
+      if (key === 'date' || key === 'created_at') { av = new Date(av).getTime() || 0; bv = new Date(bv).getTime() || 0; }
+      if (av < bv) return sortDir === 'asc' ? -1 : 1;
+      if (av > bv) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+  };
+
   if (loading) {
     return <div className="p-8 flex items-center justify-center min-h-screen text-gray-500">Loading patient…</div>;
   }
@@ -185,16 +211,22 @@ export default function ProviderPatientDetailPage() {
 
       <div className="flex gap-2 mb-6">
         {tabs.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              tab === t.key ? 'bg-sky-700 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
-            }`}
-          >
+          <button key={t.key} onClick={() => setTab(t.key)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${tab === t.key ? 'bg-sky-700 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
             {t.label}
           </button>
         ))}
+      </div>
+
+      <div className="mb-4">
+        <div className="relative">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+          </svg>
+          <input type="text" value={filterText} onChange={(e) => setFilterText(e.target.value)}
+            placeholder={`Search ${tab}…`}
+            className="w-full border border-gray-300 rounded-lg pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+        </div>
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 mb-6">
@@ -203,16 +235,16 @@ export default function ProviderPatientDetailPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 text-left text-gray-500">
-                  <th className="px-6 py-3 font-medium">Verdict</th>
-                  <th className="px-6 py-3 font-medium">Risk Tier</th>
+                  <th className="px-6 py-3 font-medium">Verdict <SortIcon col="verdict" /></th>
+                  <th className="px-6 py-3 font-medium">Risk Tier <SortIcon col="risk_tier" /></th>
                   <th className="px-6 py-3 font-medium">Risk Index</th>
-                  <th className="px-6 py-3 font-medium">Date</th>
+                  <th className="px-6 py-3 font-medium">Date <SortIcon col="date" /></th>
                 </tr>
               </thead>
               <tbody>
-                {patient.screenings?.length === 0 ? (
+                {!patient.screenings?.length ? (
                   <tr><td colSpan={4} className="px-6 py-6 text-center text-gray-400">No screenings</td></tr>
-                ) : patient.screenings?.map((s) => (
+                ) : sortArr(patient.screenings, sortKey === 'date' ? 'created_at' : sortKey).map((s) => (
                   <tr key={s.id} className="border-b border-gray-50">
                     <td className="px-6 py-3">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${

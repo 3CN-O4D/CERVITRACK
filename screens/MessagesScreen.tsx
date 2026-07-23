@@ -11,11 +11,20 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { getItem, setItem } from '../services/storage';
+import {
+  getChatContacts,
+  getConversations,
+  getOrCreateConversation,
+  getMessages,
+  sendMessage as apiSendMessage,
+  onMessagesInsert,
+} from '../services/api';
 
 const { width } = Dimensions.get('window');
 
@@ -104,6 +113,30 @@ export default function MessagesScreen({ navigation }: any) {
 
   useEffect(() => {
     (async () => {
+      // Try Supabase first
+      try {
+        const dbContacts = await getChatContacts();
+        if (dbContacts && dbContacts.length > 0) {
+          const mapped: Contact[] = dbContacts.map((c: any) => ({
+            id: String(c.id),
+            name: c.name,
+            role: c.role || 'Provider',
+            specialty: c.specialty || '',
+            hospital: c.hospital || '',
+            online: c.online ?? false,
+            lastMessage: 'Tap to start chatting',
+            lastTime: '',
+            unread: 0,
+            initials: c.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase(),
+          }));
+          setContacts(mapped);
+          await setItem(`${CONTACTS_KEY}_${user?.id || 'default'}`, JSON.stringify(mapped));
+          setLoaded(true);
+          return;
+        }
+      } catch { /* fall through to local */ }
+
+      // Fallback to local storage / seed
       const uid = user?.id || 'default';
       const raw = await getItem(`${CONTACTS_KEY}_${uid}`);
       if (raw) {
@@ -218,21 +251,66 @@ export function ChatDetail({ navigation, route }: any) {
   const uid = user?.id || 'default';
   const msgStorageKey = `@cervitrack_msgs_${uid}_${contact.id}`;
   const contactsKey = `${CONTACTS_KEY}_${uid}`;
+  const [conversationId, setConversationId] = useState<number | null>(null);
 
-  // Load messages from local storage only
+  // Create or get conversation from Supabase
   useEffect(() => {
+    if (!user?.id) return;
     (async () => {
+      try {
+        const conv = await getOrCreateConversation(
+          user.id, parseInt(contact.id), contact.name, contact.role, contact.online,
+        );
+        if (conv) {
+          setConversationId(conv.id);
+          // Load messages from Supabase
+          const dbMessages = await getMessages(conv.id);
+          if (dbMessages && dbMessages.length > 0) {
+            const mapped: Message[] = dbMessages.map((m: any) => ({
+              id: String(m.id),
+              type: m.message_type || 'text',
+              content: m.content || '',
+              sent: m.sender_id === user.id,
+              time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              status: 'read' as const,
+              createdAt: new Date(m.created_at).getTime(),
+            }));
+            setMessages(mapped);
+            setLoaded(true);
+            return;
+          }
+        }
+      } catch { /* fall through to local */ }
+
+      // Fallback to local storage
       const raw = await getItem(msgStorageKey);
       if (raw) {
-        try {
-          setMessages(JSON.parse(raw));
-        } catch {}
+        try { setMessages(JSON.parse(raw)); } catch {}
       }
       setLoaded(true);
     })();
-  }, [msgStorageKey]);
+  }, [msgStorageKey, user?.id]);
 
-  // Save messages whenever they change
+  // Realtime subscription for incoming messages
+  useEffect(() => {
+    if (!conversationId || !user?.id) return;
+    const sub = onMessagesInsert(conversationId, (msg: any) => {
+      if (msg.sender_id === user.id) return; // skip own messages (already added)
+      const incoming: Message = {
+        id: String(msg.id),
+        type: msg.message_type || 'text',
+        content: msg.content || '',
+        sent: false,
+        time: new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        status: 'read',
+        createdAt: new Date(msg.created_at).getTime(),
+      };
+      setMessages((prev) => [...prev, incoming]);
+    });
+    return () => { sub.unsubscribe(); };
+  }, [conversationId, user?.id]);
+
+  // Save messages to local storage whenever they change
   useEffect(() => {
     if (messages.length > 0) {
       setItem(msgStorageKey, JSON.stringify(messages));
@@ -255,13 +333,14 @@ export function ChatDetail({ navigation, route }: any) {
     }
   }, [contactsKey, contact.id]);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!inputText.trim()) return;
+    const text = inputText.trim();
     const now = Date.now();
     const newMsg: Message = {
       id: now.toString(),
       type: 'text',
-      content: inputText.trim(),
+      content: text,
       sent: true,
       time: getCurrentTime(),
       status: 'sent',
@@ -270,19 +349,21 @@ export function ChatDetail({ navigation, route }: any) {
     const updated = [...messages, newMsg];
     setMessages(updated);
     setInputText('');
+    updateContactLastMessage(text);
 
-    updateContactLastMessage(newMsg.content);
+    // Send to Supabase if we have a conversation
+    if (conversationId && user?.id) {
+      try {
+        await apiSendMessage(text, conversationId, user.id, 'user');
+      } catch { /* sent locally, will sync later */ }
+    }
 
     // Simulate delivery/read status
     setTimeout(() => {
-      setMessages((prev) =>
-        prev.map((m) => (m.id === newMsg.id ? { ...m, status: 'delivered' as const } : m)),
-      );
+      setMessages((prev) => prev.map((m) => m.id === newMsg.id ? { ...m, status: 'delivered' as const } : m));
     }, 1500);
     setTimeout(() => {
-      setMessages((prev) =>
-        prev.map((m) => (m.id === newMsg.id ? { ...m, status: 'read' as const } : m)),
-      );
+      setMessages((prev) => prev.map((m) => m.id === newMsg.id ? { ...m, status: 'read' as const } : m));
     }, 3000);
   };
 

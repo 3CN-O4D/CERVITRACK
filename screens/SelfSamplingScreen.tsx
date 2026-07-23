@@ -6,10 +6,14 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
+  TextInput,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
+import { scanKit, pairKit, collectKit } from '../services/api';
 
 interface Step {
   number: number;
@@ -98,6 +102,44 @@ export default function SelfSamplingScreen() {
   const { colors, isDark } = useTheme();
   const { t } = useTranslation();
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
+  const [barcode, setBarcode] = useState('');
+  const [kitStatus, setKitStatus] = useState<string | null>(null);
+  const [kitLoading, setKitLoading] = useState(false);
+  const [kitMessage, setKitMessage] = useState('');
+
+  const handleScanKit = async () => {
+    if (!barcode.trim()) return;
+    setKitLoading(true);
+    setKitMessage('');
+    setKitStatus(null);
+    try {
+      const found = await scanKit(barcode.trim());
+      if (found) {
+        setKitStatus(found.status);
+        if (found.status === 'REGISTERED') {
+          const paired = await pairKit(barcode, {
+            patientId: 'self', patientName: 'Patient',
+            pairedBy: 'self', pairedByName: 'Patient (Self)',
+          });
+          if (paired) { setKitStatus('PAIRED'); setKitMessage('Kit paired to your account'); }
+        } else if (found.status === 'PAIRED') {
+          const collected = await collectKit(barcode, {
+            collectedBy: 'self', collectedByName: 'Patient (Self-Collection)',
+            collectionMethod: 'HPV_SELF', location: 'home',
+          });
+          if (collected) { setKitStatus('COLLECTED'); setKitMessage('Sample collection confirmed!'); }
+        } else {
+          setKitMessage(`Kit status: ${found.status}`);
+        }
+      } else {
+        setKitMessage('Kit not found. Check the barcode number.');
+      }
+    } catch {
+      setKitMessage('Network error — try again later');
+    } finally {
+      setKitLoading(false);
+    }
+  };
 
   const getIcon = (step: Step, size: number) => {
     const color = colors.primary;
@@ -182,6 +224,42 @@ export default function SelfSamplingScreen() {
               )}
             </TouchableOpacity>
           ))}
+        </View>
+
+        <View style={styles.kitScanSection}>
+          <View style={styles.kitScanHeader}>
+            <MaterialCommunityIcons name="barcode" size={22} color={colors.primary} />
+            <Text style={styles.sectionTitle}>Scan Your Kit Barcode</Text>
+          </View>
+          <Text style={styles.kitScanDesc}>
+            After collecting your sample, scan the barcode on your kit to pair and confirm collection.
+          </Text>
+          <View style={styles.kitScanRow}>
+            <TextInput
+              style={[styles.kitScanInput, { borderColor: colors.border, color: colors.text, backgroundColor: colors.card }]}
+              value={barcode}
+              onChangeText={setBarcode}
+              placeholder="Enter kit barcode..."
+              placeholderTextColor={colors.textSecondary}
+            />
+            <TouchableOpacity
+              style={[styles.kitScanBtn, { backgroundColor: colors.primary }]}
+              onPress={handleScanKit}
+              disabled={!barcode.trim() || kitLoading}
+            >
+              {kitLoading ? <ActivityIndicator size="small" color="#FFF" /> : <Ionicons name="scan" size={18} color="#FFF" />}
+            </TouchableOpacity>
+          </View>
+          {kitStatus && (
+            <View style={[styles.kitStatusBadge, {
+              backgroundColor: kitStatus === 'COLLECTED' ? '#F0FDF4' : kitStatus === 'PAIRED' ? '#FFFBEB' : '#EFF6FF'
+            }]}>
+              <Text style={[styles.kitStatusText, {
+                color: kitStatus === 'COLLECTED' ? '#16A34A' : kitStatus === 'PAIRED' ? '#D97706' : '#2563EB'
+              }]}>{kitStatus}</Text>
+            </View>
+          )}
+          {kitMessage ? <Text style={styles.kitScanMessage}>{kitMessage}</Text> : null}
         </View>
 
         <View style={styles.disclaimer}>
@@ -375,4 +453,22 @@ const makeStyles = (colors: any, isDark: boolean) =>
       lineHeight: 17,
       flex: 1,
     },
+
+    kitScanSection: {
+      marginHorizontal: 20,
+      marginTop: 16,
+      backgroundColor: colors.card,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 16,
+    },
+    kitScanHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+    kitScanDesc: { fontSize: 13, color: colors.textSecondary, lineHeight: 18, marginBottom: 12 },
+    kitScanRow: { flexDirection: 'row', gap: 8 },
+    kitScanInput: { flex: 1, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14 },
+    kitScanBtn: { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+    kitStatusBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, marginTop: 10, alignSelf: 'flex-start' },
+    kitStatusText: { fontSize: 12, fontWeight: '700' },
+    kitScanMessage: { fontSize: 12, color: colors.textSecondary, marginTop: 8 },
   });

@@ -24,6 +24,7 @@ import NotificationScreen from '../screens/NotificationScreen';
 import FeedbackScreen from '../screens/FeedbackScreen';
 import AppointmentBookingScreen from '../screens/AppointmentBookingScreen';
 import ScreeningInfoScreen from '../screens/ScreeningInfoScreen';
+import KitTrackingScreen from '../screens/KitTrackingScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -95,6 +96,11 @@ function HomeStackScreen() {
       <HomeStack.Screen
         name="ScreeningInfo"
         component={ScreeningInfoScreen}
+        options={{ headerShown: false }}
+      />
+      <HomeStack.Screen
+        name="KitTracking"
+        component={KitTrackingScreen}
         options={{ headerShown: false }}
       />
     </HomeStack.Navigator>

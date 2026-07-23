@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,10 +9,14 @@ import {
   Modal,
   Dimensions,
   SafeAreaView,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
+import { getArticles, type Article as ApiArticle } from '../services/api';
+import { getItem, setItem } from '../services/storage';
 
 const { width } = Dimensions.get('window');
 
@@ -250,6 +254,8 @@ const ARTICLES: Article[] = [
   },
 ];
 
+const LIBRARY_CACHE_KEY = '@cervitrack_library';
+
 export default function LibraryScreen() {
   const { colors, isDark } = useTheme();
   const { t } = useTranslation();
@@ -257,9 +263,56 @@ export default function LibraryScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
+  const [articles, setArticles] = useState<Article[]>(ARTICLES);
+  const [syncing, setSyncing] = useState(false);
+  const [lastSync, setLastSync] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => { loadCachedLibrary(); syncFromServer(); }, []);
+
+  const loadCachedLibrary = async () => {
+    const cached = await getItem(LIBRARY_CACHE_KEY);
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (parsed.articles && parsed.articles.length > 0) setArticles(parsed.articles);
+        if (parsed.lastSync) setLastSync(parsed.lastSync);
+      } catch { /* ignore */ }
+    }
+  };
+
+  const syncFromServer = useCallback(async () => {
+    setSyncing(true);
+    try {
+      const serverArticles = await getArticles();
+      if (serverArticles && serverArticles.length > 0) {
+        const merged = serverArticles.map((a: ApiArticle) => ({
+          id: a.id,
+          title: a.title,
+          category: a.category || 'General',
+          excerpt: a.summary || '',
+          readTime: a.read_time || '5 min read',
+          icon: 'document-text-outline',
+          iconFamily: 'Ionicons' as const,
+          content: a.content || a.summary || '',
+        }));
+        setArticles(merged);
+        const now = new Date().toISOString();
+        setLastSync(now);
+        await setItem(LIBRARY_CACHE_KEY, JSON.stringify({ articles: merged, lastSync: now }));
+      }
+    } catch { /* offline — keep local */ }
+    finally { setSyncing(false); }
+  }, []);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await syncFromServer();
+    setRefreshing(false);
+  }, [syncFromServer]);
 
   const filteredArticles = useMemo(() => {
-    let result = ARTICLES;
+    let result = articles;
     if (selectedCategory !== 'All') {
       result = result.filter((a) => a.category === selectedCategory);
     }
@@ -270,7 +323,7 @@ export default function LibraryScreen() {
       );
     }
     return result;
-  }, [selectedCategory, searchQuery]);
+  }, [selectedCategory, searchQuery, articles]);
 
   const getIcon = (article: Article) => {
     const size = 22;
@@ -323,9 +376,17 @@ export default function LibraryScreen() {
         </ScrollView>
       </View>
 
+      <View style={styles.syncBar}>
+        {syncing && <ActivityIndicator size="small" color={colors.primary} />}
+        <Text style={[styles.syncText, { color: colors.textSecondary }]}>
+          {syncing ? 'Syncing...' : lastSync ? `Last synced: ${new Date(lastSync).toLocaleDateString()}` : 'Pull to sync'}
+        </Text>
+      </View>
+
       <ScrollView
         contentContainerStyle={styles.articlesGrid}
         showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
         {filteredArticles.length === 0 ? (
           <View style={styles.emptyState}>
@@ -420,6 +481,8 @@ const makeStyles = (colors: any, isDark: boolean) =>
 
     categoriesContainer: { marginBottom: 4 },
     categoriesScroll: { paddingHorizontal: 16, gap: 8, paddingVertical: 8 },
+    syncBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 6 },
+    syncText: { fontSize: 11, fontWeight: '500' },
     categoryChip: {
       paddingHorizontal: 16,
       paddingVertical: 8,

@@ -528,6 +528,85 @@ export async function syncVaccineReminder(data: { vaccineId: number; remindBefor
 // Re-export getLastFullSync from sync service
 export { getLastFullSync } from '../services/sync';
 
+// ─── Sample Kit Tracking ─────────────────────────────────────
+
+const KIT_API = 'https://cervitrack.vercel.app/api/sample-kits';
+
+export interface Kit {
+  id: string;
+  barcode: string;
+  kitType: string;
+  status: string;
+  patientName?: string;
+  collectionMethod?: string;
+  result?: string;
+  events: KitEvent[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface KitEvent {
+  id: string;
+  action: string;
+  scannedBy: string;
+  scannedByName: string;
+  location?: string;
+  notes?: string;
+  timestamp: string;
+}
+
+export async function scanKit(barcode: string): Promise<Kit | null> {
+  try {
+    const res = await fetch(`${KIT_API}/scan/${encodeURIComponent(barcode)}`);
+    if (res.ok) return await res.json();
+    return null;
+  } catch { return null; }
+}
+
+export async function registerKit(barcode: string, data: { facilityId?: string; registeredBy?: string; registeredByName?: string; kitType?: string }): Promise<Kit | null> {
+  try {
+    const res = await fetch(KIT_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'register', barcode, ...data }),
+    });
+    if (res.ok) return await res.json();
+    return null;
+  } catch { return null; }
+}
+
+export async function pairKit(barcode: string, data: { patientId: string; patientName: string; pairedBy: string; pairedByName: string }): Promise<Kit | null> {
+  try {
+    const res = await fetch(KIT_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'pair', barcode, ...data }),
+    });
+    if (res.ok) return await res.json();
+    return null;
+  } catch { return null; }
+}
+
+export async function collectKit(barcode: string, data: { collectedBy: string; collectedByName: string; collectionMethod: string; location?: string; notes?: string }): Promise<Kit | null> {
+  try {
+    const res = await fetch(KIT_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'collect', barcode, ...data }),
+    });
+    if (res.ok) return await res.json();
+    return null;
+  } catch { return null; }
+}
+
+export async function getKitStats() {
+  try {
+    const res = await fetch(`${KIT_API}/stats`);
+    if (res.ok) return await res.json();
+    return null;
+  } catch { return null; }
+}
+
 // ─── Self-sampling guide ───────────────────────────────────────
 
 export async function getSamplingGuide() {

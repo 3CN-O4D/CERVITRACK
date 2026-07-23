@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
@@ -69,6 +69,10 @@ export default function WorkspaceDashboard() {
   const [error, setError] = useState('');
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [tab, setTab] = useState<'patients' | 'kits'>('patients');
+  const [patientSearch, setPatientSearch] = useState('');
+  const [patientSortKey, setPatientSortKey] = useState<'name' | 'county' | 'nationalId'>('name');
+  const [patientSortDir, setPatientSortDir] = useState<'asc' | 'desc'>('asc');
+  const [kitPatientSearch, setKitPatientSearch] = useState('');
 
   // Kit state
   const [barcode, setBarcode] = useState('');
@@ -103,6 +107,32 @@ export default function WorkspaceDashboard() {
     } catch { setError('Failed to load data'); }
     finally { setLoading(false); }
   }
+
+  const filteredPatients = useMemo(() => {
+    let list = patients;
+    if (patientSearch) {
+      const q = patientSearch.toLowerCase();
+      list = list.filter(p =>
+        `${p.firstName} ${p.lastName}`.toLowerCase().includes(q) ||
+        p.nationalIdOrPassport?.toLowerCase().includes(q) ||
+        p.county?.toLowerCase().includes(q) ||
+        p.phone?.includes(q)
+      );
+    }
+    return [...list].sort((a, b) => {
+      let av = '', bv = '';
+      if (patientSortKey === 'name') { av = `${a.firstName} ${a.lastName}`; bv = `${b.firstName} ${b.lastName}`; }
+      else if (patientSortKey === 'county') { av = a.county || ''; bv = b.county || ''; }
+      else { av = a.nationalIdOrPassport || ''; bv = b.nationalIdOrPassport || ''; }
+      return patientSortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+    });
+  }, [patients, patientSearch, patientSortKey, patientSortDir]);
+
+  const filteredKitPatients = useMemo(() => {
+    if (!kitPatientSearch) return patients;
+    const q = kitPatientSearch.toLowerCase();
+    return patients.filter(p => `${p.firstName} ${p.lastName}`.toLowerCase().includes(q) || p.nationalIdOrPassport?.toLowerCase().includes(q));
+  }, [patients, kitPatientSearch]);
 
   async function scanKit() {
     const code = barcode.trim();
@@ -211,11 +241,31 @@ export default function WorkspaceDashboard() {
             <div className="text-center py-20 text-gray-400">Loading patients...</div>
           ) : (
             <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-100">
-                <h2 className="font-semibold text-gray-900">Patient List ({patients.length})</h2>
+              <div className="px-6 py-4 border-b border-gray-100 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h2 className="font-semibold text-gray-900">Patient List ({filteredPatients.length})</h2>
+                  <div className="flex gap-1">
+                    {([['name', 'Name'], ['county', 'County'], ['nationalId', 'ID']] as [typeof patientSortKey, string][]).map(([key, label]) => (
+                      <button key={key} onClick={() => { if (patientSortKey === key) setPatientSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setPatientSortKey(key); setPatientSortDir('asc'); } }}
+                        className={`px-2 py-1 rounded text-xs font-medium transition-colors ${patientSortKey === key ? 'bg-sky-100 text-sky-700' : 'text-gray-500 hover:bg-gray-100'}`}>
+                        {label} {patientSortKey === key ? (patientSortDir === 'asc' ? '↑' : '↓') : ''}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="relative">
+                  <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                  </svg>
+                  <input type="text" value={patientSearch} onChange={(e) => setPatientSearch(e.target.value)}
+                    placeholder="Search by name, ID, county, or phone…"
+                    className="w-full border border-gray-200 rounded-lg pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-sky-500" />
+                </div>
               </div>
               <div className="divide-y divide-gray-50">
-                {patients.map((p) => (
+                {filteredPatients.length === 0 ? (
+                  <div className="px-6 py-8 text-center text-gray-400 text-sm">No patients found</div>
+                ) : filteredPatients.map((p) => (
                   <div key={p.id} className="px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
                     <div>
                       <div className="font-medium text-sm text-gray-900">{p.firstName} {p.lastName}</div>
@@ -290,10 +340,18 @@ export default function WorkspaceDashboard() {
                   {kitAction === 'pair' && (
                     <div className="bg-gray-50 rounded-lg p-4 space-y-3">
                       <label className="block text-sm font-medium text-gray-700">Select Patient</label>
+                      <div className="relative">
+                        <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                        </svg>
+                        <input type="text" value={kitPatientSearch} onChange={(e) => setKitPatientSearch(e.target.value)}
+                          placeholder="Search patient by name or ID…"
+                          className="w-full border border-gray-200 rounded-lg pl-10 pr-3 py-2 text-sm focus:outline-none focus:border-sky-500" />
+                      </div>
                       <select value={selectedKitPatient} onChange={(e) => setSelectedKitPatient(e.target.value)}
                         className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
                         <option value="">Choose a patient...</option>
-                        {patients.map((p) => (
+                        {filteredKitPatients.map((p) => (
                           <option key={p.id} value={p.id}>{p.firstName} {p.lastName} — {p.nationalIdOrPassport}</option>
                         ))}
                       </select>

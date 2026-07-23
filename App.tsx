@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import React, { useEffect, useState } from 'react';
 import { StatusBar, Text, View } from 'react-native';
 import { I18nextProvider } from 'react-i18next';
