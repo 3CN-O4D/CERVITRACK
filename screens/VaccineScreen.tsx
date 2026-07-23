@@ -190,7 +190,7 @@ export default function VaccineScreen() {
               body: `Reminder: ${vaccine.name} is tomorrow at ${vaccine.hospital || 'your clinic'}.`,
               data: { vaccineId: vaccine.id },
             },
-            trigger: { type: 'date', date: dayBefore.valueOf() },
+            trigger: { type: 'date', date: dayBefore.valueOf() } as any,
           });
         }
 

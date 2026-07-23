@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,30 +6,17 @@ import {
   ScrollView,
   Dimensions,
   TouchableOpacity,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Calendar, DateData } from 'react-native-calendars';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { getVaccines, getPatientAppointments, getScreenings, getUserStats } from '../services/api';
 
 const { width } = Dimensions.get('window');
 const CARD_GAP = 12;
 const HALF_W = (width - 40 - CARD_GAP) / 2;
-
-const vaccines = [
-  { name: 'HPV Dose 1', date: 'Aug 15, 2026', status: 'upcoming' as const },
-  { name: 'HPV Dose 2', date: 'Oct 15, 2026', status: 'upcoming' as const },
-  { name: 'HPV Dose 3', date: 'Feb 15, 2027', status: 'upcoming' as const },
-];
-
-const appointments = [
-  { title: 'Annual Screening', date: '2026-07-20', doctor: 'Dr. Sarah Kimani', location: 'Nairobi Women\'s Hospital', status: 'completed' as const },
-  { title: 'Follow-up Visit', date: '2026-08-05', doctor: 'Dr. John Mwangi', location: 'Kenyatta Clinic', status: 'upcoming' as const },
-  { title: 'HPV Vaccine Dose 1', date: '2026-08-15', doctor: 'Nurse Mercy', location: 'Community Clinic', status: 'due' as const },
-  { title: 'HPV Vaccine Dose 2', date: '2026-10-15', doctor: 'Nurse Mercy', location: 'Community Clinic', status: 'scheduled' as const },
-];
-
-const screeningHistory: { date: string; result: string; type: string }[] = [];
 
 function CircularProgress({
   size = 140,
@@ -123,6 +110,51 @@ export default function MyHealthScreen() {
   const { colors } = useTheme();
   const { user } = useAuth();
   const [selectedDate, setSelectedDate] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+  const [vaccines, setVaccines] = useState<any[]>([]);
+  const [appointments, setAppointments] = useState<any[]>([]);
+  const [screeningHistory, setScreeningHistory] = useState<any[]>([]);
+  const [userStats, setUserStats] = useState({ total_screenings: 0, risk_index: 'low' });
+
+  const loadData = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      const [vaxData, aptData, scrData, statsData] = await Promise.all([
+        getVaccines(user.id).catch(() => []),
+        getPatientAppointments(user.id).catch(() => []),
+        getScreenings(user.id).catch(() => []),
+        getUserStats(user.id).catch(() => ({ total_screenings: 0, risk_index: 'low' })),
+      ]);
+      setVaccines(vaxData.map((v: any) => ({
+        name: v.name,
+        date: v.date,
+        status: v.status || 'upcoming',
+      })));
+      setAppointments(aptData.map((a: any) => ({
+        id: a.id,
+        title: a.title || 'Appointment',
+        date: a.date,
+        doctor: a.provider?.name || a.facility_name || 'Doctor',
+        location: a.provider?.hospital || a.facility_location || '',
+        status: a.status || 'upcoming',
+        custom_text: a.custom_text || '',
+      })));
+      setScreeningHistory(scrData.map((s: any) => ({
+        date: new Date(s.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        result: s.risk_tier === 'low' ? 'Normal' : s.risk_tier === 'high' ? 'Abnormal' : s.verdict || 'Pending',
+        type: 'Screening',
+      })));
+      setUserStats(statsData);
+    } catch { /* use defaults */ }
+  }, [user?.id]);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  };
 
   const hpvFreeDays = (() => {
     if (user?.lastHealedDate) {
@@ -133,7 +165,7 @@ export default function MyHealthScreen() {
     return 365;
   })();
 
-  const healthScore = 0;
+  const healthScore = userStats.total_screenings > 0 ? (userStats.risk_index === 'low' ? 85 : userStats.risk_index === 'medium' ? 55 : 25) : 0;
   const scoreColor = healthScore >= 80 ? colors.success : healthScore >= 50 ? colors.warning : colors.danger;
 
   const vaccineIcon = (status: string) => {
@@ -152,11 +184,12 @@ export default function MyHealthScreen() {
       case 'due': return '#92400E';
       case 'scheduled':
       case 'upcoming': return '#3B82F6';
+      case 'pending': return '#F59E0B';
       default: return colors.primary;
     }
   };
   const markedDates: Record<string, any> = {};
-  appointments.forEach((a) => {
+  appointments.forEach((a: any) => {
     const key = a.date;
     const isSelected = key === selectedDate;
     markedDates[key] = {
@@ -170,10 +203,10 @@ export default function MyHealthScreen() {
     markedDates[selectedDate] = { selected: true, selectedColor: colors.primary + '20' };
   }
 
-  const selectedAppointments = appointments.filter((a) => a.date === selectedDate);
+  const selectedAppointments = appointments.filter((a: any) => a.date === selectedDate);
 
   return (
-    <ScrollView style={[s.scroll, { backgroundColor: colors.bg }]} showsVerticalScrollIndicator={false}>
+    <ScrollView style={[s.scroll, { backgroundColor: colors.bg }]} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}>
       {/* Header */}
       <View style={s.header}>
         <MaterialCommunityIcons name="heart-pulse" size={26} color={colors.primary} />

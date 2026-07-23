@@ -75,6 +75,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             .eq('id', session.user.id)
             .maybeSingle();
           if (profile) setUser(mapSupabaseUser(session.user, profile));
+          // Sync consent if accepted locally but not in Supabase
+          const consentVal = await getItem(CONSENT_KEY);
+          if (consentVal === 'true') {
+            try {
+              const { data: existing } = await supabase
+                .from('consent_log')
+                .select('id')
+                .eq('user_id', session.user.id)
+                .maybeSingle();
+              if (!existing) {
+                await supabase.from('consent_log').insert({
+                  user_id: session.user.id,
+                  consent_type: 'registration',
+                  consent_terms: true,
+                  consent_medical: true,
+                  accepted: true,
+                });
+              }
+            } catch { /* consent sync is best-effort */ }
+          }
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
         }
@@ -90,6 +110,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const acceptConsent = useCallback(async () => {
     await setItem(CONSENT_KEY, 'true');
     setConsentAccepted(true);
+    // Sync consent to Supabase if user is already authenticated
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user?.id) {
+      try {
+        await supabase.from('consent_log').insert({
+          user_id: session.user.id,
+          consent_type: 'registration',
+          consent_terms: true,
+          consent_medical: true,
+          accepted: true,
+        });
+      } catch { /* consent synced locally */ }
+    }
   }, []);
 
   const deleteAccount = useCallback(async () => {

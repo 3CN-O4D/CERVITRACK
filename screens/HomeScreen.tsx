@@ -7,59 +7,67 @@ import {
   TouchableOpacity,
   Dimensions,
   Image,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useTheme, type ThemeColors } from '../context/ThemeContext';
 import { useNotifications } from '../context/NotificationContext';
-import { getItem } from '../services/storage';
+import { getUserStats, getScreenings, getVaccines } from '../services/api';
 
 const { width } = Dimensions.get('window');
 const CARD_GAP = 10;
 const STAT_CARD_W = (width - 40 - CARD_GAP * 2) / 3;
 const ACTION_CARD_W = (width - 40 - CARD_GAP) / 2;
 
-const timePeriods = ['Today', 'Week', 'Month', '3M', '6M', '1Y'];
-
-const riskFactors = [
-  { label: 'Age (30+)', met: true },
-  { label: 'Multiple Pregnancies', met: false },
-  { label: 'Reported Symptoms', met: true },
-  { label: 'Smoking History', met: false },
-  { label: 'Family History', met: true },
-  { label: 'HPV Vaccinated', met: false },
-];
-
 export default function HomeScreen({ navigation }: any) {
   const { colors } = useTheme();
   const { user } = useAuth();
   const { unreadCount } = useNotifications();
   const [riskExpanded, setRiskExpanded] = useState(false);
-  const [selectedPeriod, setSelectedPeriod] = useState('Month');
   const [riskLevel, setRiskLevel] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [userStats, setUserStats] = useState({ total_screenings: 0, total_vaccines: 0, risk_index: 'low' });
+  const [hpvPositive, setHpvPositive] = useState(0);
 
-  useEffect(() => {
+  const loadData = async () => {
     if (!user?.id) return;
-    getItem(`@cervitrack_screening_${user.id}`).then((raw) => {
-      if (raw) {
-        try {
-          const data = JSON.parse(raw);
-          setRiskLevel(data.riskLevel || null);
-        } catch { /* ignore */ }
-      }
-    });
-  }, [user?.id]);
+    try {
+      const [stats, screenings, vaccines] = await Promise.all([
+        getUserStats(user.id),
+        getScreenings(user.id),
+        getVaccines(user.id),
+      ]);
+      setUserStats(stats);
+      setRiskLevel(stats.risk_index === 'high' ? 'High' : null);
+      const hpvCount = screenings.filter((s: any) => s.verdict === 'POSITIVE' || s.hpv_result === 'positive').length;
+      setHpvPositive(hpvCount);
+    } catch { /* use defaults */ }
+  };
+
+  useEffect(() => { loadData(); }, [user?.id]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  };
 
   const isHighRisk = riskLevel === 'High';
   const isAssessed = riskLevel !== null;
+  const riskFactors = [
+    { label: 'Age over 30', met: true },
+    { label: 'HIV Positive', met: false },
+    { label: 'Previous abnormal screening', met: isHighRisk },
+    { label: 'Smoking history', met: false },
+    { label: 'Family history', met: false },
+  ];
   const s = styles(colors);
   const firstName = (user?.name || 'User').split(' ')[0];
-  const stats = { screenings: 0, hpvPositive: 0, followups: 0 };
-  const regionalStats = { registered: 0, screened: 0, hpvPositive: 0 };
 
   const quickActions = [
     { icon: 'calendar-outline', label: 'Appointments', color: colors.primary, sub: 'View schedule' },
-    { icon: 'chatbubbles-outline', label: 'Talk to Nurse', color: colors.success, sub: 'Online now' },
+    { icon: 'chatbubbles-outline', label: 'Talk to Doctor', color: colors.success, sub: 'Online now' },
     { icon: 'flask-outline', label: 'Lab Results', color: colors.warning, sub: 'View results' },
     { icon: 'barcode-outline', label: 'Kit Tracker', color: '#0891B2', sub: 'Scan & track' },
     { icon: 'syringe-outline', label: 'Vaccines', color: colors.danger, sub: 'Track doses' },
@@ -67,6 +75,8 @@ export default function HomeScreen({ navigation }: any) {
     { icon: 'document-text-outline', label: 'Self-Assessment', color: '#EC4899', sub: 'Risk check' },
     { icon: 'book-outline', label: 'Health Library', color: '#06B6D4', sub: 'Learn more' },
     { icon: 'chatbubble-ellipses', label: 'AI Assistant', color: '#8B5CF6', sub: 'Ask anything' },
+    { icon: 'medkit-outline', label: 'My Results', color: '#F97316', sub: 'All results' },
+    { icon: 'search-outline', label: 'Find Clinician', color: '#10B981', sub: 'Search doctors' },
   ];
 
   const handleAction = (label: string) => {
@@ -74,11 +84,11 @@ export default function HomeScreen({ navigation }: any) {
       case 'Appointments':
         navigation.navigate('AppointmentBooking');
         break;
-      case 'Talk to Nurse':
+      case 'Talk to Doctor':
         navigation.navigate('Messages');
         break;
       case 'Lab Results':
-        navigation.navigate('LabResults');
+        navigation.navigate('MyResults');
         break;
       case 'Kit Tracker':
         navigation.navigate('KitTracking');
@@ -98,14 +108,17 @@ export default function HomeScreen({ navigation }: any) {
       case 'AI Assistant':
         navigation.navigate('AIAssistant');
         break;
-      case 'Screening Info':
-        navigation.navigate('ScreeningInfo');
+      case 'My Results':
+        navigation.navigate('MyResults');
+        break;
+      case 'Find Clinician':
+        navigation.navigate('SearchClinicians');
         break;
     }
   };
 
   return (
-    <ScrollView style={s.scroll} showsVerticalScrollIndicator={false}>
+    <ScrollView style={s.scroll} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}>
       {/* Header */}
       <View style={s.header}>
         <View style={s.brandRow}>
@@ -208,18 +221,18 @@ export default function HomeScreen({ navigation }: any) {
       <View style={s.statsRow}>
         <View style={[s.statCard, { backgroundColor: colors.card, borderColor: colors.primary + '30' }]}>
           <MaterialCommunityIcons name="test-tube" size={22} color={colors.primary} />
-          <Text style={s.statNumber}>{stats.screenings}</Text>
+          <Text style={s.statNumber}>{userStats.total_screenings}</Text>
           <Text style={s.statLabel}>Screenings</Text>
         </View>
         <View style={[s.statCard, { backgroundColor: colors.card, borderColor: colors.danger + '30' }]}>
           <MaterialCommunityIcons name="virus" size={22} color={colors.danger} />
-          <Text style={[s.statNumber, { color: colors.danger }]}>{stats.hpvPositive}</Text>
+          <Text style={[s.statNumber, { color: colors.danger }]}>{hpvPositive}</Text>
           <Text style={s.statLabel}>HPV+ Cases</Text>
         </View>
         <View style={[s.statCard, { backgroundColor: colors.card, borderColor: colors.success + '30' }]}>
           <Ionicons name="checkmark-done" size={22} color={colors.success} />
-          <Text style={[s.statNumber, { color: colors.success }]}>{stats.followups}</Text>
-          <Text style={s.statLabel}>Follow-ups</Text>
+          <Text style={[s.statNumber, { color: colors.success }]}>{userStats.total_vaccines}</Text>
+          <Text style={s.statLabel}>Vaccines</Text>
         </View>
       </View>
 
@@ -241,31 +254,24 @@ export default function HomeScreen({ navigation }: any) {
         ))}
       </View>
 
-      {/* Regional Stats */}
-      <Text style={s.sectionTitle}>Regional Statistics</Text>
-      <View style={s.periodRow}>
-        {timePeriods.map((p) => (
-          <TouchableOpacity
-            key={p}
-            style={[s.periodChip, { backgroundColor: colors.inputBg, borderColor: colors.border }, selectedPeriod === p && { backgroundColor: colors.primary, borderColor: colors.primary }]}
-            onPress={() => setSelectedPeriod(p)}
-          >
-            <Text style={[s.periodText, { color: selectedPeriod === p ? '#FFF' : colors.textSecondary }]}>{p}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-      <View style={s.regionalRow}>
-        <View style={[s.regionalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={s.regionalNumber}>{regionalStats.registered.toLocaleString()}</Text>
-          <Text style={s.regionalLabel}>Registered</Text>
+      {/* Your Health Summary */}
+      <Text style={s.sectionTitle}>Your Health Summary</Text>
+      <View style={[s.summaryCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={s.summaryRow}>
+          <Ionicons name="shield-checkmark" size={20} color={colors.success} />
+          <Text style={[s.summaryText, { color: colors.text }]}>Risk Level: <Text style={{ fontWeight: '800', color: userStats.risk_index === 'high' ? colors.danger : colors.success }}>{userStats.risk_index === 'high' ? 'High' : userStats.risk_index === 'medium' ? 'Medium' : 'Low'}</Text></Text>
         </View>
-        <View style={[s.regionalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={s.regionalNumber}>{regionalStats.screened.toLocaleString()}</Text>
-          <Text style={s.regionalLabel}>Screened</Text>
+        <View style={s.summaryRow}>
+          <Ionicons name="calendar" size={20} color={colors.primary} />
+          <Text style={[s.summaryText, { color: colors.textSecondary }]}>
+            {userStats.total_screenings > 0 ? `${userStats.total_screenings} screening${userStats.total_screenings > 1 ? 's' : ''} completed` : 'No screenings yet — take your first risk assessment'}
+          </Text>
         </View>
-        <View style={[s.regionalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[s.regionalNumber, { color: colors.danger }]}>{regionalStats.hpvPositive}</Text>
-          <Text style={s.regionalLabel}>HPV+</Text>
+        <View style={s.summaryRow}>
+          <Ionicons name="medical" size={20} color={colors.warning} />
+          <Text style={[s.summaryText, { color: colors.textSecondary }]}>
+            {userStats.total_vaccines > 0 ? `${userStats.total_vaccines} vaccine${userStats.total_vaccines > 1 ? 's' : ''} recorded` : 'No vaccines recorded yet'}
+          </Text>
         </View>
       </View>
     </ScrollView>
@@ -540,15 +546,21 @@ const styles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
   },
-  regionalNumber: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: colors.text,
+  summaryCard: {
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+    marginBottom: 30,
+    gap: 12,
   },
-  regionalLabel: {
-    fontSize: 10,
+  summaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  summaryText: {
+    flex: 1,
+    fontSize: 14,
     fontWeight: '600',
-    color: colors.textSecondary,
-    marginTop: 4,
   },
 });

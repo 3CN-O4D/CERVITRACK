@@ -25,6 +25,8 @@ import FeedbackScreen from '../screens/FeedbackScreen';
 import AppointmentBookingScreen from '../screens/AppointmentBookingScreen';
 import ScreeningInfoScreen from '../screens/ScreeningInfoScreen';
 import KitTrackingScreen from '../screens/KitTrackingScreen';
+import SearchCliniciansScreen from '../screens/SearchCliniciansScreen';
+import MyResultsScreen from '../screens/MyResultsScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -101,6 +103,16 @@ function HomeStackScreen() {
       <HomeStack.Screen
         name="KitTracking"
         component={KitTrackingScreen}
+        options={{ headerShown: false }}
+      />
+      <HomeStack.Screen
+        name="SearchClinicians"
+        component={SearchCliniciansScreen}
+        options={{ headerShown: false }}
+      />
+      <HomeStack.Screen
+        name="MyResults"
+        component={MyResultsScreen}
         options={{ headerShown: false }}
       />
     </HomeStack.Navigator>

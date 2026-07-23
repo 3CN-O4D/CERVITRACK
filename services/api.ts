@@ -2,7 +2,7 @@ import { supabase } from '../lib/supabase/client';
 import type { Session } from '@supabase/supabase-js';
 
 export interface ScreeningPayload {
-  profile_id: string;
+  profile_id?: string;
   verdict: string;
   risk_tier: 'LOW' | 'MODERATE' | 'HIGH';
   age?: number;
@@ -47,13 +47,18 @@ export interface Vaccine {
 export interface Appointment {
   id: number;
   user_id: string;
+  clinician_id?: string;
+  provider_id?: string;
   title?: string;
   facility?: string;
   facility_name?: string;
   facility_location?: string;
   date?: string;
+  time?: string;
   notes?: string;
+  custom_text?: string;
   status: string;
+  provider?: { name?: string; specialty?: string; hospital?: string };
 }
 
 export interface Notification {
@@ -202,9 +207,23 @@ export async function getAppointments(userId: string): Promise<Appointment[]> {
 }
 
 export async function bookAppointment(a: Partial<Appointment> & { user_id: string; date: string }) {
+  const payload: any = {
+    user_id: a.user_id,
+    title: a.title,
+    facility: a.facility,
+    facility_name: a.facility_name,
+    facility_location: a.facility_location,
+    date: a.date,
+    notes: a.notes,
+    custom_text: a.custom_text,
+    clinician_id: a.clinician_id,
+    provider_id: a.provider_id,
+    time: a.time,
+    status: a.status || 'pending',
+  };
   const { data, error } = await supabase
     .from('appointments')
-    .insert(a)
+    .insert(payload)
     .select()
     .single();
   if (error) throw error;
@@ -252,15 +271,85 @@ export async function getLabResults(userId: string) {
   return data ?? [];
 }
 
-// ─── Chat Contacts ─────────────────────────────────────────────
+// ─── Clinicians (providers) ──────────────────────────────────
+
+export interface Clinician {
+  id: string;
+  name: string;
+  specialty: string;
+  hospital: string;
+  county: string;
+  years_experience: number;
+  photo: string;
+  bio: string;
+  approval_status: string;
+}
+
+export async function searchClinicians(query?: string, county?: string, specialty?: string): Promise<Clinician[]> {
+  let q = supabase
+    .from('providers')
+    .select('id, name, specialty, hospital, county, years_experience, photo, bio, approval_status')
+    .eq('approval_status', 'approved');
+
+  if (query) {
+    q = q.or(`name.ilike.%${query}%,hospital.ilike.%${query}%,specialty.ilike.%${query}%`);
+  }
+  if (county) {
+    q = q.eq('county', county);
+  }
+  if (specialty) {
+    q = q.eq('specialization', specialty);
+  }
+
+  const { data, error } = await q.order('name', { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function getClinicianById(id: string): Promise<Clinician | null> {
+  const { data, error } = await supabase
+    .from('providers')
+    .select('id, name, specialty, hospital, county, years_experience, photo, bio, approval_status')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+// ─── Chat Contacts (from providers table) ───────────────────
 
 export async function getChatContacts() {
+  // First try providers table (real clinicians)
+  try {
+    const { data: providers, error } = await supabase
+      .from('providers')
+      .select('id, name, specialty, hospital, approval_status')
+      .eq('approval_status', 'approved')
+      .order('name', { ascending: true });
+
+    if (!error && providers && providers.length > 0) {
+      return providers.map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        role: 'clinician',
+        specialty: p.specialty || '',
+        hospital: p.hospital || '',
+        online: true,
+      }));
+    }
+  } catch { /* fall through to chat_contacts */ }
+
+  // Fallback to seeded chat_contacts
   const { data, error } = await supabase
     .from('chat_contacts')
     .select('*')
     .order('id', { ascending: true });
   if (error) throw error;
   return data ?? [];
+}
+
+export async function getProvidersForChat(): Promise<Clinician[]> {
+  return searchClinicians();
 }
 
 // ─── Conversations ─────────────────────────────────────────────
@@ -367,6 +456,109 @@ export async function sendAudioMessage(conversationId: number, senderId: string,
   return data;
 }
 
+// ─── User Stats ────────────────────────────────────────────────
+
+export async function getUserStats(userId: string) {
+  const { data: user, error } = await supabase
+    .from('users')
+    .select('total_screenings, total_vaccines, last_screening_date, risk_index')
+    .eq('id', userId)
+    .maybeSingle();
+  if (error) throw error;
+  return user ?? { total_screenings: 0, total_vaccines: 0, last_screening_date: null, risk_index: 'low' };
+}
+
+// ─── Appointments (patient) ─────────────────────────────────
+
+export async function getPatientAppointments(userId: string): Promise<Appointment[]> {
+  const { data, error } = await supabase
+    .from('appointments')
+    .select('*, provider:providers!appointments_provider_id_fkey(name, specialty, hospital)')
+    .eq('user_id', userId)
+    .order('date', { ascending: false });
+  if (error) {
+    // Fallback without join
+    const { data: fallback, error: e2 } = await supabase
+      .from('appointments')
+      .select('*')
+      .eq('user_id', userId)
+      .order('date', { ascending: false });
+    if (e2) throw e2;
+    return (fallback ?? []) as Appointment[];
+  }
+  return (data ?? []) as Appointment[];
+}
+
+export async function requestAppointment(userId: string, providerId: string, date: string, time: string, title: string, notes: string, customText: string) {
+  const { data, error } = await supabase
+    .from('appointments')
+    .insert({
+      user_id: userId,
+      provider_id: providerId,
+      date,
+      time,
+      title,
+      notes,
+      custom_text: customText,
+      status: 'pending',
+    })
+    .select()
+    .single();
+  if (error) throw error;
+
+  // Notify the provider
+  try {
+    const { data: provider } = await supabase
+      .from('providers')
+      .select('id')
+      .eq('id', providerId)
+      .maybeSingle();
+    if (provider) {
+      const { data: patient } = await supabase
+        .from('users')
+        .select('name')
+        .eq('id', userId)
+        .maybeSingle();
+      await supabase.from('notifications').insert({
+        user_id: userId, // patient gets confirmation
+        title: 'Appointment Requested',
+        message: `Your appointment request for ${date} has been sent.`,
+        type: 'appointment',
+      });
+    }
+  } catch { /* notification is nice-to-have */ }
+
+  return data;
+}
+
+// ─── Sample Kit Results (for patients) ──────────────────────
+
+export async function getKitResults(userId: string) {
+  const { data, error } = await supabase
+    .from('sample_kits')
+    .select('id, barcode, kit_type, status, result, result_notes, processed_at, created_at')
+    .eq('patient_id', userId)
+    .not('result', 'eq', '')
+    .order('processed_at', { ascending: false });
+  if (error) throw error;
+  return data ?? [];
+}
+
+// ─── Consent ──────────────────────────────────────────────────
+
+export async function syncConsent(userId: string) {
+  const { error } = await supabase
+    .from('consent_log')
+    .insert({
+      user_id: userId,
+      consent_type: 'registration',
+      consent_terms: true,
+      consent_medical: true,
+      accepted: true,
+    });
+  if (error) throw error;
+}
+
 // ─── Admin helpers ─────────────────────────────────────────────
 
 export async function getAdminDashboard() {
@@ -427,6 +619,16 @@ export async function sendAdminNotification(userId: string, title: string, messa
   const { data, error } = await supabase
     .from('notifications')
     .insert({ user_id: userId, title, message, type: 'admin' })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function createNotification(userId: string, title: string, message: string, type: string = 'info') {
+  const { data, error } = await supabase
+    .from('notifications')
+    .insert({ user_id: userId, title, message, type })
     .select()
     .single();
   if (error) throw error;

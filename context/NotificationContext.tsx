@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
+import { Platform } from 'react-native';
+import * as Notifications from 'expo-notifications';
 import { getItem, setItem } from '../services/storage';
 import { getNotifications as apiGetNotifications, markNotificationRead as apiMarkRead, markAllNotificationsRead as apiMarkAllRead } from '../services/api';
 import { useAuth } from './AuthContext';
@@ -60,6 +62,24 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
             read: Boolean(n.read),
             createdAt: n.created_at,
           }));
+
+          // Find new unread notifications and show Android notification
+          const oldIds = new Set(notifications.map(n => n.id));
+          const newUnread = mapped.filter((n: Notification) => !n.read && !oldIds.has(n.id));
+          if (newUnread.length > 0 && Platform.OS === 'android') {
+            for (const notif of newUnread.slice(0, 3)) {
+              await Notifications.scheduleNotificationAsync({
+                content: {
+                  title: notif.title,
+                  body: notif.message,
+                  sound: 'default',
+                  priority: Notifications.AndroidNotificationPriority.HIGH,
+                },
+                trigger: null as any,
+              });
+            }
+          }
+
           setNotifications(mapped);
           await setItem(NOTIF_KEY, JSON.stringify(mapped));
         }

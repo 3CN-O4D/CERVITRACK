@@ -4,6 +4,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import { syncConsent } from '../services/api';
 
 const TERMS = {
   dataCollection: `You understand and agree that CerviTrack collects, stores, and processes personal health information you provide, including screening results, medical history, and demographic data. This data is essential for providing accurate risk assessments and connecting you with appropriate care.`,

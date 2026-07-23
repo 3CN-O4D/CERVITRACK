@@ -172,7 +172,7 @@ export default function ScanScreen() {
       const manipulated = await ImageManipulator.manipulateAsync(
         capturedUri,
         [{ resize: { width: 200 } }],
-        { format: 'jpeg', base64: true },
+        { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG, base64: true },
       );
       if (!manipulated.base64) throw new Error('Processing failed');
       // Wait for WebView to be ready then send
@@ -262,8 +262,8 @@ await addTestResult({ user_id: user?.id || '', result: log.result, date: log.dat
             <CameraView ref={cameraRef} style={s.camera} facing="back">
               <View style={s.guideOverlay}>
                 <View style={[s.guideBox, { borderColor: '#FFF' }]}>
-                  <View style={[s.guideLabel_left, { color: '#FFF' }]}><Text style={{color:'#FFF',fontSize:10,fontWeight:'800'}}>C</Text></View>
-                  <View style={[s.guideLabel_right, { color: '#FFF' }]}><Text style={{color:'#FFF',fontSize:10,fontWeight:'800'}}>T</Text></View>
+                  <View style={s.guideLabel_left}><Text style={{color:'#FFF',fontSize:10,fontWeight:'800'}}>C</Text></View>
+                  <View style={s.guideLabel_right}><Text style={{color:'#FFF',fontSize:10,fontWeight:'800'}}>T</Text></View>
                   <Animated.View style={[s.scanLine, { backgroundColor: colors.primary, transform: [{ translateY: scanLineY }] }]} />
                 </View>
               </View>

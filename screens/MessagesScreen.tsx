@@ -17,6 +17,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { getItem, setItem } from '../services/storage';
+import { supabase } from '../lib/supabase/client';
 import {
   getChatContacts,
   getConversations,
@@ -51,16 +52,7 @@ interface Message {
   createdAt: number;
 }
 
-const SEED_CONTACTS = [
-  { id: '1', name: 'Dr. Sarah Kimani', role: 'Gynecologist', specialty: 'Gynecologic Oncology', hospital: 'Nairobi Women\'s Hospital', online: true, initials: 'SK' },
-  { id: '2', name: 'Nurse Mercy Wanjiku', role: 'Oncology Nurse', specialty: 'Chemotherapy & Palliative Care', hospital: 'Kenyatta National Hospital', online: true, initials: 'MW' },
-  { id: '3', name: 'Dr. John Mwangi', role: 'General Practitioner', specialty: 'Family Medicine & Reproductive Health', hospital: 'Afya Health Center', online: false, initials: 'JM' },
-  { id: '4', name: 'Lab Tech Paul Ochieng', role: 'Lab Technician', specialty: 'Cytology & Histopathology', hospital: 'Lancet Kenya Labs', online: true, initials: 'PO' },
-  { id: '5', name: 'Nurse Esther Nyambura', role: 'Community Health Worker', specialty: 'Community Outreach & HPV Vaccination', hospital: 'Mwiki Health Center', online: false, initials: 'EN' },
-  { id: '6', name: 'Dr. Amina Hassan', role: 'Radiologist', specialty: 'Diagnostic Imaging & Ultrasound', hospital: 'Aga Khan University Hospital', online: true, initials: 'AH' },
-  { id: '7', name: 'Pharm. Kevin Otieno', role: 'Pharmacist', specialty: 'Oncology Pharmacy & Immunizations', hospital: 'Goodlife Pharmacy', online: false, initials: 'KO' },
-  { id: '8', name: 'Reception Desk', role: 'Nairobi Hospital', specialty: 'Appointments & Patient Services', hospital: 'Nairobi Hospital', online: true, initials: 'RD' },
-];
+const SEED_CONTACTS: any[] = [];
 
 const CONTACTS_KEY = '@cervitrack_contacts';
 
@@ -113,7 +105,31 @@ export default function MessagesScreen({ navigation }: any) {
 
   useEffect(() => {
     (async () => {
-      // Try Supabase first
+      // Fetch approved clinicians from providers table
+      try {
+        const { searchClinicians } = await import('../services/api');
+        const clinicians = await searchClinicians();
+        if (clinicians && clinicians.length > 0) {
+          const mapped: Contact[] = clinicians.map((c: any) => ({
+            id: String(c.id),
+            name: c.name,
+            role: 'Clinician',
+            specialty: c.specialty || '',
+            hospital: c.hospital || '',
+            online: true,
+            lastMessage: 'Tap to start chatting',
+            lastTime: '',
+            unread: 0,
+            initials: c.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase(),
+          }));
+          setContacts(mapped);
+          await setItem(`${CONTACTS_KEY}_${user?.id || 'default'}`, JSON.stringify(mapped));
+          setLoaded(true);
+          return;
+        }
+      } catch { /* fall through */ }
+
+      // Fallback: try chat_contacts table
       try {
         const dbContacts = await getChatContacts();
         if (dbContacts && dbContacts.length > 0) {
@@ -134,22 +150,13 @@ export default function MessagesScreen({ navigation }: any) {
           setLoaded(true);
           return;
         }
-      } catch { /* fall through to local */ }
+      } catch { /* fall through */ }
 
-      // Fallback to local storage / seed
+      // Fallback to local storage
       const uid = user?.id || 'default';
       const raw = await getItem(`${CONTACTS_KEY}_${uid}`);
       if (raw) {
         setContacts(JSON.parse(raw));
-      } else {
-        const seeded: Contact[] = SEED_CONTACTS.map((c) => ({
-          ...c,
-          lastMessage: 'Hello! How can I help you today?',
-          lastTime: '2d ago',
-          unread: 0,
-        }));
-        setContacts(seeded);
-        await setItem(`${CONTACTS_KEY}_${uid}`, JSON.stringify(seeded));
       }
       setLoaded(true);
     })();
@@ -257,30 +264,57 @@ export function ChatDetail({ navigation, route }: any) {
   useEffect(() => {
     if (!user?.id) return;
     (async () => {
+      // First, find or create a chat_contacts entry for this provider
+      let chatContactId: number | null = null;
       try {
-        const conv = await getOrCreateConversation(
-          user.id, parseInt(contact.id), contact.name, contact.role, contact.online,
-        );
-        if (conv) {
-          setConversationId(conv.id);
-          // Load messages from Supabase
-          const dbMessages = await getMessages(conv.id);
-          if (dbMessages && dbMessages.length > 0) {
-            const mapped: Message[] = dbMessages.map((m: any) => ({
-              id: String(m.id),
-              type: m.message_type || 'text',
-              content: m.content || '',
-              sent: m.sender_id === user.id,
-              time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              status: 'read' as const,
-              createdAt: new Date(m.created_at).getTime(),
-            }));
-            setMessages(mapped);
-            setLoaded(true);
-            return;
-          }
+        const { data: existing } = await supabase
+          .from('chat_contacts')
+          .select('id')
+          .eq('name', contact.name)
+          .maybeSingle();
+        if (existing) {
+          chatContactId = existing.id;
+        } else {
+          const { data: newContact } = await supabase
+            .from('chat_contacts')
+            .insert({
+              name: contact.name,
+              role: contact.role || 'clinician',
+              specialty: contact.specialty || '',
+              hospital: contact.hospital || '',
+              online: contact.online ?? true,
+            })
+            .select('id')
+            .single();
+          if (newContact) chatContactId = newContact.id;
         }
-      } catch { /* fall through to local */ }
+      } catch { /* continue without chat_contacts */ }
+
+      if (chatContactId) {
+        try {
+          const conv = await getOrCreateConversation(
+            user.id, chatContactId, contact.name, contact.role, contact.online,
+          );
+          if (conv) {
+            setConversationId(conv.id);
+            const dbMessages = await getMessages(conv.id);
+            if (dbMessages && dbMessages.length > 0) {
+              const mapped: Message[] = dbMessages.map((m: any) => ({
+                id: String(m.id),
+                type: m.message_type || 'text',
+                content: m.content || '',
+                sent: m.sender_id === user.id,
+                time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                status: 'read' as const,
+                createdAt: new Date(m.created_at).getTime(),
+              }));
+              setMessages(mapped);
+              setLoaded(true);
+              return;
+            }
+          }
+        } catch { /* fall through to local */ }
+      }
 
       // Fallback to local storage
       const raw = await getItem(msgStorageKey);
@@ -289,7 +323,7 @@ export function ChatDetail({ navigation, route }: any) {
       }
       setLoaded(true);
     })();
-  }, [msgStorageKey, user?.id]);
+  }, [msgStorageKey, user?.id, contact.id]);
 
   // Realtime subscription for incoming messages
   useEffect(() => {

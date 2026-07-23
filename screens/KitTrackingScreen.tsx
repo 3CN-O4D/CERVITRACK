@@ -115,7 +115,7 @@ export default function KitTrackingScreen() {
       const result = await registerKit(barcode, {
         facilityId: 'home',
         registeredBy: user?.id || 'self',
-        registeredByName: user?.user_metadata?.full_name || 'Patient',
+        registeredByName: user?.name || 'Patient',
       });
       if (result) {
         setKit(result);
@@ -138,9 +138,9 @@ export default function KitTrackingScreen() {
     try {
       const result = await pairKit(barcode, {
         patientId: user?.id || 'unknown',
-        patientName: user?.user_metadata?.full_name || 'Patient',
+        patientName: user?.name || 'Patient',
         pairedBy: user?.id || 'self',
-        pairedByName: user?.user_metadata?.full_name || 'Patient (Self)',
+        pairedByName: user?.name || 'Patient (Self)',
       });
       if (result) {
         setKit(result);
@@ -163,7 +163,7 @@ export default function KitTrackingScreen() {
     try {
       const result = await collectKit(barcode, {
         collectedBy: user?.id || 'self',
-        collectedByName: user?.user_metadata?.full_name || 'Patient (Self-Collection)',
+        collectedByName: user?.name || 'Patient (Self-Collection)',
         collectionMethod: method,
         location: 'home',
       });

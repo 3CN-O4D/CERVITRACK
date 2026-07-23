@@ -667,12 +667,12 @@ export default function ScreeningScreen() {
         score: risk.score,
         age: answers.age ? Number(answers.age) : undefined,
         parity: answers.parity ? Number(answers.parity) : undefined,
-        vaccination: answers.vaccination,
-        smoking: answers.smoking,
-        hiv_status: answers.hivStatus,
-        symptoms: answers.symptoms,
-        family_history: answers.familyHistory,
-        previous_screening: answers.previousScreening,
+        vaccination: String(answers.vaccination ?? ''),
+        smoking: String(answers.smoking ?? ''),
+        hiv_status: String(answers.hivStatus ?? ''),
+        symptoms: String(answers.symptoms ?? ''),
+        family_history: String(answers.familyHistory ?? ''),
+        previous_screening: String(answers.previousScreening ?? ''),
       });
       if (user?.id) {
         await setItem(`@cervitrack_screening_${user.id}`, JSON.stringify({
