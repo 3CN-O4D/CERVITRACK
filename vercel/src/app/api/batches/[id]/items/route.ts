@@ -10,12 +10,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ message: 'kit_barcode required' }, { status: 400 });
   }
 
-  const kit = getKit(kit_barcode);
-  const result = addSampleToBatch(params.id, {
+  const kit = await getKit(kit_barcode);
+  const result = await addSampleToBatch(params.id, {
     kit_barcode,
     kit_id: kit?.id || null,
-    patient_id: kit?.patientId || null,
-    patient_name: kit?.patientName || '',
+    patient_id: kit?.patient_id || null,
+    patient_name: kit?.patient_name || '',
   });
 
   if (result.error) return NextResponse.json({ message: result.error }, { status: result.status });
@@ -27,7 +27,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   const itemId = searchParams.get('itemId');
   if (!itemId) return NextResponse.json({ message: 'itemId required' }, { status: 400 });
 
-  const result = removeSampleFromBatch(params.id, itemId);
+  const result = await removeSampleFromBatch(params.id, itemId);
   if (result.error) return NextResponse.json({ message: result.error }, { status: result.status });
   return NextResponse.json(result.batch);
 }

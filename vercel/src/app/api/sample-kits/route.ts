@@ -3,7 +3,7 @@ import { listKits, registerKit, pairKit, collectKit, transitKit, receiveKit, ent
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const result = listKits({
+  const result = await listKits({
     facilityId: searchParams.get('facilityId') || undefined,
     status: searchParams.get('status') || undefined,
     patientId: searchParams.get('patientId') || undefined,
@@ -20,22 +20,22 @@ export async function POST(req: NextRequest) {
   let result;
   switch (action) {
     case 'register':
-      result = registerKit(barcode, body);
+      result = await registerKit(barcode, body);
       break;
     case 'pair':
-      result = pairKit(barcode, body);
+      result = await pairKit(barcode, body);
       break;
     case 'collect':
-      result = collectKit(barcode, body);
+      result = await collectKit(barcode, body);
       break;
     case 'transit':
-      result = transitKit(barcode, body);
+      result = await transitKit(barcode, body);
       break;
     case 'receive':
-      result = receiveKit(barcode, body);
+      result = await receiveKit(barcode, body);
       break;
     case 'results':
-      result = enterResults(barcode, body);
+      result = await enterResults(barcode, body);
       break;
     default:
       return NextResponse.json({ message: 'Unknown action' }, { status: 400 });

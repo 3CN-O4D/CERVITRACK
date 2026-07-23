@@ -1,8 +1,52 @@
 -- ============================================================
 -- CerviTrack — Complete Database Initialization
--- Run this ONCE in Supabase SQL Editor to create all tables,
--- indexes, functions, RLS policies, and seed data.
+-- Safe to re-run: drops + recreates everything clean.
 -- ============================================================
+
+-- ============================================================
+-- 0. CLEANUP (drop everything so old schema.sql state doesn't
+--    cause column mismatches)
+-- ============================================================
+DROP TABLE IF EXISTS sample_batch_items CASCADE;
+DROP TABLE IF EXISTS sample_batches CASCADE;
+DROP TABLE IF EXISTS sample_kit_events CASCADE;
+DROP TABLE IF EXISTS sample_kits CASCADE;
+DROP TABLE IF EXISTS telehealth_messages CASCADE;
+DROP TABLE IF EXISTS chat_messages CASCADE;
+DROP TABLE IF EXISTS chat_conversations CASCADE;
+DROP TABLE IF EXISTS chat_contacts CASCADE;
+DROP TABLE IF EXISTS articles CASCADE;
+DROP TABLE IF EXISTS facilities CASCADE;
+DROP TABLE IF EXISTS providers CASCADE;
+DROP TABLE IF EXISTS consent_log CASCADE;
+DROP TABLE IF EXISTS scheduled_actions CASCADE;
+DROP TABLE IF EXISTS feedback CASCADE;
+DROP TABLE IF EXISTS reports CASCADE;
+DROP TABLE IF EXISTS followups CASCADE;
+DROP TABLE IF EXISTS test_results CASCADE;
+DROP TABLE IF EXISTS lab_results CASCADE;
+DROP TABLE IF EXISTS notifications CASCADE;
+DROP TABLE IF EXISTS appointments CASCADE;
+DROP TABLE IF EXISTS vaccines CASCADE;
+DROP TABLE IF EXISTS screenings CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
+DROP TABLE IF EXISTS sync_log CASCADE;
+-- old schema.sql leftover tables
+DROP TABLE IF EXISTS messages CASCADE;
+DROP TABLE IF EXISTS conversations CASCADE;
+
+-- Drop old enum types and recreate fresh
+DROP TYPE IF EXISTS clinician_specialty CASCADE;
+DROP TYPE IF EXISTS approval_status CASCADE;
+DROP TYPE IF EXISTS batch_status CASCADE;
+DROP TYPE IF EXISTS kit_status CASCADE;
+DROP TYPE IF EXISTS message_type CASCADE;
+DROP TYPE IF EXISTS sender_type CASCADE;
+DROP TYPE IF EXISTS notification_type CASCADE;
+DROP TYPE IF EXISTS appointment_status CASCADE;
+DROP TYPE IF EXISTS vaccine_status CASCADE;
+DROP TYPE IF EXISTS risk_tier CASCADE;
+DROP TYPE IF EXISTS user_role CASCADE;
 
 -- ============================================================
 -- EXTENSIONS
@@ -15,71 +59,26 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 -- 1. ENUM TYPES
 -- ============================================================
 
-DO $$ BEGIN
-  CREATE TYPE user_role AS ENUM (
-    'patient','lab_technician','clinician',
-    'facility_admin','county_admin','national_admin','system_admin'
-  );
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;
-
-DO $$ BEGIN
-  CREATE TYPE risk_tier AS ENUM ('low','medium','high','critical');
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;
-
-DO $$ BEGIN
-  CREATE TYPE vaccine_status AS ENUM ('scheduled','done','missed','cancelled');
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;
-
-DO $$ BEGIN
-  CREATE TYPE appointment_status AS ENUM ('pending','upcoming','completed','cancelled');
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;
-
-DO $$ BEGIN
-  CREATE TYPE notification_type AS ENUM ('info','reminder','alert','appointment','screening','admin','provider');
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;
-
-DO $$ BEGIN
-  CREATE TYPE sender_type AS ENUM ('patient','staff','system');
-EXCEPTION WHEN duplicate_object THEN
-  ALTER TYPE sender_type ADD VALUE IF NOT EXISTS 'patient';
-  ALTER TYPE sender_type ADD VALUE IF NOT EXISTS 'system';
-END $$;
-
-DO $$ BEGIN
-  CREATE TYPE message_type AS ENUM ('text','image','audio');
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;
-
-DO $$ BEGIN
-  CREATE TYPE kit_status AS ENUM (
-    'UNREGISTERED','REGISTERED','PAIRED','COLLECTED',
-    'IN_TRANSIT','IN_LAB','PROCESSED'
-  );
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;
-
-DO $$ BEGIN
-  CREATE TYPE batch_status AS ENUM ('receiving','testing','submitted');
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;
-
-DO $$ BEGIN
-  CREATE TYPE approval_status AS ENUM ('pending','approved','rejected');
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;
-
-DO $$ BEGIN
-  CREATE TYPE clinician_specialty AS ENUM (
-    'oncologist','gynecologist','nurse_practitioner',
-    'public_health_officer','pathologist','general_practitioner','other'
-  );
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;
+CREATE TYPE user_role AS ENUM (
+  'patient','lab_technician','clinician',
+  'facility_admin','county_admin','national_admin','system_admin'
+);
+CREATE TYPE risk_tier AS ENUM ('low','medium','high','critical');
+CREATE TYPE vaccine_status AS ENUM ('scheduled','done','missed','cancelled');
+CREATE TYPE appointment_status AS ENUM ('pending','upcoming','completed','cancelled');
+CREATE TYPE notification_type AS ENUM ('info','reminder','alert','appointment','screening','admin','provider');
+CREATE TYPE sender_type AS ENUM ('patient','staff','system');
+CREATE TYPE message_type AS ENUM ('text','image','audio');
+CREATE TYPE kit_status AS ENUM (
+  'UNREGISTERED','REGISTERED','PAIRED','COLLECTED',
+  'IN_TRANSIT','IN_LAB','PROCESSED'
+);
+CREATE TYPE batch_status AS ENUM ('receiving','testing','submitted');
+CREATE TYPE approval_status AS ENUM ('pending','approved','rejected');
+CREATE TYPE clinician_specialty AS ENUM (
+  'oncologist','gynecologist','nurse_practitioner',
+  'public_health_officer','pathologist','general_practitioner','other'
+);
 
 -- ============================================================
 -- 2. CORE TABLES

@@ -1,33 +1,81 @@
-const kits: Record<string, any> = {};
+import { supabaseAdmin } from './supabase-admin';
 
-function addEvent(kit: any, action: string, scannedBy: string, scannedByName: string, location?: string, facilityId?: string, notes?: string) {
-  if (!kit.events) kit.events = [];
-  kit.events.push({
-    id: `evt_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-    kitId: kit.id, action, scannedBy, scannedByName, location, facilityId, notes,
-    timestamp: new Date().toISOString(),
-  });
+export async function getKit(barcode: string) {
+  const { data: kit, error } = await supabaseAdmin
+    .from('sample_kits')
+    .select('*')
+    .eq('barcode', barcode)
+    .single();
+  if (error || !kit) return null;
+
+  const { data: events } = await supabaseAdmin
+    .from('sample_kit_events')
+    .select('*')
+    .eq('kit_id', kit.id)
+    .order('created_at', { ascending: true });
+
+  const mappedEvents = (events || []).map((e: any) => ({
+    id: e.id,
+    action: e.event_type,
+    scannedBy: e.performed_by || '',
+    scannedByName: e.performed_by_name || '',
+    location: e.event_data?.location || '',
+    facilityId: e.event_data?.facilityId || '',
+    notes: e.event_data?.notes || '',
+    timestamp: e.created_at,
+  }));
+
+  return {
+    ...kit,
+    kitType: kit.kit_type,
+    facilityId: kit.facility_id,
+    registeredBy: kit.registered_by,
+    registeredByName: kit.registered_by_name,
+    patientId: kit.patient_id,
+    patientName: kit.patient_name,
+    collectionMethod: kit.collection_method,
+    collectedAt: kit.collected_at,
+    currentLocation: kit.current_location,
+    receivedAtLab: kit.received_at_lab,
+    resultNotes: kit.result_notes,
+    processedAt: kit.processed_at,
+    createdAt: kit.created_at,
+    updatedAt: kit.updated_at,
+    events: mappedEvents,
+  };
 }
 
-export function getKit(barcode: string) {
-  return kits[barcode] || null;
-}
-
-export function listKits(query: { facilityId?: string; status?: string; patientId?: string; page?: number; limit?: number }) {
+export async function listKits(query: { facilityId?: string; status?: string; patientId?: string; page?: number; limit?: number }) {
   const { facilityId, status, patientId, page = 1, limit = 20 } = query;
-  let list = Object.values(kits);
-  if (facilityId) list = list.filter((k) => k.facilityId === facilityId);
-  if (status) list = list.filter((k) => k.status === status);
-  if (patientId) list = list.filter((k) => k.patientId === patientId);
-  list.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-  const total = list.length;
+  let q = supabaseAdmin.from('sample_kits').select('*', { count: 'exact' });
+  if (facilityId) q = q.eq('facility_id', facilityId);
+  if (status) q = q.eq('status', status);
+  if (patientId) q = q.eq('patient_id', patientId);
+  q = q.order('created_at', { ascending: false });
+
   const start = (page - 1) * limit;
-  return { data: list.slice(start, start + limit), total, page, limit, totalPages: Math.ceil(total / limit) };
+  q = q.range(start, start + limit - 1);
+
+  const { data, count } = await q;
+  const mapped = (data || []).map((k: any) => ({
+    ...k,
+    kitType: k.kit_type,
+    facilityId: k.facility_id,
+    patientId: k.patient_id,
+    patientName: k.patient_name,
+    createdAt: k.created_at,
+    updatedAt: k.updated_at,
+    events: [],
+  }));
+  return { data: mapped, total: count || 0, page, limit, totalPages: Math.ceil((count || 0) / limit) };
 }
 
-export function getKitStats(facilityId?: string) {
-  let list = Object.values(kits);
-  if (facilityId) list = list.filter((k) => k.facilityId === facilityId);
+export async function getKitStats(facilityId?: string) {
+  let q = supabaseAdmin.from('sample_kits').select('status');
+  if (facilityId) q = q.eq('facility_id', facilityId);
+  const { data } = await q;
+
+  const list = data || [];
   const byStatus: Record<string, number> = {};
   for (const k of list) byStatus[k.status] = (byStatus[k.status] || 0) + 1;
   return {
@@ -38,73 +86,113 @@ export function getKitStats(facilityId?: string) {
   };
 }
 
-export function registerKit(barcode: string, data: { facilityId?: string; registeredBy?: string; registeredByName?: string; kitType?: string }) {
-  if (kits[barcode]) return { error: 'Kit already registered', status: 400 };
-  const kit = {
-    id: `kit_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-    barcode, kitType: data.kitType || 'HPV_DNA_SELF', status: 'REGISTERED',
-    facilityId: data.facilityId || 'home', registeredBy: data.registeredBy || 'system',
-    registeredByName: data.registeredByName || 'System', patientId: null, patientName: null,
-    events: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-  };
-  addEvent(kit, 'REGISTERED', kit.registeredBy, kit.registeredByName, undefined, kit.facilityId, 'Kit registered');
-  kits[barcode] = kit;
-  return { kit };
+async function addEvent(kitId: number, action: string, scannedBy: string, scannedByName: string, location?: string, facilityId?: string, notes?: string) {
+  await supabaseAdmin.from('sample_kit_events').insert({
+    kit_id: kitId,
+    event_type: action,
+    event_data: { location, facilityId, notes },
+    performed_by: scannedBy || null,
+    performed_by_name: scannedByName || '',
+  });
 }
 
-export function pairKit(barcode: string, data: { patientId: string; patientName: string; pairedBy: string; pairedByName: string; facilityId?: string }) {
-  const kit = kits[barcode];
+export async function registerKit(barcode: string, data: { facilityId?: string; registeredBy?: string; registeredByName?: string; kitType?: string }) {
+  const existing = await getKit(barcode);
+  if (existing) return { error: 'Kit already registered', status: 400 };
+
+  const { data: kit, error } = await supabaseAdmin
+    .from('sample_kits')
+    .insert({
+      barcode,
+      kit_type: data.kitType || 'HPV_DNA_SELF',
+      status: 'REGISTERED',
+      facility_id: data.facilityId || 'home',
+      registered_by: data.registeredBy || 'system',
+      registered_by_name: data.registeredByName || 'System',
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  await addEvent(kit.id, 'REGISTERED', data.registeredBy || 'system', data.registeredByName || 'System', undefined, data.facilityId, 'Kit registered');
+  return { kit: await getKit(barcode) };
+}
+
+export async function pairKit(barcode: string, data: { patientId: string; patientName: string; pairedBy: string; pairedByName: string; facilityId?: string }) {
+  const kit = await getKit(barcode);
   if (!kit) return { error: 'Kit not found', status: 404 };
   if (kit.status !== 'REGISTERED') return { error: `Kit is ${kit.status}`, status: 400 };
-  kit.patientId = data.patientId;
-  kit.patientName = data.patientName;
-  kit.status = 'PAIRED';
-  kit.updatedAt = new Date().toISOString();
-  addEvent(kit, 'PAIRED', data.pairedBy, data.pairedByName, undefined, data.facilityId, `Paired to ${data.patientName}`);
-  return { kit };
+
+  await supabaseAdmin
+    .from('sample_kits')
+    .update({ patient_id: data.patientId, patient_name: data.patientName, status: 'PAIRED', updated_at: new Date().toISOString() })
+    .eq('id', kit.id);
+
+  await addEvent(kit.id, 'PAIRED', data.pairedBy, data.pairedByName, undefined, data.facilityId, `Paired to ${data.patientName}`);
+  return { kit: await getKit(barcode) };
 }
 
-export function collectKit(barcode: string, data: { collectedBy: string; collectedByName: string; collectionMethod: string; facilityId?: string; location?: string; notes?: string }) {
-  const kit = kits[barcode];
+export async function collectKit(barcode: string, data: { collectedBy: string; collectedByName: string; collectionMethod: string; facilityId?: string; location?: string; notes?: string }) {
+  const kit = await getKit(barcode);
   if (!kit) return { error: 'Kit not found', status: 404 };
   if (kit.status !== 'PAIRED') return { error: `Kit is ${kit.status}`, status: 400 };
-  kit.status = 'COLLECTED';
-  kit.collectionMethod = data.collectionMethod;
-  kit.collectedAt = new Date().toISOString();
-  kit.updatedAt = new Date().toISOString();
-  addEvent(kit, 'COLLECTED', data.collectedBy, data.collectedByName, data.location, data.facilityId, `${data.collectionMethod} confirmed. ${data.notes || ''}`);
-  return { kit };
+
+  await supabaseAdmin
+    .from('sample_kits')
+    .update({
+      status: 'COLLECTED',
+      collection_method: data.collectionMethod,
+      collected_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', kit.id);
+
+  await addEvent(kit.id, 'COLLECTED', data.collectedBy, data.collectedByName, data.location, data.facilityId, `${data.collectionMethod} confirmed. ${data.notes || ''}`);
+  return { kit: await getKit(barcode) };
 }
 
-export function transitKit(barcode: string, data: { scannedBy: string; scannedByName: string; fromLocation: string; toLocation: string; facilityId?: string; notes?: string }) {
-  const kit = kits[barcode];
+export async function transitKit(barcode: string, data: { scannedBy: string; scannedByName: string; fromLocation: string; toLocation: string; facilityId?: string; notes?: string }) {
+  const kit = await getKit(barcode);
   if (!kit) return { error: 'Kit not found', status: 404 };
-  kit.status = 'IN_TRANSIT';
-  kit.currentLocation = data.toLocation;
-  kit.updatedAt = new Date().toISOString();
-  addEvent(kit, 'IN_TRANSIT', data.scannedBy, data.scannedByName, `${data.fromLocation} -> ${data.toLocation}`, data.facilityId, `${data.notes || ''}`);
-  return { kit };
+
+  await supabaseAdmin
+    .from('sample_kits')
+    .update({ status: 'IN_TRANSIT', current_location: data.toLocation, updated_at: new Date().toISOString() })
+    .eq('id', kit.id);
+
+  await addEvent(kit.id, 'IN_TRANSIT', data.scannedBy, data.scannedByName, `${data.fromLocation} -> ${data.toLocation}`, data.facilityId, data.notes || '');
+  return { kit: await getKit(barcode) };
 }
 
-export function receiveKit(barcode: string, data: { receivedBy: string; receivedByName: string; facilityId?: string; notes?: string }) {
-  const kit = kits[barcode];
+export async function receiveKit(barcode: string, data: { receivedBy: string; receivedByName: string; facilityId?: string; notes?: string }) {
+  const kit = await getKit(barcode);
   if (!kit) return { error: 'Kit not found', status: 404 };
-  kit.status = 'IN_LAB';
-  kit.receivedAtLab = new Date().toISOString();
-  kit.updatedAt = new Date().toISOString();
-  addEvent(kit, 'IN_LAB', data.receivedBy, data.receivedByName, undefined, data.facilityId, `Received at lab. ${data.notes || ''}`);
-  return { kit };
+
+  await supabaseAdmin
+    .from('sample_kits')
+    .update({ status: 'IN_LAB', received_at_lab: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq('id', kit.id);
+
+  await addEvent(kit.id, 'IN_LAB', data.receivedBy, data.receivedByName, undefined, data.facilityId, `Received at lab. ${data.notes || ''}`);
+  return { kit: await getKit(barcode) };
 }
 
-export function enterResults(barcode: string, data: { technicianId: string; technicianName: string; result: string; notes?: string; facilityId?: string }) {
-  const kit = kits[barcode];
+export async function enterResults(barcode: string, data: { technicianId: string; technicianName: string; result: string; notes?: string; facilityId?: string }) {
+  const kit = await getKit(barcode);
   if (!kit) return { error: 'Kit not found', status: 404 };
   if (kit.status !== 'IN_LAB') return { error: `Kit is ${kit.status}`, status: 400 };
-  kit.status = 'PROCESSED';
-  kit.result = data.result;
-  kit.resultNotes = data.notes;
-  kit.processedAt = new Date().toISOString();
-  kit.updatedAt = new Date().toISOString();
-  addEvent(kit, 'PROCESSED', data.technicianId, data.technicianName, undefined, data.facilityId, `Results: ${data.result}. ${data.notes || ''}`);
-  return { kit };
+
+  await supabaseAdmin
+    .from('sample_kits')
+    .update({
+      status: 'PROCESSED',
+      result: data.result,
+      result_notes: data.notes || '',
+      processed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', kit.id);
+
+  await addEvent(kit.id, 'PROCESSED', data.technicianId, data.technicianName, undefined, data.facilityId, `Results: ${data.result}. ${data.notes || ''}`);
+  return { kit: await getKit(barcode) };
 }

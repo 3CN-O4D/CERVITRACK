@@ -8,10 +8,10 @@ export async function GET(req: NextRequest) {
   const stats = searchParams.get('stats') === '1';
 
   if (stats) {
-    return NextResponse.json(getBatchStats(lab_tech_id));
+    return NextResponse.json(await getBatchStats(lab_tech_id));
   }
 
-  const result = listBatches({
+  const result = await listBatches({
     lab_tech_id,
     status,
     page: parseInt(searchParams.get('page') || '1'),
@@ -28,6 +28,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ message: 'lab_tech_id and lab_tech_name required' }, { status: 400 });
   }
 
-  const batch = createBatch({ lab_tech_id, lab_tech_name, facility_id });
+  const batch = await createBatch({ lab_tech_id, lab_tech_name, facility_id });
   return NextResponse.json(batch, { status: 201 });
 }

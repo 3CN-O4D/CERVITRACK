@@ -9,7 +9,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ message: 'result required' }, { status: 400 });
   }
 
-  const batchResult = recordItemResult(params.id, params.itemId, { result, result_notes });
+  const batchResult = await recordItemResult(params.id, params.itemId, { result, result_notes });
   if (batchResult.error) return NextResponse.json({ message: batchResult.error }, { status: batchResult.status });
   return NextResponse.json(batchResult.batch);
 }

@@ -9,18 +9,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: 'barcode and patientId are required' }, { status: 400 });
     }
 
-    const existing = getKit(barcode);
+    const existing = await getKit(barcode);
     if (!existing) {
       return NextResponse.json({ message: 'Kit not found. Register it first.' }, { status: 404 });
     }
-    if (existing.patientId) {
-      return NextResponse.json({ message: `Kit already linked to ${existing.patientName || 'a patient'}. Unlink first.` }, { status: 409 });
+    if (existing.patient_id) {
+      return NextResponse.json({ message: `Kit already linked to ${existing.patient_name || 'a patient'}. Unlink first.` }, { status: 409 });
     }
     if (existing.status !== 'REGISTERED') {
       return NextResponse.json({ message: `Kit is ${existing.status}. Only REGISTERED kits can be linked.` }, { status: 400 });
     }
 
-    const result = pairKit(barcode, {
+    const result = await pairKit(barcode, {
       patientId,
       patientName: patientName || 'Patient',
       pairedBy: linkedBy || 'system',
