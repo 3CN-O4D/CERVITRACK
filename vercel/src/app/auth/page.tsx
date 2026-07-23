@@ -1,12 +1,20 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase-browser';
 import Image from 'next/image';
 
 export default function AuthPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-sky-50 to-white"><p className="text-gray-400">Loading...</p></div>}>
+      <AuthForm />
+    </Suspense>
+  );
+}
+
+function AuthForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get('redirect');
