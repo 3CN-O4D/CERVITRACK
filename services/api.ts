@@ -1040,5 +1040,15 @@ export async function getSamplingGuide() {
   ];
 }
 
+export function onMessagesInsert(conversationId: number, callback: (msg: any) => void) {
+  const channel = supabase
+    .channel(`messages:${conversationId}`)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` }, (payload) => {
+      callback(payload.new);
+    })
+    .subscribe();
+  return { unsubscribe: () => supabase.removeChannel(channel) };
+}
+
 // Re-export sync helpers
 export { getLastFullSync } from './sync';

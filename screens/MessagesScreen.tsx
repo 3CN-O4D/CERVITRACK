@@ -21,8 +21,8 @@ import { getItem, setItem } from '../services/storage';
 import { supabase } from '../lib/supabase/client';
 import { uploadToCloudinary } from '../lib/cloudinary';
 import * as ImagePicker from 'expo-image-picker';
-import { Audio } from 'expo-av';
-import { saveImageLocally, saveAudioLocally, uploadMediaToCloudinary } from '../services/mediaStore';
+// Voice recording disabled — remove expo-av dep temporarily
+import { saveImageLocally, uploadMediaToCloudinary } from '../services/mediaStore';
 import {
   getChatContacts,
   getConversations,
@@ -30,7 +30,7 @@ import {
   getMessages,
   sendMessage as apiSendMessage,
   sendImageMessage as apiSendImageMessage,
-  sendAudioMessage as apiSendAudioMessage,
+
   onMessagesInsert,
 } from '../services/api';
 
@@ -263,9 +263,7 @@ export function ChatDetail({ navigation, route }: any) {
   const [inputText, setInputText] = useState('');
   const [loaded, setLoaded] = useState(false);
   const flatListRef = useRef<FlatList>(null);
-  const [isRecording, setIsRecording] = useState(false);
-  const [recording, setRecording] = useState<Audio.Recording | null>(null);
-  const [playingId, setPlayingId] = useState<string | null>(null);
+
 
   const uid = user?.id || 'default';
   const msgStorageKey = `@cervitrack_msgs_${uid}_${contact.id}`;
@@ -459,77 +457,14 @@ export function ChatDetail({ navigation, route }: any) {
   };
 
   const handleStartRecording = async () => {
-    const { status } = await Audio.requestPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Please grant microphone access to record voice notes.');
-      return;
-    }
-    await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-    const { recording: newRecording } = await Audio.Recording.createAsync(
-      Audio.RecordingOptionsPresets.HIGH_QUALITY
-    );
-    setRecording(newRecording);
-    setIsRecording(true);
+    Alert.alert('Coming Soon', 'Voice recording will be available in the next update.');
   };
 
   const handleStopRecording = async () => {
-    if (!recording) return;
-    setIsRecording(false);
-    await recording.stopAndUnloadAsync();
-    await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
-    const uri = recording.getURI();
-    setRecording(null);
-    if (!uri) return;
-
-    const now = Date.now();
-    const msgId = now.toString();
-
-    // Save locally
-    const localPath = await saveAudioLocally(uri, msgId);
-
-    const newMsg: Message = {
-      id: msgId,
-      type: 'audio',
-      content: 'Voice note',
-      localUri: localPath,
-      sent: true,
-      time: getCurrentTime(),
-      status: 'sent',
-      createdAt: now,
-    };
-    setMessages((prev) => [...prev, newMsg]);
-    updateContactLastMessage('🎤 Voice note');
-
-    // Upload + send
-    if (conversationId && user?.id) {
-      try {
-        const cloudUrl = await uploadMediaToCloudinary(localPath, 'audio');
-        const fileUrl = cloudUrl || localPath;
-        await apiSendAudioMessage(conversationId, user.id, fileUrl, undefined, 'user');
-      } catch { /* sent locally, will sync later */ }
-    }
   };
 
   const handlePlayAudio = async (msg: Message) => {
-    const uri = msg.localUri || msg.fileUrl || msg.content;
-    if (!uri) return;
-
-    if (playingId === msg.id) {
-      setPlayingId(null);
-      return;
-    }
-
-    try {
-      const { sound } = await Audio.Sound.createAsync({ uri });
-      setPlayingId(msg.id);
-      await sound.playAsync();
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded && status.didJustFinish) {
-          setPlayingId(null);
-          sound.unloadAsync();
-        }
-      });
-    } catch { setPlayingId(null); }
+    Alert.alert('Coming Soon', 'Audio playback will be available in the next update.');
   };
 
   const renderMessage = ({ item }: { item: Message }) => (
@@ -564,7 +499,7 @@ export function ChatDetail({ navigation, route }: any) {
             style={[s.playBtn, { backgroundColor: colors.primary }]}
             onPress={() => handlePlayAudio(item)}
           >
-            <Ionicons name={playingId === item.id ? 'pause' : 'play'} size={14} color="#FFF" />
+            <Ionicons name="mic" size={14} color="#FFF" />
           </TouchableOpacity>
           <View style={s.audioWave}>
             <View style={[s.waveBar, { backgroundColor: item.sent ? colors.primary : colors.textSecondary }]} />
@@ -638,23 +573,12 @@ export function ChatDetail({ navigation, route }: any) {
             multiline
           />
         </View>
-        {inputText.trim() ? (
+        {!!inputText.trim() && (
           <TouchableOpacity
             style={[s.sendBtn, { backgroundColor: colors.primary }]}
             onPress={handleSend}
           >
             <Ionicons name="send" size={18} color="#FFF" />
-          </TouchableOpacity>
-        ) : isRecording ? (
-          <TouchableOpacity
-            style={[s.sendBtn, { backgroundColor: colors.danger }]}
-            onPress={handleStopRecording}
-          >
-            <Ionicons name="stop" size={18} color="#FFF" />
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity style={s.micBtn} onPress={handleStartRecording}>
-            <Ionicons name="mic-outline" size={22} color={colors.textSecondary} />
           </TouchableOpacity>
         )}
       </View>
