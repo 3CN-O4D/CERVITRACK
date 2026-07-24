@@ -710,4 +710,10 @@ const styles = (colors: any) => StyleSheet.create({
   howText: { flex: 1 },
   howTitle: { fontSize: 14, fontWeight: '700' },
   howDesc: { fontSize: 12, marginTop: 2 },
+  confirmCard: { borderRadius: 16, borderWidth: 1, padding: 20, marginBottom: 16, alignItems: 'center' },
+  confirmTitle: { fontSize: 16, fontWeight: '700', marginBottom: 4 },
+  confirmBarcode: { fontSize: 18, fontWeight: '800', letterSpacing: 2, marginBottom: 16, fontFamily: 'monospace' },
+  confirmActions: { flexDirection: 'row', gap: 12 },
+  confirmBtn: { paddingHorizontal: 32, paddingVertical: 10, borderRadius: 10 },
+  confirmBtnText: { color: '#FFF', fontSize: 14, fontWeight: '700' },
 });
