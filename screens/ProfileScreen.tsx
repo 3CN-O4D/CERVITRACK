@@ -405,7 +405,8 @@ export default function ProfileScreen({ navigation }: any) {
   );
 }
 
-const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
+type ThemeColors = ReturnType<typeof useTheme>['colors'];
+const styles = (colors: ThemeColors) =>
   StyleSheet.create({
     scroll: {
       paddingHorizontal: 20,

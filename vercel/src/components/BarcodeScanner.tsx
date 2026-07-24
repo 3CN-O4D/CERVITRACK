@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 
 interface BarcodeScannerProps {
   onScan: (code: string) => void;
@@ -12,16 +12,19 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
   const [scanning, setScanning] = useState(true);
   const readerRef = useRef<HTMLDivElement>(null);
   const scannerRef = useRef<any>(null);
+  const uniqueId = useId();
 
   useEffect(() => {
     let mounted = true;
+    const elementId = `barcode-qr-reader-${uniqueId.replace(/:/g, '')}`;
 
     async function startScanner() {
       try {
         const { Html5Qrcode } = await import('html5-qrcode');
         if (!mounted || !readerRef.current) return;
+        readerRef.current.id = elementId;
 
-        const scanner = new Html5Qrcode('barcode-qr-reader');
+        const scanner = new Html5Qrcode(elementId);
         scannerRef.current = scanner;
 
         await scanner.start(
@@ -35,6 +38,7 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
             if (mounted) {
               onScan(decodedText);
               scanner.stop().catch(() => {});
+              scanner.clear().catch(() => {});
               onClose();
             }
           },
@@ -63,7 +67,7 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
         scannerRef.current.clear().catch(() => {});
       }
     };
-  }, [onScan, onClose]);
+  }, [onScan, onClose, uniqueId]);
 
   return (
     <div className="relative">
@@ -76,12 +80,10 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
         </div>
       ) : (
         <>
-          <div ref={readerRef} id="barcode-qr-reader" className="w-full rounded-lg overflow-hidden" />
+          <div ref={readerRef} className="w-full rounded-lg overflow-hidden" />
           {scanning && (
             <div className="absolute bottom-2 left-0 right-0 text-center">
-              <span className="bg-black/60 text-white text-xs px-3 py-1.5 rounded-full">
-                Point camera at barcode
-              </span>
+              <span className="bg-black/60 text-white text-xs px-3 py-1.5 rounded-full">Point camera at barcode</span>
             </div>
           )}
         </>
