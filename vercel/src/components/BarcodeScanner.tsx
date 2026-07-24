@@ -38,7 +38,7 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
             if (mounted) {
               onScan(decodedText);
               scanner.stop().catch(() => {});
-              scanner.clear().catch(() => {});
+              try { scanner.clear(); } catch {}
               onClose();
             }
           },
