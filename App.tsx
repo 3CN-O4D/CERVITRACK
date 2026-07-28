@@ -39,9 +39,7 @@ function AppContent() {
       // Navigation is handled by the app's existing navigation state;
       // the listener just posts a custom event for screens to listen to
       if (type || id) {
-        // Emit a custom event that screens can subscribe to
-        // e.g. Notifications.addListener('notificationTap', ({ type, id }) => { ... })
-        Notifications.emitNotificationsEvent(type, id);
+        // TODO: implement deep-link navigation from notification tap
       }
     });
 

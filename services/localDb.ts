@@ -802,6 +802,14 @@ export function getPendingCounts(): Record<string, number> {
 
 // ─── Full Replace (for initial sync) ──────────────────────────
 
+export function clearAllData() {
+  const database = getDb();
+  const tables = ['screenings', 'vaccines', 'appointments', 'notifications', 'messages', 'conversations', 'lab_results', 'kit_requests', 'sample_kits', 'feedback', 'sync_queue'];
+  for (const t of tables) {
+    try { database.runSync(`DELETE FROM ${t}`); } catch {}
+  }
+}
+
 export function replaceTable(tableName: string, rows: any[], columns: string[]) {
   const database = getDb();
   database.runSync(`DELETE FROM ${tableName}`);
@@ -818,6 +826,7 @@ export function replaceTable(tableName: string, rows: any[], columns: string[]) 
 export default {
   getDb,
   initLocalDb,
+  clearAllData,
   saveUser,
   getUser,
   getCurrentUser,

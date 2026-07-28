@@ -462,7 +462,7 @@ export async function searchClinicians(query?: string, county?: string, specialt
       .eq('approval_status', 'approved');
     if (query) q = q.or(`name.ilike.%${query}%,hospital.ilike.%${query}%,specialty.ilike.%${query}%`);
     if (county) q = q.eq('county', county);
-    if (specialty) q = q.eq('specialization', specialty);
+    if (specialty) q = q.eq('specialty', specialty);
     const { data, error } = await q.order('name', { ascending: true });
     if (error) throw error;
     return data ?? [];

@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { getLabResults, getKitResults } from '../services/api';
+import { getScreenings, getSampleKits } from '../services/localDb';
 
 interface Result {
   id: string;
@@ -48,8 +49,27 @@ export default function MyResultsScreen({ navigation }: any) {
     if (!user?.id) return;
     try {
       const [labData, kitData] = await Promise.all([
-        getLabResults(user.id).catch(() => []),
-        getKitResults(user.id).catch(() => []),
+        getLabResults(user.id).catch(async () => {
+          const local = getScreenings(user.id);
+          return local.map((s: any) => ({
+            id: s.id,
+            result: s.verdict,
+            notes: `Score: ${s.score} | Risk: ${s.risk_tier}`,
+            patient_name: '',
+            created_at: s.created_at,
+          }));
+        }),
+        getKitResults(user.id).catch(async () => {
+          const local = getSampleKits(user.id);
+          return local.map((k: any) => ({
+            id: k.id,
+            kit_type: k.kit_type,
+            result: k.result,
+            result_notes: k.result_notes,
+            processed_at: k.processed_at,
+            created_at: k.created_at,
+          }));
+        }),
       ]);
 
       const labResults: Result[] = labData.map((r: any) => ({

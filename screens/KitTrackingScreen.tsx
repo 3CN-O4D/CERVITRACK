@@ -51,7 +51,7 @@ export default function KitTrackingScreen() {
   const [confirmed, setConfirmed] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [action, setAction] = useState<'register' | 'pair' | 'collect' | null>(null);
+  const [action, setAction] = useState<string | null>(null);
   const [collectionMethod, setCollectionMethod] = useState('');
   const [myKits, setMyKits] = useState<Kit[]>([]);
   const [patientSearch, setPatientSearch] = useState('');
@@ -235,7 +235,7 @@ export default function KitTrackingScreen() {
     }
   };
 
-  const isClinician = user?.role === 'clinician' || user?.role === 'nurse' || user?.role === 'lab_technician';
+  const isClinician = (user?.role as string) === 'clinician' || user?.role === 'nurse';
 
   const handleSearchPatients = async (query: string) => {
     setPatientSearch(query);
@@ -417,6 +417,26 @@ export default function KitTrackingScreen() {
                 <Text style={s.confirmBtnText}>Yes</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        )}
+
+        {/* Register Kit prompt — shown when kit not found after scan */}
+        {!kit && barcode && confirmed && (
+          <View style={[s.confirmCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Ionicons name="barcode-outline" size={32} color={colors.warning} style={{ marginBottom: 8 }} />
+            <Text style={[s.confirmTitle, { color: colors.text }]}>Kit Not Registered</Text>
+            <Text style={[s.confirmBarcode, { color: colors.primary }]}>{barcode}</Text>
+            <Text style={[s.confirmActions, { color: colors.textSecondary, fontSize: 13, textAlign: 'center', marginBottom: 16 }]}>
+              This kit isn't in the system yet. Register it to get started.
+            </Text>
+            <TouchableOpacity
+              style={[s.confirmBtn, { backgroundColor: colors.primary, paddingHorizontal: 24 }]}
+              onPress={handleRegister}
+              disabled={scanning}
+            >
+              {scanning ? <ActivityIndicator size="small" color="#FFF" /> : <Ionicons name="add-circle" size={18} color="#FFF" />}
+              <Text style={s.confirmBtnText}>Register Kit</Text>
+            </TouchableOpacity>
           </View>
         )}
 
