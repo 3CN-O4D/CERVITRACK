@@ -22,12 +22,15 @@ export interface AppNotification {
   createdAt: string;
 }
 
+export type Notification = AppNotification;
+
 interface NotificationContextType {
   notifications: AppNotification[];
   unreadCount: number;
   addNotification: (n: Omit<AppNotification, 'id' | 'read' | 'createdAt'>) => void;
   markRead: (id: string) => void;
   markAllRead: () => void;
+  deleteNotification: (id: string) => void;
 }
 
 const NotificationContext = createContext<NotificationContextType | null>(null);
@@ -83,6 +86,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     persist(notifications.map((n) => ({ ...n, read: true })));
   }, [notifications, persist]);
 
+  const deleteNotification = useCallback((id: string) => {
+    persist(notifications.filter((n) => n.id !== id));
+  }, [notifications, persist]);
+
   const unreadCount = useMemo(
     () => notifications.filter((n) => !n.read).length,
     [notifications],
@@ -90,7 +97,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   return (
     <NotificationContext.Provider
-      value={{ notifications, unreadCount, addNotification, markRead, markAllRead }}
+      value={{ notifications, unreadCount, addNotification, markRead, markAllRead, deleteNotification }}
     >
       {children}
     </NotificationContext.Provider>

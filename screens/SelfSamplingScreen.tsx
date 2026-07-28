@@ -10,14 +10,17 @@ import {
   Alert,
   ActivityIndicator,
   Linking,
+  Dimensions,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
+import { WebView } from 'react-native-webview';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { scanKit, pairKit, collectKit, createKitRequest } from '../services/api';
 
-const VIDEO_URL = 'https://youtu.be/njsHSnDGcDk';
+const { width } = Dimensions.get('window');
+const VIDEO_EMBED = 'https://www.youtube.com/embed/njsHSnDGcDk?autoplay=0&rel=0&modestbranding=1';
 
 type SamplingStep =
   | 'order'
@@ -286,11 +289,19 @@ export default function SelfSamplingScreen() {
               </Text>
             </View>
 
-            <TouchableOpacity style={styles.videoBtn} onPress={() => Linking.openURL(VIDEO_URL)}>
+            <View style={styles.videoEmbed}>
+              <WebView
+                source={{ html: `<html><body style="margin:0;background:#000"><iframe width="100%" height="100%" src="${VIDEO_EMBED}" frameborder="0" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowfullscreen></iframe></body></html>` }}
+                style={{ width: '100%', height: '100%' }}
+                javaScriptEnabled
+                allowsFullscreenVideo
+              />
+            </View>
+            <TouchableOpacity style={styles.videoBtn} onPress={() => Linking.openURL('https://youtu.be/njsHSnDGcDk')}>
               <View style={styles.videoIcon}>
                 <Ionicons name="play" size={18} color="#FFF" />
               </View>
-              <Text style={styles.videoBtnText}>Watch Video Guide</Text>
+              <Text style={styles.videoBtnText}>Open in YouTube</Text>
               <Ionicons name="chevron-forward" size={18} color={colors.primary} />
             </TouchableOpacity>
 
@@ -535,6 +546,7 @@ const makeStyles = (colors: any, isDark: boolean) =>
     statusCardTitle: { fontSize: 18, fontWeight: '800', color: colors.text, textAlign: 'center', marginTop: 12 },
     statusCardDesc: { fontSize: 13, color: colors.textSecondary, textAlign: 'center', lineHeight: 18, marginTop: 6 },
 
+    videoEmbed: { marginHorizontal: 20, height: (width - 40) * 0.5625, borderRadius: 14, overflow: 'hidden', marginBottom: 12, backgroundColor: '#000' },
     videoBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.primaryLight, marginHorizontal: 20, paddingVertical: 14, paddingHorizontal: 20, borderRadius: 14, borderWidth: 1, borderColor: colors.border, marginBottom: 20, gap: 10 },
     videoIcon: { width: 34, height: 34, borderRadius: 10, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
     videoBtnText: { fontSize: 15, fontWeight: '700', color: colors.primary, flex: 1 },

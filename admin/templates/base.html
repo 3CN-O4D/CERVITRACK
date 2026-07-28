@@ -247,6 +247,9 @@
             <a class="nav-link {% if request.path == '/followups' %}active{% endif %}" href="{{ url_for('followups') }}">
                 <i class="bi bi-clipboard-check"></i> Follow-ups
             </a>
+            <a class="nav-link {% if request.path == '/requests' %}active{% endif %}" href="{{ url_for('kit_requests') }}">
+                <i class="bi bi-box-seam"></i> Kit Requests
+            </a>
             <a class="nav-link {% if request.path == '/reports' %}active{% endif %}" href="{{ url_for('reports') }}">
                 <i class="bi bi-file-text"></i> Reports
             </a>

@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { searchClinicians } from '../services/api';
 
 const SPECIALTIES = [
@@ -27,6 +28,7 @@ const SPECIALTIES = [
 
 export default function SearchCliniciansScreen({ navigation }: any) {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
   const [selectedSpecialty, setSelectedSpecialty] = useState('');
   const [clinicians, setClinicians] = useState<any[]>([]);
@@ -62,7 +64,7 @@ export default function SearchCliniciansScreen({ navigation }: any) {
           role: 'Clinician',
           specialty: clinician.specialty,
           hospital: clinician.hospital,
-          online: true,
+          online: false,
           initials: clinician.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase(),
         },
       },
@@ -74,8 +76,8 @@ export default function SearchCliniciansScreen({ navigation }: any) {
   };
 
   return (
-    <View style={[s.container, { backgroundColor: colors.bg }]}>
-      <View style={[s.header, { paddingTop: 50 }]}>
+      <View style={[s.container, { backgroundColor: colors.bg }]}>
+      <View style={[s.header, { paddingTop: insets.top + 10 }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={s.backBtn}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
@@ -141,7 +143,6 @@ export default function SearchCliniciansScreen({ navigation }: any) {
                     <Text style={[s.cardExp, { color: colors.textSecondary }]}>{item.years_experience} years experience</Text>
                   )}
                 </View>
-                <View style={[s.onlineDot, { backgroundColor: colors.success }]} />
               </View>
               {item.bio ? <Text style={[s.cardBio, { color: colors.textSecondary }]} numberOfLines={2}>{item.bio}</Text> : null}
               <View style={s.cardActions}>

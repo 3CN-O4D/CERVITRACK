@@ -102,6 +102,14 @@ MOCK_FOLLOWUPS = [
     {'id': 5, 'user_id': 5, 'user_name': 'Mary Akinyi', 'screening_id': 5, 'completed': 0, 'completed_at': None, 'notes': ''},
 ]
 
+MOCK_KIT_REQUESTS = [
+    {'id': 1, 'user_id': 1, 'user_name': 'Amina Mwangi', 'user_phone': '+254712345678', 'user_county': 'Nairobi', 'user_sub_county': 'Westlands', 'user_ward': 'Kitisuru', 'status': 'pending', 'created_at': '2026-07-20 09:15:00', 'admin_notes': ''},
+    {'id': 2, 'user_id': 4, 'user_name': 'Sarah Wanjiku', 'user_phone': '+254745678901', 'user_county': 'Kiambu', 'user_sub_county': 'Thika', 'user_ward': 'Township', 'status': 'contacted', 'created_at': '2026-07-19 14:30:00', 'admin_notes': 'Called - will pick up at facility'},
+    {'id': 3, 'user_id': 7, 'user_name': 'Faith Nyambura', 'user_phone': '+254778901234', 'user_county': 'Kisumu', 'user_sub_county': 'Kisumu East', 'user_ward': 'Manyatta', 'status': 'delivered', 'created_at': '2026-07-15 10:00:00', 'admin_notes': 'Kit delivered to facility'},
+    {'id': 4, 'user_id': 2, 'user_name': 'Grace Otieno', 'user_phone': '+254723456789', 'user_county': 'Mombasa', 'user_sub_county': 'Mvita', 'user_ward': 'Majengo', 'status': 'pending', 'created_at': '2026-07-22 08:45:00', 'admin_notes': ''},
+    {'id': 5, 'user_id': 5, 'user_name': 'Mary Akinyi', 'user_phone': '+254756789012', 'user_county': 'Nakuru', 'user_sub_county': 'Nakuru Town', 'user_ward': 'Kaptembwa', 'status': 'cancelled', 'created_at': '2026-07-10 16:20:00', 'admin_notes': 'Patient withdrew request'},
+]
+
 
 def login_required(f):
     @wraps(f)
@@ -645,6 +653,33 @@ def followup_toggle(followup_id):
         fup['completed_at'] = None
     flash(f'Follow-up #{followup_id} updated', 'success')
     return redirect(url_for('followups'))
+
+
+@app.route('/requests')
+@login_required
+def kit_requests():
+    status_filter = request.args.get('status', '')
+    requests = MOCK_KIT_REQUESTS
+    if status_filter:
+        requests = [r for r in requests if r['status'] == status_filter]
+    return render_template('requests.html', kit_requests=requests, users=_get_users_list())
+
+
+@app.route('/requests/<int:request_id>/status', methods=['POST'])
+@login_required
+def update_kit_request(request_id):
+    req = next((r for r in MOCK_KIT_REQUESTS if r['id'] == request_id), None)
+    if not req:
+        flash('Kit request not found', 'danger')
+        return redirect(url_for('kit_requests'))
+    new_status = request.form.get('status', '')
+    admin_notes = request.form.get('admin_notes', '')
+    if new_status in ('pending', 'contacted', 'delivered', 'cancelled'):
+        req['status'] = new_status
+    if admin_notes:
+        req['admin_notes'] = admin_notes
+    flash(f'Kit request #{request_id} updated to {new_status}', 'success')
+    return redirect(url_for('kit_requests'))
 
 
 @app.route('/chats')

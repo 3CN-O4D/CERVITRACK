@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { submitFeedback } from '../services/api';
@@ -20,6 +21,7 @@ const categories = [
 
 export default function FeedbackScreen({ navigation }: any) {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const [category, setCategory] = useState('');
   const [message, setMessage] = useState('');
@@ -55,7 +57,7 @@ export default function FeedbackScreen({ navigation }: any) {
   };
 
   return (
-    <ScrollView style={s.scroll} showsVerticalScrollIndicator={false}>
+    <ScrollView style={[s.scroll, { paddingTop: insets.top + 20 }]} showsVerticalScrollIndicator={false}>
       <View style={s.header}>
         <MaterialCommunityIcons name="message-text-outline" size={26} color={colors.primary} />
         <Text style={s.headerTitle}>Feedback</Text>
@@ -124,7 +126,7 @@ export default function FeedbackScreen({ navigation }: any) {
 }
 
 const styles = (colors: any) => StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: 20, paddingTop: 50, paddingBottom: 30 },
+  scroll: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: 20, paddingBottom: 30 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
   headerTitle: { fontSize: 22, fontWeight: '800', color: colors.text },
   subtitle: { fontSize: 13, fontWeight: '500', color: colors.textSecondary, marginBottom: 20, lineHeight: 18 },

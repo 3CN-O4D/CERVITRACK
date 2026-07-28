@@ -1,18 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase-admin';
+import { findUserByEmail } from '@/lib/auth-store';
 
 export async function POST(request: NextRequest) {
   try {
     const { email, password } = await request.json();
 
-    const { data: user, error } = await supabaseAdmin
-      .from('users')
-      .select('*')
-      .eq('email', email)
-      .eq('password', password)
-      .single();
+    if (!email || !password) {
+      return NextResponse.json({ error: 'Email and password are required.' }, { status: 400 });
+    }
 
-    if (error || !user) {
+    const user = findUserByEmail(email);
+
+    if (!user || user.password !== password) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
     }
 

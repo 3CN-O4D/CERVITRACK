@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Calendar, DateData } from 'react-native-calendars';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { getVaccines, getPatientAppointments, getScreenings, getUserStats } from '../services/api';
@@ -108,6 +109,7 @@ function formatDate(dateStr: string) {
 
 export default function MyHealthScreen() {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const [selectedDate, setSelectedDate] = useState('');
   const [refreshing, setRefreshing] = useState(false);
@@ -206,7 +208,7 @@ export default function MyHealthScreen() {
   const selectedAppointments = appointments.filter((a: any) => a.date === selectedDate);
 
   return (
-    <ScrollView style={[s.scroll, { backgroundColor: colors.bg }]} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}>
+    <ScrollView style={[s.scroll, { backgroundColor: colors.bg, paddingTop: insets.top + 20 }]} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}>
       {/* Header */}
       <View style={s.header}>
         <MaterialCommunityIcons name="heart-pulse" size={26} color={colors.primary} />
@@ -368,7 +370,6 @@ const s = StyleSheet.create({
   scroll: {
     flex: 1,
     paddingHorizontal: 20,
-    paddingTop: 50,
     paddingBottom: 30,
   },
   calendarCard: {

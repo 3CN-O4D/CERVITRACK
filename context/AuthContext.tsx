@@ -1,7 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { Alert, Platform } from 'react-native';
 import { supabase } from '../lib/supabase/client';
 import { getItem, setItem, removeItem } from '../services/storage';
-import { saveUser as saveUserToLocal } from '../services/localDb';
+import { saveUser as saveUserToLocal, getCurrentUser, getUser as getLocalUser, getDb } from '../services/localDb';
+import { registerViaApi, loginViaApi } from '../services/api';
 import type { User } from './types';
 
 interface AuthContextType {
@@ -11,6 +13,7 @@ interface AuthContextType {
   consentAccepted: boolean;
   acceptConsent: () => Promise<void>;
   deleteAccount: () => Promise<void>;
+  requestData: () => Promise<void>;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   loginByPhone: (phone: string) => Promise<{ success: boolean; error?: string }>;
   register: (name: string, email: string, phone: string, password: string, role: string, location?: string, county?: string, subCounty?: string, ward?: string, photoUri?: string) => Promise<{ success: boolean; error?: string }>;
@@ -21,6 +24,9 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 const CONSENT_KEY = '@cervitrack_consent';
+const LAST_USER_KEY = '@cervitrack_last_user';
+
+const CLINICIAN_ROLES = ['clinician', 'admin', 'nurse', 'lab_technician', 'facility_admin', 'county_admin', 'national_admin', 'system_admin'];
 
 function mapSupabaseUser(sbUser: any, profile: any): User {
   return {
@@ -41,6 +47,25 @@ function mapSupabaseUser(sbUser: any, profile: any): User {
   };
 }
 
+function mapLocalUser(localUser: any): User {
+  return {
+    id: localUser.id,
+    name: localUser.name || '',
+    email: localUser.email || '',
+    phone: localUser.phone || '',
+    password: '',
+    role: (localUser.role as User['role']) || 'patient',
+    photo: localUser.photo || '',
+    birthDate: localUser.birth_date || '',
+    lastHealedDate: localUser.last_healed_date || '',
+    location: [localUser.county, localUser.sub_county, localUser.ward].filter(Boolean).join(', '),
+    county: localUser.county || '',
+    subCounty: localUser.sub_county || '',
+    ward: localUser.ward || '',
+    createdAt: localUser.created_at || new Date().toISOString(),
+  };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -55,18 +80,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (consent === 'true') setConsentAccepted(true);
       } catch {}
 
-      const { data: { session } } = await supabase.auth.getSession();
-      if (mounted && session) {
-        const { data: profile } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', session.user.id)
-          .maybeSingle();
-        if (profile && mounted) {
-          setUser(mapSupabaseUser(session.user, profile));
-          saveUserToLocal(profile);
+      // Try remote session first
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (mounted && session) {
+          const { data: profile } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', session.user.id)
+            .maybeSingle();
+          if (profile && mounted) {
+            setUser(mapSupabaseUser(session.user, profile));
+            saveUserToLocal(profile);
+            if (mounted) setLoading(false);
+            return;
+          }
+        }
+      } catch {}
+
+      // Fallback to local SQLite for offline access
+      if (mounted) {
+        const localUser = getCurrentUser();
+        if (localUser) {
+          setUser(mapLocalUser(localUser));
+          setConsentAccepted(true);
+          // Mark as last user so re-login doesn't wipe data
+          await setItem(LAST_USER_KEY, localUser.id);
         }
       }
+
       if (mounted) setLoading(false);
     };
 
@@ -135,44 +177,155 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // Clear local data for clean data isolation
+  const clearLocalSession = useCallback(async () => {
+    try {
+      const database = getDb();
+      database.execSync(`
+        DELETE FROM screenings;
+        DELETE FROM vaccines;
+        DELETE FROM appointments;
+        DELETE FROM notifications;
+        DELETE FROM messages;
+        DELETE FROM conversations;
+        DELETE FROM lab_results;
+        DELETE FROM kit_requests;
+        DELETE FROM sample_kits;
+        DELETE FROM feedback;
+        DELETE FROM sync_queue;
+      `);
+    } catch {}
+  }, []);
+
   const deleteAccount = useCallback(async () => {
     if (!user) return;
     try {
-      await supabase.from('screenings').delete().eq('profile_id', user.id);
-      await supabase.from('appointments').delete().eq('user_id', user.id);
-      await supabase.from('notifications').delete().eq('user_id', user.id);
+      const tables = [
+        'screenings', 'vaccines', 'appointments', 'notifications',
+        'lab_results', 'test_results', 'followups', 'feedback',
+        'consent_log', 'kit_requests', 'sample_kits',
+      ];
+      for (const table of tables) {
+        try {
+          await supabase.from(table).delete().eq('user_id', user.id);
+        } catch {}
+        try {
+          await supabase.from(table).delete().eq('profile_id', user.id);
+        } catch {}
+        try {
+          await supabase.from(table).delete().eq('patient_id', user.id);
+        } catch {}
+      }
       await supabase.from('users').delete().eq('id', user.id);
     } catch {}
+    // Clear local SQLite
+    await clearLocalSession();
     setUser(null);
     await supabase.auth.signOut();
     await removeItem(CONSENT_KEY);
+  }, [user, clearLocalSession]);
+
+  const requestData = useCallback(async () => {
+    if (!user) return;
+    try {
+      const tables = [
+        'screenings', 'vaccines', 'appointments', 'notifications',
+        'lab_results', 'test_results', 'followups', 'feedback',
+        'consent_log', 'kit_requests', 'sample_kits',
+      ];
+      let report = `=== CERVITRACK DATA EXPORT ===\nUser: ${user.name} (${user.email})\nID: ${user.id}\nDate: ${new Date().toISOString()}\n\n`;
+
+      for (const table of tables) {
+        try {
+          const { data } = await supabase
+            .from(table)
+            .select('*')
+            .or(`user_id.eq.${user.id},profile_id.eq.${user.id},patient_id.eq.${user.id}`);
+          if (data && data.length > 0) {
+            report += `\n--- ${table.toUpperCase()} ---\n`;
+            report += JSON.stringify(data, null, 2) + '\n';
+          }
+        } catch {}
+      }
+
+      // Save report to local
+      const db = getDb();
+      db.runSync(
+        `INSERT OR REPLACE INTO sync_meta (key, value) VALUES (?, ?)`,
+        `data_export_${user.id}`, report
+      );
+
+      Alert.alert(
+        'Data Export',
+        'Your data has been compiled and saved locally. An admin will be notified to provide you with a downloadable copy.'
+      );
+    } catch {
+      Alert.alert('Error', 'Could not export data. Please try again later.');
+    }
   }, [user]);
+
+  const ensureUserIsolation = useCallback(async (userId: string) => {
+    const lastUserId = await getItem(LAST_USER_KEY);
+    if (lastUserId && lastUserId !== userId) {
+      await clearLocalSession();
+    }
+    await setItem(LAST_USER_KEY, userId);
+  }, [clearLocalSession]);
 
   const login = useCallback(async (email: string, password: string) => {
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      if (error || !data.user) {
-        return { success: false, error: error?.message ?? 'Invalid credentials' };
+      const apiResult = await loginViaApi(email, password);
+      if (apiResult && apiResult.user) {
+        const userData = apiResult.user;
+        if (userData.role && CLINICIAN_ROLES.includes(userData.role)) {
+          return {
+            success: false,
+            error: 'Clinician accounts cannot access the patient app. Please use the web portal at cervitrack.vercel.app',
+          };
+        }
+        saveUserToLocal({
+          id: userData.id,
+          name: userData.name || email.split('@')[0],
+          email: userData.email || email,
+          phone: userData.phone || '',
+          password,
+          role: userData.role || 'patient',
+          patient_id: userData.patient_id || userData.id,
+          created_at: new Date().toISOString(),
+        });
+        await ensureUserIsolation(userData.id);
+        return { success: true };
       }
-      return { success: true };
+      // Fall back to local SQLite
+      const localUser = getCurrentUser();
+      if (localUser && localUser.email === email) {
+        await ensureUserIsolation(localUser.id);
+        return { success: true };
+      }
+      return { success: false, error: 'Invalid credentials' };
     } catch {
       return { success: false, error: 'Login failed' };
     }
-  }, []);
+  }, [ensureUserIsolation]);
 
   const loginByPhone = useCallback(async (phone: string) => {
     try {
       const { data: profile, error: profileErr } = await supabase
         .from('users')
-        .select('email, password')
+        .select('email, password, role')
         .eq('phone', phone.trim())
         .maybeSingle();
       if (profileErr || !profile?.email) {
         return { success: false, error: 'Phone number not registered' };
       }
+
+      if (profile.role && CLINICIAN_ROLES.includes(profile.role)) {
+        return {
+          success: false,
+          error: 'Clinician accounts cannot access the patient app. Please use the web portal at cervitrack.vercel.app',
+        };
+      }
+
       const { data, error } = await supabase.auth.signInWithPassword({
         email: profile.email,
         password: profile.password || 'default123',
@@ -180,87 +333,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (error || !data.user) {
         return { success: false, error: error?.message ?? 'Login failed' };
       }
+
+      await ensureUserIsolation(data.user.id);
       return { success: true };
     } catch {
       return { success: false, error: 'Login failed' };
     }
-  }, []);
+  }, [ensureUserIsolation]);
 
   const register = useCallback(
     async (name: string, email: string, phone: string, password: string, role: string, location?: string, county?: string, subCounty?: string, ward?: string, photoUri?: string) => {
       try {
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password,
-          phone: phone || undefined,
-          options: {
-            data: {
-              name,
-              phone,
-              role,
-              county,
-              sub_county: subCounty,
-              ward,
-              photo: photoUri ?? null,
-              consent_terms: true,
-              consent_medical: true,
-              consent_at: new Date().toISOString(),
-            },
-          },
-        });
-        if (error || !data.user) {
-          return { success: false, error: error?.message ?? 'Registration failed' };
-        }
-
-        // If email confirmation is required, signIn directly so user doesn't hang
-        if (!data.session) {
-          const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
-          if (signInErr) {
-            // User created but needs email confirmation — tell them
-            return { success: false, error: 'Account created. Check your email to verify, then sign in.' };
-          }
-        }
-
-        // Create profile row in users table
-        const uid = data.user.id;
-        const patientId = `PT-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9999)).padStart(4, '0')}`;
-        const { error: profileErr } = await supabase.from('users').upsert({
-          id: uid,
-          name,
-          email,
-          phone,
-          password,
-          role: role || 'patient',
-          photo: photoUri || null,
-          county: county || '',
-          sub_county: subCounty || '',
-          ward: ward || '',
-          patient_id: patientId,
-          consent_terms: true,
-          consent_medical: true,
-          consent_at: new Date().toISOString(),
-          created_at: new Date().toISOString(),
-        }, { onConflict: 'id' });
-        if (profileErr) {
-          console.warn('Profile insert failed:', profileErr.message);
-        }
-
-        // Save user to local SQLite
+        const result = await registerViaApi({ email, password, name, phone, role, county, sub_county: subCounty, ward });
+        if (result.error) return { success: false, error: result.error };
+        const userData = result.user || result;
+        const uid = userData.id || userData.user_id || `local-${Date.now()}`;
         saveUserToLocal({
-          id: uid, name, email, phone, password, role: role || 'patient',
-          photo: photoUri || null, county: county || '', sub_county: subCounty || '',
-          ward: ward || '', patient_id: patientId, created_at: new Date().toISOString(),
+          id: uid,
+          name: userData.name || name,
+          email: userData.email || email,
+          phone: userData.phone || phone,
+          password,
+          role: userData.role || role || 'patient',
+          patient_id: userData.patient_id || uid,
+          created_at: new Date().toISOString(),
         });
-
-        // Create consent log
-        await supabase.from('consent_log').insert({
-          user_id: uid,
-          consent_type: 'registration',
-          consent_terms: true,
-          consent_medical: true,
-          accepted: true,
-        });
-
         return { success: true };
       } catch {
         return { success: false, error: 'Registration failed' };
@@ -302,7 +399,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     setUser(null);
     await supabase.auth.signOut();
-  }, []);
+    await removeItem(CONSENT_KEY);
+    await clearLocalSession();
+  }, [clearLocalSession]);
 
   return (
     <AuthContext.Provider
@@ -313,6 +412,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         consentAccepted,
         acceptConsent,
         deleteAccount,
+        requestData,
         login,
         loginByPhone,
         register,

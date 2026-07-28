@@ -13,6 +13,8 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { scanKit, registerKit, pairKit, collectKit, linkKit, searchPatients, type Kit, type KitEvent } from '../services/api';
@@ -38,6 +40,7 @@ const KITS_LOG_KEY = '@cervitrack_kits';
 
 export default function KitTrackingScreen() {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
@@ -56,6 +59,7 @@ export default function KitTrackingScreen() {
   const [searchingPatients, setSearchingPatients] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<{ id: string; name: string; patient_id: string } | null>(null);
   const scanAnim = useRef(new Animated.Value(0)).current;
+  const scanFlash = useRef(new Animated.Value(0)).current;
   const lastScanned = useRef<string>('');
   const isScanning = useRef(false);
   const hidBuffer = useRef('');
@@ -125,6 +129,11 @@ export default function KitTrackingScreen() {
     isScanning.current = true;
     lastScanned.current = data;
     setBarcode(data);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    Animated.sequence([
+      Animated.timing(scanFlash, { toValue: 1, duration: 100, useNativeDriver: true }),
+      Animated.timing(scanFlash, { toValue: 0, duration: 300, useNativeDriver: true }),
+    ]).start();
     await lookupKit(data);
     isScanning.current = false;
   }, []);
@@ -283,7 +292,7 @@ export default function KitTrackingScreen() {
   return (
     <View style={[s.container, { backgroundColor: colors.bg }]}>
       {/* Header */}
-      <View style={s.header}>
+      <View style={[s.header, { paddingTop: insets.top + 20 }]}>
         <View style={s.headerRow}>
           <MaterialCommunityIcons name="barcode" size={24} color={colors.primary} />
           <Text style={[s.headerTitle, { color: colors.text }]}>Kit Tracker</Text>
@@ -320,20 +329,20 @@ export default function KitTrackingScreen() {
             ref={cameraRef}
             style={s.camera}
             facing="back"
-            barcodeScannerSettings={{ barcodeTypes: ['qr', 'ean13', 'ean8', 'code128', 'code39', 'upc_a', 'upc_e', 'pdf417', 'aztec', 'data_matrix', 'interleaved2of5', 'codabar', 'itf'] }}
+            barcodeScannerSettings={{ barcodeTypes: ['qr', 'ean13', 'ean8', 'code128', 'code39', 'upc_a', 'upc_e', 'pdf417', 'aztec', 'datamatrix', 'codabar', 'itf14'] }}
             onBarcodeScanned={scanning ? undefined : handleBarCodeScanned}
-          >
-            <View style={s.scanOverlay}>
-              <View style={s.scanFrame}>
-                <View style={[s.corner, s.cornerTL]} />
-                <View style={[s.corner, s.cornerTR]} />
-                <View style={[s.corner, s.cornerBL]} />
-                <View style={[s.corner, s.cornerBR]} />
-                <Animated.View style={[s.scanLine2, { backgroundColor: colors.primary, transform: [{ translateY: scanLineY }] }]} />
-              </View>
-              <Text style={s.scanText}>Point camera at kit barcode</Text>
+          />
+          <Animated.View style={[s.scanFlash, { opacity: scanFlash }]} pointerEvents="none" />
+          <View style={s.scanOverlay} pointerEvents="none">
+            <View style={s.scanFrame}>
+              <View style={[s.corner, s.cornerTL]} />
+              <View style={[s.corner, s.cornerTR]} />
+              <View style={[s.corner, s.cornerBL]} />
+              <View style={[s.corner, s.cornerBR]} />
+              <Animated.View style={[s.scanLine2, { backgroundColor: colors.primary, transform: [{ translateY: scanLineY }] }]} />
             </View>
-          </CameraView>
+            <Text style={s.scanText}>Point camera at kit barcode</Text>
+          </View>
         </View>
       )}
 
@@ -397,7 +406,7 @@ export default function KitTrackingScreen() {
             <View style={s.confirmActions}>
               <TouchableOpacity
                 style={[s.confirmBtn, { backgroundColor: colors.danger }]}
-                onPress={() => { setBarcode(''); setConfirmed(false); }}
+                onPress={() => { setBarcode(''); setConfirmed(false); lastScanned.current = ''; }}
               >
                 <Text style={s.confirmBtnText}>No</Text>
               </TouchableOpacity>
@@ -533,6 +542,16 @@ export default function KitTrackingScreen() {
               </View>
             )}
 
+            {/* 25-Day Countdown */}
+            {kit.status === 'COLLECTED' && (
+              <View style={s.countdownCard}>
+                <MaterialCommunityIcons name="timer-sand" size={28} color={colors.primary} />
+                <Text style={[s.countdownLabel, { color: colors.text }]}>Estimated time remaining</Text>
+                <CountdownTimer targetDate={kit.createdAt} />
+                <Text style={[s.countdownHint, { color: colors.textSecondary }]}>Results typically ready within 25 days of collection</Text>
+              </View>
+            )}
+
             {/* Kit Timeline */}
             {kit.events && kit.events.length > 0 && (
               <View style={s.timeline}>
@@ -613,9 +632,57 @@ export default function KitTrackingScreen() {
   );
 }
 
+function CountdownTimer({ targetDate }: { targetDate: string }) {
+  const getRemaining = () => {
+    const created = new Date(targetDate).getTime();
+    const deadline = created + 25 * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    const diff = deadline - now;
+    if (diff <= 0) return { days: 0, hours: 0, minutes: 0, expired: true };
+    return {
+      days: Math.floor(diff / (24 * 60 * 60 * 1000)),
+      hours: Math.floor((diff % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000)),
+      minutes: Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000)),
+      expired: false,
+    };
+  };
+
+  const [remaining, setRemaining] = useState(getRemaining());
+
+  useEffect(() => {
+    const interval = setInterval(() => setRemaining(getRemaining()), 60000);
+    return () => clearInterval(interval);
+  }, [targetDate]);
+
+  const { colors } = useTheme();
+
+  if (remaining.expired) {
+    return <Text style={{ fontSize: 18, fontWeight: '800', color: colors.success }}>Results Ready</Text>;
+  }
+
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+      <View style={{ alignItems: 'center' }}>
+        <Text style={{ fontSize: 28, fontWeight: '800', color: colors.text }}>{remaining.days}</Text>
+        <Text style={{ fontSize: 11, color: colors.textSecondary }}>days</Text>
+      </View>
+      <Text style={{ fontSize: 20, fontWeight: '800', color: colors.textSecondary }}>:</Text>
+      <View style={{ alignItems: 'center' }}>
+        <Text style={{ fontSize: 28, fontWeight: '800', color: colors.text }}>{remaining.hours}</Text>
+        <Text style={{ fontSize: 11, color: colors.textSecondary }}>hrs</Text>
+      </View>
+      <Text style={{ fontSize: 20, fontWeight: '800', color: colors.textSecondary }}>:</Text>
+      <View style={{ alignItems: 'center' }}>
+        <Text style={{ fontSize: 28, fontWeight: '800', color: colors.text }}>{remaining.minutes}</Text>
+        <Text style={{ fontSize: 11, color: colors.textSecondary }}>min</Text>
+      </View>
+    </View>
+  );
+}
+
 const styles = (colors: any) => StyleSheet.create({
   container: { flex: 1 },
-  header: { paddingHorizontal: 20, paddingTop: 50, paddingBottom: 12 },
+  header: { paddingHorizontal: 20, paddingBottom: 12 },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   headerTitle: { fontSize: 22, fontWeight: '800' },
   headerSub: { fontSize: 13, fontWeight: '500', marginTop: 4 },
@@ -625,7 +692,8 @@ const styles = (colors: any) => StyleSheet.create({
 
   cameraWrap: { marginHorizontal: 20, height: 220, borderRadius: 20, overflow: 'hidden', marginBottom: 12 },
   camera: { flex: 1 },
-  scanOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  scanFlash: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#FFF' },
+  scanOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' },
   scanFrame: { width: 240, height: 180, position: 'relative' },
   corner: { position: 'absolute', width: 24, height: 24, borderColor: '#FFF' },
   cornerTL: { top: 0, left: 0, borderTopWidth: 3, borderLeftWidth: 3 },
@@ -669,6 +737,10 @@ const styles = (colors: any) => StyleSheet.create({
   progressLabel: { fontSize: 9, fontWeight: '600', textAlign: 'center' },
   progressBar: { height: 4, backgroundColor: '#E5E7EB', borderRadius: 2, overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: 2 },
+
+  countdownCard: { flexDirection: 'column', alignItems: 'center', gap: 8, padding: 16, marginBottom: 12, borderRadius: 14, backgroundColor: '#F0F9FF' },
+  countdownLabel: { fontSize: 12, fontWeight: '600' },
+  countdownHint: { fontSize: 11, textAlign: 'center', marginTop: 4 },
 
   actions: { marginBottom: 12 },
   actionBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 14 },

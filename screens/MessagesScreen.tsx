@@ -17,11 +17,11 @@ import {
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getItem, setItem } from '../services/storage';
 import { supabase } from '../lib/supabase/client';
 import { uploadToCloudinary } from '../lib/cloudinary';
 import * as ImagePicker from 'expo-image-picker';
-// Voice recording disabled — remove expo-av dep temporarily
 import { saveImageLocally, uploadMediaToCloudinary } from '../services/mediaStore';
 import {
   getChatContacts,
@@ -30,7 +30,6 @@ import {
   getMessages,
   sendMessage as apiSendMessage,
   sendImageMessage as apiSendImageMessage,
-
   onMessagesInsert,
 } from '../services/api';
 
@@ -108,6 +107,7 @@ function StatusIcon({ status }: { status: 'sent' | 'delivered' | 'read' }) {
 export default function MessagesScreen({ navigation }: any) {
   const { colors } = useTheme();
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [search, setSearch] = useState('');
   const [loaded, setLoaded] = useState(false);
@@ -221,7 +221,7 @@ export default function MessagesScreen({ navigation }: any) {
   );
 
   return (
-    <View style={[s.container, { backgroundColor: colors.bg }]}>
+    <View style={[s.container, { backgroundColor: colors.bg, paddingTop: insets.top }]}>
       <View style={s.mlistHeader}>
         <Text style={[s.mlistTitle, { color: colors.text }]}>Messages</Text>
       </View>
@@ -258,6 +258,7 @@ export default function MessagesScreen({ navigation }: any) {
 export function ChatDetail({ navigation, route }: any) {
   const { colors } = useTheme();
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   const { contact } = route.params as { contact: Contact };
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
@@ -521,10 +522,10 @@ export function ChatDetail({ navigation, route }: any) {
   return (
     <KeyboardAvoidingView
       style={[s.chatContainer, { backgroundColor: colors.bg }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
-      <View style={[s.chatHeader, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+      <View style={[s.chatHeader, { backgroundColor: colors.card, borderBottomColor: colors.border, paddingTop: insets.top + 12 }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={s.backBtn}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
@@ -589,7 +590,7 @@ export function ChatDetail({ navigation, route }: any) {
 /* ─── Styles ─── */
 
 const s = StyleSheet.create({
-  container: { flex: 1, paddingTop: 50 },
+  container: { flex: 1 },
   mlistHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -665,7 +666,6 @@ const s = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    paddingTop: 50,
   },
   backBtn: { padding: 4, marginRight: 8 },
   chatAvatar: {

@@ -19,7 +19,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useNotifications } from '../context/NotificationContext';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
-import { submitScreening } from '../services/api';
+import { submitScreening, fetchData } from '../services/api';
 import { getItem, setItem } from '../services/storage';
 
 const { width } = Dimensions.get('window');
@@ -43,376 +43,7 @@ const riskParityThreshold = 3;
 const highRiskThreshold = 8;
 const moderateRiskThreshold = 4;
 
-const ALL_QUESTIONS: QuestionConfig[] = [
-  // ── Demographics ──
-  {
-    key: 'age',
-    title: 'What is your age?',
-    type: 'number',
-    condition: () => true,
-  },
-  {
-    key: 'weight',
-    title: 'What is your weight? (kg)',
-    type: 'number',
-    condition: () => true,
-  },
-  {
-    key: 'bmi',
-    title: 'What is your height? (cm)',
-    type: 'number',
-    condition: () => true,
-  },
-  // ── Menstrual History ──
-  {
-    key: 'periodStart',
-    title: 'How old were you when you had your first period?',
-    type: 'single',
-    options: [
-      { label: 'Under 12', value: 'under12' },
-      { label: '12-14', value: '12_14' },
-      { label: '15+', value: 'over15' },
-    ],
-    condition: (a) => (a.age as number) >= 12,
-  },
-  {
-    key: 'cycleRegular',
-    title: 'Are your menstrual cycles regular?',
-    type: 'single',
-    options: [
-      { label: 'Yes, regular', value: 'regular' },
-      { label: 'Sometimes irregular', value: 'sometimes' },
-      { label: 'Very irregular', value: 'irregular' },
-    ],
-    condition: (a) => (a.age as number) >= 12,
-  },
-  // ── Pregnancy History ──
-  {
-    key: 'pregnancies',
-    title: 'How many times have you been pregnant?',
-    type: 'single',
-    options: [
-      { label: '0', value: '0' },
-      { label: '1-2', value: '1_2' },
-      { label: '3-4', value: '3_4' },
-      { label: '5+', value: '5plus' },
-    ],
-    condition: (a) => (a.age as number) >= ageThreshold,
-  },
-  {
-    key: 'births',
-    title: 'How many births have you had?',
-    type: 'number',
-    condition: (a) => {
-      const preg = a.pregnancies as string | null;
-      return preg !== null && preg !== '0';
-    },
-  },
-  {
-    key: 'firstPregnancyAge',
-    title: 'How old were you at your first pregnancy?',
-    type: 'single',
-    options: [
-      { label: 'Under 18', value: 'under18' },
-      { label: '18-25', value: '18_25' },
-      { label: 'Over 25', value: 'over25' },
-    ],
-    condition: (a) => {
-      const preg = a.pregnancies as string | null;
-      return preg !== null && preg !== '0';
-    },
-  },
-  // ── Sexual History ──
-  {
-    key: 'sexuallyActive',
-    title: 'Are you currently sexually active?',
-    type: 'single',
-    options: [
-      { label: 'Yes', value: 'yes' },
-      { label: 'No', value: 'no' },
-    ],
-    condition: (a) => (a.age as number) >= 14,
-  },
-  {
-    key: 'ageFirstIntercourse',
-    title: 'At what age did you first have sexual intercourse?',
-    type: 'single',
-    options: [
-      { label: 'Under 16', value: 'under16' },
-      { label: '16-18', value: '16_18' },
-      { label: '19-25', value: '19_25' },
-      { label: 'Over 25', value: 'over25' },
-      { label: 'Prefer not to say', value: 'prefer_not' },
-    ],
-    condition: (a) => a.sexuallyActive === 'yes' || (a.age as number) >= 16,
-  },
-  {
-    key: 'partners',
-    title: 'How many sexual partners have you had in your lifetime?',
-    type: 'single',
-    options: [
-      { label: '1', value: '1' },
-      { label: '2-3', value: '2_3' },
-      { label: '4-6', value: '4_6' },
-      { label: '7+', value: '7plus' },
-      { label: 'Prefer not to say', value: 'prefer_not' },
-    ],
-    condition: () => true,
-  },
-  {
-    key: 'newPartners',
-    title: 'New sexual partners in the last year?',
-    type: 'single',
-    options: [
-      { label: '0', value: '0' },
-      { label: '1', value: '1' },
-      { label: '2+', value: '2plus' },
-    ],
-    condition: (a) => a.sexuallyActive === 'yes',
-  },
-  {
-    key: 'condomUse',
-    title: 'How often do you use condoms?',
-    type: 'single',
-    options: [
-      { label: 'Always', value: 'always' },
-      { label: 'Sometimes', value: 'sometimes' },
-      { label: 'Never', value: 'never' },
-      { label: 'Not applicable', value: 'na' },
-    ],
-    condition: (a) => a.sexuallyActive === 'yes',
-  },
-  {
-    key: 'stiHistory',
-    title: 'Have you ever been diagnosed with an STI?',
-    type: 'single',
-    options: [
-      { label: 'No', value: 'no' },
-      { label: 'Yes, treated', value: 'treated' },
-      { label: 'Yes, recurring', value: 'recurring' },
-    ],
-    condition: () => true,
-  },
-  // ── Contraception ──
-  {
-    key: 'contraceptives',
-    title: 'Do you use hormonal contraceptives?',
-    type: 'single',
-    options: [
-      { label: 'Yes, 5+ years', value: 'long_term' },
-      { label: 'Yes, under 5 years', value: 'short_term' },
-      { label: 'No', value: 'no' },
-    ],
-    condition: () => true,
-  },
-  // ── Medical History ──
-  {
-    key: 'hiv',
-    title: 'What is your HIV status?',
-    type: 'single',
-    options: [
-      { label: 'Positive', value: 'positive' },
-      { label: 'Negative', value: 'negative' },
-      { label: 'Unknown', value: 'unknown' },
-    ],
-    condition: () => true,
-  },
-  {
-    key: 'immunocompromised',
-    title: 'Do you have any condition that weakens your immune system?',
-    type: 'single',
-    options: [
-      { label: 'No', value: 'no' },
-      { label: 'Organ transplant', value: 'transplant' },
-      { label: 'Autoimmune disease', value: 'autoimmune' },
-      { label: 'Long-term steroid use', value: 'steroids' },
-      { label: 'Other', value: 'other' },
-    ],
-    condition: () => true,
-  },
-  {
-    key: 'diabetes',
-    title: 'Do you have diabetes?',
-    type: 'single',
-    options: [
-      { label: 'No', value: 'no' },
-      { label: 'Type 1', value: 'type1' },
-      { label: 'Type 2', value: 'type2' },
-    ],
-    condition: () => true,
-  },
-  // ── Vaccination ──
-  {
-    key: 'vaccine',
-    title: 'Have you received the HPV vaccine?',
-    type: 'single',
-    options: [
-      { label: 'Fully vaccinated', value: 'full' },
-      { label: 'Partially vaccinated', value: 'partial' },
-      { label: 'Not vaccinated', value: 'none' },
-    ],
-    condition: () => true,
-  },
-  {
-    key: 'vaccineReason',
-    title: 'Why haven\'t you been vaccinated?',
-    type: 'single',
-    options: [
-      { label: 'Not offered/available', value: 'not_offered' },
-      { label: 'Too old/young', value: 'age' },
-      { label: 'Safety concerns', value: 'safety' },
-      { label: 'Cost', value: 'cost' },
-      { label: 'Other', value: 'other' },
-    ],
-    condition: (a) => a.vaccine === 'none' || a.vaccine === 'partial',
-  },
-  // ── Screening History ──
-  {
-    key: 'previous',
-    title: 'Have you had a cervical screening (Pap smear or HPV test) before?',
-    type: 'single',
-    options: [
-      { label: 'Yes, within 3 years', value: 'recent' },
-      { label: 'Yes, over 3 years ago', value: 'old' },
-      { label: 'Never screened', value: 'never' },
-    ],
-    condition: () => true,
-  },
-  {
-    key: 'lastResult',
-    title: 'What was your last screening result?',
-    type: 'single',
-    options: [
-      { label: 'Normal / Negative', value: 'normal' },
-      { label: 'Abnormal cells found', value: 'abnormal' },
-      { label: 'HPV positive', value: 'hpv_positive' },
-      { label: 'Not sure / don\'t remember', value: 'unsure' },
-    ],
-    condition: (a) => a.previous === 'recent' || a.previous === 'old',
-  },
-  // ── Symptoms ──
-  {
-    key: 'symptoms',
-    title: 'Which symptoms are you experiencing?',
-    type: 'single',
-    options: [
-      { label: 'No symptoms', value: 'none' },
-      { label: 'Bleeding between periods', value: 'abnormal_bleeding' },
-      { label: 'Bleeding after sex', value: 'postcoital' },
-      { label: 'Pelvic pain', value: 'pelvic_pain' },
-      { label: 'Pain during sex', value: 'pain_sex' },
-      { label: 'Unusual discharge', value: 'discharge' },
-      { label: 'Multiple symptoms', value: 'multiple' },
-    ],
-    condition: () => true,
-  },
-  {
-    key: 'symptomDuration',
-    title: 'How long have you had these symptoms?',
-    type: 'single',
-    options: [
-      { label: 'Less than 2 weeks', value: 'acute' },
-      { label: '2 weeks - 3 months', value: 'subacute' },
-      { label: 'Over 3 months', value: 'chronic' },
-    ],
-    condition: (a) => a.symptoms !== null && a.symptoms !== 'none',
-  },
-  // ── Lifestyle ──
-  {
-    key: 'smoking',
-    title: 'Do you smoke tobacco?',
-    type: 'single',
-    options: [
-      { label: 'Never smoked', value: 'never' },
-      { label: 'Current smoker', value: 'yes' },
-      { label: 'Used to smoke, quit', value: 'quit' },
-    ],
-    condition: () => true,
-  },
-  {
-    key: 'alcohol',
-    title: 'How often do you consume alcohol?',
-    type: 'single',
-    options: [
-      { label: 'Never', value: 'never' },
-      { label: 'Occasionally', value: 'occasionally' },
-      { label: 'Weekly', value: 'weekly' },
-      { label: 'Daily', value: 'daily' },
-    ],
-    condition: () => true,
-  },
-  {
-    key: 'exercise',
-    title: 'How often do you exercise?',
-    type: 'single',
-    options: [
-      { label: 'Daily', value: 'daily' },
-      { label: '2-3 times/week', value: 'moderate' },
-      { label: 'Rarely', value: 'rarely' },
-      { label: 'Never', value: 'never' },
-    ],
-    condition: () => true,
-  },
-  {
-    key: 'diet',
-    title: 'How would you describe your diet?',
-    type: 'single',
-    options: [
-      { label: 'Healthy & balanced', value: 'healthy' },
-      { label: 'Mostly healthy', value: 'mostly_healthy' },
-      { label: 'Mixed', value: 'mixed' },
-      { label: 'Mostly processed / fast food', value: 'unhealthy' },
-    ],
-    condition: () => true,
-  },
-  // ── Family History ──
-  {
-    key: 'family',
-    title: 'Has anyone in your immediate family had cervical cancer?',
-    type: 'single',
-    options: [
-      { label: 'No', value: 'no' },
-      { label: 'Yes, mother/sister', value: 'immediate' },
-      { label: 'Yes, other relative', value: 'extended' },
-    ],
-    condition: () => true,
-  },
-  {
-    key: 'familyOther',
-    title: 'Has anyone in your family had other cancers?',
-    type: 'single',
-    options: [
-      { label: 'No', value: 'no' },
-      { label: 'Breast cancer', value: 'breast' },
-      { label: 'Ovarian cancer', value: 'ovarian' },
-      { label: 'Other', value: 'other' },
-    ],
-    condition: () => true,
-  },
-  // ── Access to Care ──
-  {
-    key: 'distance',
-    title: 'How far is the nearest health facility from your home?',
-    type: 'single',
-    options: [
-      { label: 'Less than 5 km', value: 'near' },
-      { label: '5-15 km', value: 'medium' },
-      { label: 'Over 15 km', value: 'far' },
-    ],
-    condition: () => true,
-  },
-  {
-    key: 'insurance',
-    title: 'Do you have health insurance?',
-    type: 'single',
-    options: [
-      { label: 'Yes, NHIF', value: 'nhif' },
-      { label: 'Yes, private', value: 'private' },
-      { label: 'No insurance', value: 'none' },
-    ],
-    condition: () => true,
-  },
-];
+
 
 function calculateRisk(answers: AnswerMap): { score: number; level: string; factors: { label: string; active: boolean }[] } {
   let score = 0;
@@ -597,13 +228,26 @@ export default function ScreeningScreen() {
   const [currentQ, setCurrentQ] = useState(0);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [questions, setQuestions] = useState<QuestionConfig[]>([]);
 
   const slideAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
+  useEffect(() => {
+    (async () => {
+      const data = await fetchData('questions');
+      if (data && Array.isArray(data)) {
+        setQuestions(data.map((q: any) => ({
+          ...q,
+          condition: q.condition ? new Function('a', `return ${q.condition}`) : () => true,
+        })));
+      }
+    })();
+  }, []);
+
   const visibleQuestions = useMemo(
-    () => ALL_QUESTIONS.filter((q) => q.condition(answers)),
-    [answers],
+    () => questions.filter((q) => q.condition(answers)),
+    [answers, questions],
   );
 
   const currentQDef = visibleQuestions[currentQ];

@@ -12,6 +12,7 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
   const [scanning, setScanning] = useState(true);
   const readerRef = useRef<HTMLDivElement>(null);
   const scannerRef = useRef<any>(null);
+  const scannedRef = useRef(false);
   const uniqueId = useId();
 
   useEffect(() => {
@@ -34,13 +35,15 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
             qrbox: { width: 250, height: 150 },
             aspectRatio: 1.0,
           },
-          (decodedText: string) => {
-            if (mounted) {
-              onScan(decodedText);
-              scanner.stop().catch(() => {});
-              try { scanner.clear(); } catch {}
-              onClose();
-            }
+          async (decodedText: string) => {
+            if (!mounted || scannedRef.current) return;
+            scannedRef.current = true;
+            try {
+              await scanner.stop();
+              await scanner.clear();
+            } catch { /* ignore cleanup errors */ }
+            onScan(decodedText);
+            onClose();
           },
           () => {},
         );
@@ -62,7 +65,7 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
 
     return () => {
       mounted = false;
-      if (scannerRef.current) {
+      if (scannerRef.current && !scannedRef.current) {
         scannerRef.current.stop().catch(() => {});
         scannerRef.current.clear().catch(() => {});
       }

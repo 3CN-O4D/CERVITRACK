@@ -10,6 +10,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useTheme, type ThemeColors } from '../context/ThemeContext';
 import { useNotifications } from '../context/NotificationContext';
@@ -22,6 +23,7 @@ const ACTION_CARD_W = (width - 40 - CARD_GAP) / 2;
 
 export default function HomeScreen({ navigation }: any) {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { unreadCount } = useNotifications();
   const [riskExpanded, setRiskExpanded] = useState(false);
@@ -122,7 +124,7 @@ export default function HomeScreen({ navigation }: any) {
   };
 
   return (
-    <ScrollView style={s.scroll} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}>
+    <ScrollView style={[s.scroll, { paddingTop: insets.top + 20 }]} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}>
       {/* Header */}
       <View style={s.header}>
         <View style={s.brandRow}>
@@ -287,7 +289,6 @@ const styles = (colors: ThemeColors) => StyleSheet.create({
     flex: 1,
     backgroundColor: colors.bg,
     paddingHorizontal: 20,
-    paddingTop: 50,
     paddingBottom: 30,
   },
   header: {

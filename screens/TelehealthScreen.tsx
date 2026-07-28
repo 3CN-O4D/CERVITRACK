@@ -15,7 +15,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
-import { sendMessage } from '../services/api';
+import { searchClinicians, sendMessage } from '../services/api';
 import * as db from '../services/db';
 
 interface Message {
@@ -25,9 +25,8 @@ interface Message {
   timestamp: Date;
 }
 
-const EXPERT_NAME = 'Dr. Sarah';
-const EXPERT_ROLE = 'HPV Specialist';
-
+const TELEHEALTH_CONTACT_ID = 1;
+const WELCOME_TEXT = "Hello! I'm your AI health assistant. I'm here to answer any questions you have about HPV, cervical cancer screening, vaccines, or women's health. How can I help you today?";
 const EXPERT_RESPONSES = [
   'Thank you for reaching out. HPV is a very common virus, and most infections clear on their own. Would you like to know more about how it spreads?',
   'That\'s an excellent question! The HPV vaccine is recommended for girls and boys from age 9, with catch-up vaccination available up to age 45 in many countries.',
@@ -42,9 +41,6 @@ const EXPERT_RESPONSES = [
   'A healthy immune system clears most HPV infections within 1-2 years. Eating well, exercising, and not smoking all support your immune system\'s ability to fight HPV.',
   'Yes, using condoms reduces but does not eliminate the risk of HPV transmission, as the virus can infect areas not covered by a condom. Vaccination remains the best protection.',
 ];
-
-const TELEHEALTH_CONTACT_ID = 999;
-const WELCOME_MSG = `Hello! I'm ${EXPERT_NAME}, your ${EXPERT_ROLE}. I'm here to answer any questions you have about HPV, cervical cancer screening, vaccines, or women's health. How can I help you today?`;
 
 const QUICK_CHIPS = [
   'What is HPV?',
@@ -74,6 +70,19 @@ export default function TelehealthScreen() {
   const [isTyping, setIsTyping] = useState(false);
   const [conversationId, setConversationId] = useState<number | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [expert, setExpert] = useState({ name: 'Dr. Sarah', role: 'HPV Specialist' });
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const providers = await searchClinicians('');
+        const found = providers?.[0];
+        if (found) {
+          setExpert({ name: found.name || 'Dr. Sarah', role: found.specialty || 'HPV Specialist' });
+        }
+      } catch { /* ignore, use defaults */ }
+    })();
+  }, []);
 
   const scrollToBottom = () => {
     setTimeout(() => {
@@ -92,8 +101,8 @@ export default function TelehealthScreen() {
         const conv = await db.getOrCreateConversation(
           user?.id ?? '',
           TELEHEALTH_CONTACT_ID,
-          EXPERT_NAME,
-          EXPERT_ROLE,
+          expert.name,
+          expert.role,
           1,
         );
         setConversationId(conv.id);
@@ -104,7 +113,7 @@ export default function TelehealthScreen() {
         } else {
           setMessages([{
             id: 'welcome',
-            text: WELCOME_MSG,
+            text: WELCOME_TEXT,
             sender: 'expert',
             timestamp: new Date(),
           }]);
@@ -112,14 +121,14 @@ export default function TelehealthScreen() {
       } catch {
         setMessages([{
           id: 'welcome',
-          text: WELCOME_MSG,
+          text: WELCOME_TEXT,
           sender: 'expert',
           timestamp: new Date(),
         }]);
       }
       setLoaded(true);
     })();
-  }, []);
+  }, [expert.name, expert.role]);
 
   const saveAndAddMessage = async (content: string, senderType: string) => {
     if (!conversationId) return null;
@@ -195,8 +204,8 @@ export default function TelehealthScreen() {
             <View style={[styles.statusDot, { backgroundColor: colors.success }]} />
           </View>
           <View style={styles.expertInfo}>
-            <Text style={styles.expertName}>{EXPERT_NAME}</Text>
-            <Text style={styles.expertRole}>{EXPERT_ROLE}</Text>
+            <Text style={styles.expertName}>{expert.name}</Text>
+            <Text style={styles.expertRole}>{expert.role}</Text>
             <View style={styles.statusRow}>
               <View style={[styles.miniDot, { backgroundColor: colors.success }]} />
               <Text style={styles.statusText}>{t('telehealth.expertOnline')}</Text>

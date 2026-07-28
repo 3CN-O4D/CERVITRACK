@@ -8,6 +8,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { getLabResults, getKitResults } from '../services/api';
@@ -37,6 +38,7 @@ const resultLabel = (result: string) => {
 
 export default function MyResultsScreen({ navigation }: any) {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const [results, setResults] = useState<Result[]>([]);
   const [loading, setLoading] = useState(true);
@@ -89,7 +91,7 @@ export default function MyResultsScreen({ navigation }: any) {
 
   return (
     <ScrollView
-      style={[s.scroll, { backgroundColor: colors.bg }]}
+      style={[s.scroll, { backgroundColor: colors.bg, paddingTop: insets.top + 20 }]}
       showsVerticalScrollIndicator={false}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
     >
@@ -166,7 +168,7 @@ export default function MyResultsScreen({ navigation }: any) {
 }
 
 const s = StyleSheet.create({
-  scroll: { flex: 1, paddingHorizontal: 20, paddingTop: 50, paddingBottom: 30 },
+  scroll: { flex: 1, paddingHorizontal: 20, paddingBottom: 30 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 24 },
   backBtn: { padding: 4, marginRight: 4 },
   headerTitle: { fontSize: 22, fontWeight: '800', flex: 1 },

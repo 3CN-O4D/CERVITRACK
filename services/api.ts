@@ -1,6 +1,35 @@
 import { supabase } from '../lib/supabase/client';
 import * as localDb from './localDb';
 
+const API_BASE = 'https://cervitrack.vercel.app/api';
+
+export async function fetchData(endpoint: string): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE}/data/${endpoint}`);
+    if (res.ok) return await res.json();
+    return null;
+  } catch { return null; }
+}
+
+export async function registerViaApi(data: { email: string; password: string; name: string; phone?: string; role?: string; county?: string; sub_county?: string; ward?: string }): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE}/auth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+    if (res.ok) return await res.json();
+    const err = await res.json().catch(() => ({}));
+    return { error: err.error || 'Registration failed' };
+  } catch {
+    return { error: 'Network error. Please try again.' };
+  }
+}
+
+export async function loginViaApi(email: string, password: string): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
+    if (res.ok) return await res.json();
+    return null;
+  } catch { return null; }
+}
+
 // ─── Types ────────────────────────────────────────────────────
 
 export interface ScreeningPayload {
