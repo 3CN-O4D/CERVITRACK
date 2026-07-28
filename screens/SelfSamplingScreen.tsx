@@ -10,7 +10,9 @@ import {
   Alert,
   ActivityIndicator,
   Linking,
+  Dimensions,
 } from 'react-native';
+import { WebView } from 'react-native-webview';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
@@ -336,13 +338,16 @@ export default function SelfSamplingScreen() {
               </Text>
             </View>
 
-            <TouchableOpacity style={styles.videoBtn} onPress={() => Linking.openURL(VIDEO_URL)}>
-              <View style={styles.videoIcon}>
-                <Ionicons name="play" size={18} color="#FFF" />
-              </View>
-              <Text style={styles.videoBtnText}>Watch Video Guide</Text>
-              <Ionicons name="chevron-forward" size={18} color={colors.primary} />
-            </TouchableOpacity>
+            <View style={styles.videoEmbed}>
+              <WebView
+                source={{ uri: 'https://www.youtube.com/embed/njsHSnDGcDk?autoplay=0&modestbranding=1&rel=0' }}
+                style={styles.videoFrame}
+                javaScriptEnabled
+                domStorageEnabled
+                allowsFullscreenVideo
+                scrollEnabled={false}
+              />
+            </View>
 
             <View style={styles.sectionHeader}>
               <MaterialCommunityIcons name="clipboard-list" size={20} color={colors.primary} />
@@ -585,9 +590,8 @@ const makeStyles = (colors: any, isDark: boolean) =>
     statusCardTitle: { fontSize: 18, fontWeight: '800', color: colors.text, textAlign: 'center', marginTop: 12 },
     statusCardDesc: { fontSize: 13, color: colors.textSecondary, textAlign: 'center', lineHeight: 18, marginTop: 6 },
 
-    videoBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.primaryLight, marginHorizontal: 20, paddingVertical: 14, paddingHorizontal: 20, borderRadius: 14, borderWidth: 1, borderColor: colors.border, marginBottom: 20, gap: 10 },
-    videoIcon: { width: 34, height: 34, borderRadius: 10, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
-    videoBtnText: { fontSize: 15, fontWeight: '700', color: colors.primary, flex: 1 },
+    videoEmbed: { marginHorizontal: 20, marginBottom: 20, borderRadius: 14, overflow: 'hidden', height: 200 },
+    videoFrame: { width: '100%', height: 200 },
 
     sectionHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, gap: 8, marginBottom: 10, marginTop: 4 },
     sectionTitle: { fontSize: 16, fontWeight: '800', color: colors.text, flex: 1 },

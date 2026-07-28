@@ -396,7 +396,7 @@ return (
             <View style={s.datePickerCols}>
               <View style={s.datePickerCol}>
                 <Text style={[s.datePickerLabel, { color: colors.textSecondary }]}>Year</Text>
-                <ScrollView style={s.datePickerScroll}>
+                  <ScrollView style={[s.datePickerScroll, { height: 200 }]}>
                   {Array.from({ length: 100 }, (_, i) => 1940 + i).reverse().map((y) => (
                     <TouchableOpacity
                       key={y}

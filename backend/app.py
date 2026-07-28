@@ -422,13 +422,28 @@ def run_db_migration():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
-        CREATE TABLE IF NOT EXISTS consent_log (
+        CREATE TABLE IF NOT EXISTS kit_requests (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
-            consent_type TEXT NOT NULL,
-            accepted BOOLEAN DEFAULT 1,
-            accepted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            user_name TEXT,
+            user_phone TEXT,
+            user_county TEXT,
+            user_sub_county TEXT,
+            user_ward TEXT,
+            status TEXT DEFAULT 'pending',
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
+
+        CREATE TABLE IF NOT EXISTS sample_kits (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            barcode TEXT UNIQUE NOT NULL,
+            status TEXT DEFAULT 'REGISTERED',
+            patient_id INTEGER,
+            collected_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
     """)
     conn.commit()
     conn.close()
@@ -1741,18 +1756,25 @@ def admin_chat_send():
 
 # ───────────────────────── Feedback ──────────────────────
 
-@app.route("/api/feedback", methods=["POST"])
-def submit_feedback():
-    data = request.json
-    if not data:
-        return jsonify({"error": "Request body required"}), 400
+@app.route("/api/kit/requests", methods=["GET"])
+def get_kit_requests():
     conn = get_db()
-    conn.execute(
-        "INSERT INTO feedback (user_id, category, message, contact) VALUES (?, ?, ?, ?)",
-        (data.get("user_id"), data.get("category"), data.get("message"), data.get("contact", "")),
-    )
-    conn.commit(); conn.close()
-    return jsonify({"success": True}), 201
+    rows = conn.execute("SELECT * FROM kit_requests ORDER BY created_at DESC").fetchall()
+    conn.close()
+    return jsonify(rows_to_list(rows)), 200
+
+@app.route("/api/sample-kits/awaiting", methods=["GET"])
+def awaiting_collection():
+    conn = get_db()
+    # Query kits registered but not collected, calculate days left (25 - elapsed)
+    rows = conn.execute("""
+        SELECT *, 
+               CAST((julianday('now') - julianday(created_at)) AS INTEGER) as elapsed_days
+        FROM sample_kits 
+        WHERE status = 'REGISTERED'
+    """).fetchall()
+    conn.close()
+    return jsonify([{**dict(r), "days_left": max(0, 25 - r["elapsed_days"])} for r in rows]), 200
 
 
 # ───────────────────────── Providers ──────────────────────

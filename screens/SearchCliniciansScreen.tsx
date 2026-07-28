@@ -29,20 +29,25 @@ export default function SearchCliniciansScreen({ navigation }: any) {
   const { colors } = useTheme();
   const [query, setQuery] = useState('');
   const [selectedSpecialty, setSelectedSpecialty] = useState('');
+  const [selectedHospital, setSelectedHospital] = useState('');
   const [clinicians, setClinicians] = useState<any[]>([]);
+  const [hospitals, setHospitals] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadClinicians = useCallback(async () => {
     try {
-      const data = await searchClinicians(query || undefined, undefined, selectedSpecialty || undefined);
+      const data = await searchClinicians(query || undefined, undefined, selectedSpecialty || undefined, selectedHospital || undefined);
       setClinicians(data);
+      // Extract unique hospitals
+      const uniqueHospitals = Array.from(new Set(data.map((c: any) => c.hospital).filter(Boolean)));
+      setHospitals(uniqueHospitals as string[]);
     } catch {
       setClinicians([]);
     } finally {
       setLoading(false);
     }
-  }, [query, selectedSpecialty]);
+  }, [query, selectedSpecialty, selectedHospital]);
 
   useEffect(() => { loadClinicians(); }, [loadClinicians]);
 

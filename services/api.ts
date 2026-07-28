@@ -425,7 +425,7 @@ export async function getLabResults(userId: string) {
 
 // ─── Clinicians ───────────────────────────────────────────────
 
-export async function searchClinicians(query?: string, county?: string, specialty?: string): Promise<Clinician[]> {
+export async function searchClinicians(query?: string, county?: string, specialty?: string, hospital?: string): Promise<Clinician[]> {
   try {
     let q = supabase
       .from('providers')
@@ -434,6 +434,7 @@ export async function searchClinicians(query?: string, county?: string, specialt
     if (query) q = q.or(`name.ilike.%${query}%,hospital.ilike.%${query}%,specialty.ilike.%${query}%`);
     if (county) q = q.eq('county', county);
     if (specialty) q = q.eq('specialty', specialty);
+    if (hospital) q = q.eq('hospital', hospital);
     const { data, error } = await q.order('name', { ascending: true });
     if (error) throw error;
     return data ?? [];

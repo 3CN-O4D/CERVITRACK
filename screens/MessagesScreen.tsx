@@ -550,11 +550,12 @@ export function ChatDetail({ navigation, route }: any) {
   );
 
   return (
-    <KeyboardAvoidingView
+      <KeyboardAvoidingView
       style={[s.chatContainer, { backgroundColor: colors.bg }]}
-      behavior="padding"
-      keyboardVerticalOffset={0}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 80}
     >
+
       <View style={[s.chatHeader, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={s.backBtn}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />

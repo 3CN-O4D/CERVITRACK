@@ -187,6 +187,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     await supabase.auth.signOut();
     await removeItem(CONSENT_KEY);
+    await clearAllData();
   }, [user]);
 
   const login = useCallback(async (email: string, password: string) => {
