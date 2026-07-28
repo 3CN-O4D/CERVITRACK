@@ -102,16 +102,17 @@ const ALL_QUESTIONS: QuestionConfig[] = [
   },
   {
     key: 'births',
-    title: 'How many births have you had?',
+    title: 'How many children have you delivered?',
     type: 'number',
     condition: (a) => {
       const preg = a.pregnancies as string | null;
+      // Only ask if they have been pregnant at least once
       return preg !== null && preg !== '0';
     },
   },
   {
     key: 'firstPregnancyAge',
-    title: 'How old were you at your first pregnancy?',
+    title: 'How old were you at your first birth?',
     type: 'single',
     options: [
       { label: 'Under 18', value: 'under18' },
@@ -119,8 +120,9 @@ const ALL_QUESTIONS: QuestionConfig[] = [
       { label: 'Over 25', value: 'over25' },
     ],
     condition: (a) => {
-      const preg = a.pregnancies as string | null;
-      return preg !== null && preg !== '0';
+      const births = a.births as number | null;
+      // Only ask if they have actually delivered at least one child
+      return births !== null && births > 0;
     },
   },
   // ── Sexual History ──

@@ -27,6 +27,7 @@ interface NotificationContextType {
   unreadCount: number;
   addNotification: (n: Omit<AppNotification, 'id' | 'read' | 'createdAt'>) => void;
   markRead: (id: string) => void;
+  deleteNotification: (id: string) => void;
   markAllRead: () => void;
 }
 
