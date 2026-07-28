@@ -85,6 +85,7 @@ window.addEventListener('message', function(e) {
 export default function ScanScreen() {
   const { colors } = useTheme();
   const { user } = useAuth();
+  const [torch, setTorch] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
   const webViewRef = useRef<WebView>(null);
@@ -127,16 +128,20 @@ export default function ScanScreen() {
     setTestLogs(logs);
   };
 
-  const captureImage = async () => {
-    if (!cameraRef.current) return;
-    try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.8, base64: false });
-      if (photo?.uri) {
-        setCapturedUri(photo.uri);
-        setStep('preview');
-      }
-    } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Failed to capture image');
+  const pickImageFromGallery = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Access to gallery required.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.8,
+      allowsEditing: true,
+    });
+    if (!result.canceled && result.assets?.[0]) {
+      setCapturedUri(result.assets[0].uri);
+      setStep('preview');
     }
   };
 
@@ -259,7 +264,15 @@ await addTestResult({ user_id: user?.id || '', result: log.result, date: log.dat
             Place test kit flat on a surface. Position result window inside the guide.
           </Text>
           <View style={s.cameraWrap}>
-            <CameraView ref={cameraRef} style={s.camera} facing="back">
+            <CameraView ref={cameraRef} style={s.camera} facing="back" enableTorch={torch}>
+              <View style={s.cameraControls}>
+                <TouchableOpacity style={s.controlBtn} onPress={() => setTorch(!torch)}>
+                  <Ionicons name={torch ? 'flash' : 'flash-outline'} size={24} color="#FFF" />
+                </TouchableOpacity>
+                <TouchableOpacity style={s.controlBtn} onPress={pickImageFromGallery}>
+                  <Ionicons name="images-outline" size={24} color="#FFF" />
+                </TouchableOpacity>
+              </View>
               <View style={s.guideOverlay}>
                 <View style={[s.guideBox, { borderColor: '#FFF' }]}>
                   <View style={s.guideLabel_left}><Text style={{color:'#FFF',fontSize:10,fontWeight:'800'}}>C</Text></View>
@@ -365,6 +378,8 @@ const styles = (colors: any) => StyleSheet.create({
   instruction: { fontSize: 13, fontWeight: '500', textAlign: 'center', lineHeight: 20, marginBottom: 12 },
   cameraWrap: { width: width - 32, height: (width - 32) * 0.75, borderRadius: 20, overflow: 'hidden', marginBottom: 16 },
   camera: { flex: 1 },
+  cameraControls: { position: 'absolute', top: 40, right: 20, gap: 16, zIndex: 10 },
+  controlBtn: { padding: 10, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20 },
   guideOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   guideBox: {
     width: GUIDE_W, height: GUIDE_H,
