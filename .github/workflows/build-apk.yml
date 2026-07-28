@@ -1,0 +1,67 @@
+name: Build Release APK
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Decode keystore
+        run: |
+          echo "${{ secrets.RELEASE_KEYSTORE }}" | base64 -d > android/app/release.keystore
+
+      - name: Build release APK
+        run: |
+          cd android
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: cervitrack-release
+          path: android/app/build/outputs/apk/release/*.apk
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: cervitrack-release
+          path: apk
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: apk/*.apk
+          body: |
+            ## CerviTrack Release APK
+
+            Download the APK below and install on your Android device.
+
+            **Note:** You may need to enable "Install from unknown sources" in your device settings.
