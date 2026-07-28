@@ -15,7 +15,7 @@ import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-ico
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
-import { scanKit, pairKit, collectKit, createKitRequest } from '../services/api';
+import { scanKit, registerKit, pairKit, collectKit, createKitRequest } from '../services/api';
 
 const VIDEO_URL = 'https://youtu.be/njsHSnDGcDk';
 
@@ -23,6 +23,7 @@ type SamplingStep =
   | 'order'
   | 'pre-scan'
   | 'pre-scan-result'
+  | 'register-kit'
   | 'learn'
   | 'procedure'
   | 'post-checklist'
@@ -106,9 +107,26 @@ export default function SelfSamplingScreen() {
         setKitMessage(found.status === 'REGISTERED' ? 'Kit found. Link it to your account to begin.' : `Kit status: ${found.status}`);
         setStep('pre-scan-result');
       } else {
-        setKitMessage('Kit not found. Check the barcode number.');
+        setKitBarcode(barcode.trim());
+        setStep('register-kit');
       }
     } catch { setKitMessage('Network error \u2014 try again later'); }
+    finally { setKitLoading(false); }
+  };
+
+  const handleRegisterKit = async () => {
+    if (!kitBarcode) return;
+    setKitLoading(true);
+    try {
+      const result = await registerKit(kitBarcode, { facilityId: 'home', registeredBy: user?.id || 'self', registeredByName: user?.name || 'Patient' });
+      if (result) {
+        setKitStatus('REGISTERED');
+        setKitMessage('Kit registered. Now link it to your account.');
+        setStep('pre-scan-result');
+      } else {
+        setKitMessage('Failed to register kit. Try again.');
+      }
+    } catch { setKitMessage('Network error'); }
     finally { setKitLoading(false); }
   };
 
@@ -268,6 +286,38 @@ export default function SelfSamplingScreen() {
               >
                 {kitLoading ? <ActivityIndicator size="small" color="#FFF" /> : <Ionicons name="link" size={18} color="#FFF" />}
                 <Text style={styles.primaryBtnText}>Link Kit to My Account</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
+
+        {/* ─── STEP: REGISTER KIT ─── */}
+        {step === 'register-kit' && (
+          <>
+            <View style={styles.heroSection}>
+              <View style={[styles.heroIconWrap, { backgroundColor: colors.warning + '20' }]}>
+                <Ionicons name="barcode-outline" size={32} color={colors.warning} />
+              </View>
+              <Text style={styles.heroTitle}>Kit Not Found</Text>
+              <Text style={styles.heroSubtitle}>
+                Barcode: {kitBarcode}
+                {'\n'}This kit isn't registered yet. Register it to begin.
+              </Text>
+            </View>
+
+            <View style={styles.statusCard}>
+              <Ionicons name="add-circle-outline" size={40} color={colors.primary} />
+              <Text style={styles.statusCardTitle}>Register this kit</Text>
+              <Text style={styles.statusCardDesc}>
+                Register the kit to your account so you can proceed with self-sampling.
+              </Text>
+              <TouchableOpacity
+                style={[styles.primaryBtn, { backgroundColor: colors.primary, marginTop: 16 }]}
+                onPress={handleRegisterKit}
+                disabled={kitLoading}
+              >
+                {kitLoading ? <ActivityIndicator size="small" color="#FFF" /> : <Ionicons name="checkmark-circle" size={18} color="#FFF" />}
+                <Text style={styles.primaryBtnText}>Register Kit</Text>
               </TouchableOpacity>
             </View>
           </>
