@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { supabase } from '../lib/supabase/client';
 import { getItem, setItem, removeItem } from '../services/storage';
-import { saveUser as saveUserToLocal } from '../services/localDb';
+import { saveUser as saveUserToLocal, getCurrentUser, clearAllData } from '../services/localDb';
 import type { User } from './types';
 
 interface AuthContextType {
@@ -65,6 +65,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (profile && mounted) {
           setUser(mapSupabaseUser(session.user, profile));
           saveUserToLocal(profile);
+        }
+      } else {
+        // No supabase session — try local SQLite for offline-first
+        const localUser = getCurrentUser();
+        if (localUser && mounted) {
+          const u: User = {
+            id: localUser.id,
+            name: localUser.name || '',
+            email: localUser.email || '',
+            phone: localUser.phone || '',
+            password: '',
+            role: localUser.role || 'patient',
+            photo: localUser.photo || '',
+            birthDate: localUser.birth_date || '',
+            lastHealedDate: localUser.last_healed_date || '',
+            location: [localUser.county, localUser.sub_county, localUser.ward].filter(Boolean).join(', '),
+            county: localUser.county || '',
+            subCounty: localUser.sub_county || '',
+            ward: localUser.ward || '',
+            createdAt: localUser.created_at || new Date().toISOString(),
+          };
+          setUser(u);
+
+          // Try silent re-auth in background
+          if (localUser.email && localUser.password) {
+            supabase.auth.signInWithPassword({
+              email: localUser.email,
+              password: localUser.password,
+            }).then(({ data, error }) => {
+              if (!error && data.session && mounted) {
+                // Refresh profile from server
+                supabase.from('users').select('*').eq('id', localUser.id).maybeSingle()
+                  .then(({ data: profile }) => {
+                    if (profile && mounted) {
+                      setUser(mapSupabaseUser(data.session.user, profile));
+                      saveUserToLocal(profile);
+                    }
+                  });
+              }
+            });
+          }
         }
       }
       if (mounted) setLoading(false);
@@ -157,6 +198,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (error || !data.user) {
         return { success: false, error: error?.message ?? 'Invalid credentials' };
       }
+      // Check role — only patients can use the mobile app
+      const { data: profile } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', data.user.id)
+        .maybeSingle();
+      if (profile && profile.role && profile.role !== 'patient') {
+        await supabase.auth.signOut();
+        return { success: false, error: 'Clinician accounts cannot use the patient app. Please use the web portal.' };
+      }
+      // Clear old user data before saving new user
+      clearAllData();
+      if (profile) {
+        saveUserToLocal({ ...profile, password });
+      }
       return { success: true };
     } catch {
       return { success: false, error: 'Login failed' };
@@ -167,11 +223,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { data: profile, error: profileErr } = await supabase
         .from('users')
-        .select('email, password')
+        .select('email, password, role')
         .eq('phone', phone.trim())
         .maybeSingle();
       if (profileErr || !profile?.email) {
         return { success: false, error: 'Phone number not registered' };
+      }
+      if (profile.role && profile.role !== 'patient') {
+        return { success: false, error: 'Clinician accounts cannot use the patient app. Please use the web portal.' };
       }
       const { data, error } = await supabase.auth.signInWithPassword({
         email: profile.email,
@@ -180,6 +239,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (error || !data.user) {
         return { success: false, error: error?.message ?? 'Login failed' };
       }
+      // Clear old user data before saving new user
+      clearAllData();
+      saveUserToLocal({ ...profile, password: profile.password || 'default123' });
       return { success: true };
     } catch {
       return { success: false, error: 'Login failed' };
@@ -302,6 +364,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     setUser(null);
     await supabase.auth.signOut();
+    clearAllData();
   }, []);
 
   return (

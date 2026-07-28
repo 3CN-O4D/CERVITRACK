@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, AppState, AppStateStatus } from 'react-native';
+import { View, Text, StyleSheet, AppState, AppStateStatus, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useNotifications } from '../context/NotificationContext';
@@ -199,6 +200,8 @@ function AuthStack() {
 function MainTabs() {
   const { colors, isDark } = useTheme();
   const { unreadCount } = useNotifications();
+  const insets = useSafeAreaInsets();
+  const bottomNavBarHeight = Platform.OS === 'android' ? Math.max(insets.bottom, 16) : insets.bottom;
 
   return (
     <Tab.Navigator
@@ -210,9 +213,9 @@ function MainTabs() {
           backgroundColor: colors.tabBar,
           borderTopColor: colors.border,
           borderTopWidth: 1,
-          paddingBottom: 6,
+          paddingBottom: bottomNavBarHeight,
           paddingTop: 6,
-          height: 60,
+          height: 60 + bottomNavBarHeight,
         },
         headerStyle: { backgroundColor: colors.bg },
         headerTintColor: colors.text,

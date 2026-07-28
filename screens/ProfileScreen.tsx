@@ -140,31 +140,64 @@ export default function ProfileScreen({ navigation }: any) {
   };
 
 const s = StyleSheet.create({
-  scroll: { paddingHorizontal: 20, paddingBottom: 40, backgroundColor: colors.bg },
-  profileCard: { alignItems: 'center', backgroundColor: colors.card, borderRadius: 28, padding: 28, marginTop: 10, marginBottom: 20, borderWidth: 1, borderColor: colors.border },
+  scroll: { paddingHorizontal: 20, paddingBottom: 40, paddingTop: 60, backgroundColor: colors.bg },
+  profileCard: { alignItems: 'center', backgroundColor: colors.card, borderRadius: 28, padding: 28, marginTop: 50, marginBottom: 20, borderWidth: 1, borderColor: colors.border },
   avatarWrap: { position: 'relative', marginBottom: 14 },
+  avatarPlaceholder: { width: 80, height: 80, borderRadius: 40, backgroundColor: colors.inputBg, justifyContent: 'center', alignItems: 'center' },
   avatarImage: { width: 80, height: 80, borderRadius: 40 },
-  avatarBtn: { position: 'absolute', bottom: 0, right: 0, backgroundColor: colors.primary, borderRadius: 20, padding: 6 },
-  sectionCard: { backgroundColor: colors.card, borderRadius: 20, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: colors.border },
+  cameraBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: colors.primary, borderRadius: 20, padding: 6 },
+  nameText: { fontSize: 20, fontWeight: '800', color: colors.text, marginBottom: 4 },
+  roleBadge: { backgroundColor: colors.primary + '20', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 4 },
+  roleText: { color: colors.primary, fontSize: 12, fontWeight: '700' },
+  hpvCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.success + '10', borderRadius: 16, padding: 16, marginBottom: 16, gap: 12 },
+  hpvEmoji: { fontSize: 28 },
+  hpvTextWrap: { flex: 1 },
+  hpvCount: { fontSize: 22, fontWeight: '800', color: colors.success },
+  hpvLabel: { fontSize: 13, color: colors.textSecondary },
+  hpvEmpty: { fontSize: 14, color: colors.textSecondary },
+  formSection: { backgroundColor: colors.card, borderRadius: 20, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: colors.border },
   sectionTitle: { fontSize: 13, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 },
+  fieldLabel: { fontSize: 13, fontWeight: '600', color: colors.text, marginBottom: 6 },
   input: { borderWidth: 1, borderColor: colors.border, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, fontSize: 15, color: colors.text, backgroundColor: colors.inputBg, marginBottom: 14 },
+  dateInput: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  dateText: { fontSize: 15, fontWeight: '500' },
   label: { fontSize: 13, fontWeight: '600', color: colors.text, marginBottom: 6 },
   pickerRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
   saveBtn: { backgroundColor: colors.primary, borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 8 },
-  saveBtnText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
+  saveBtnDisabled: { opacity: 0.6 },
+  saveBtnText: { color: '#FFF', fontSize: 16, fontWeight: '700', marginLeft: 8 },
+  feedbackBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary + '10', borderRadius: 16, paddingVertical: 14, marginTop: 8, gap: 8 },
+  feedbackText: { color: colors.primary, fontSize: 14, fontWeight: '700' },
   logoutBtn: { backgroundColor: colors.danger + '15', borderRadius: 16, paddingVertical: 14, alignItems: 'center', marginTop: 12 },
   logoutBtnText: { color: colors.danger, fontSize: 14, fontWeight: '600' },
+  logoutText: { color: colors.error, fontSize: 14, fontWeight: '600', marginLeft: 8 },
+  requestDataBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary + '10', borderRadius: 16, paddingVertical: 14, marginTop: 8, gap: 8 },
+  requestDataText: { color: colors.primary, fontSize: 14, fontWeight: '700' },
+  deleteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.error + '10', borderRadius: 16, paddingVertical: 14, marginTop: 8, gap: 8 },
+  deleteText: { color: colors.error, fontSize: 14, fontWeight: '700' },
   statsRow: { flexDirection: 'row', gap: 10, marginTop: 4 },
   statBox: { flex: 1, backgroundColor: colors.inputBg, borderRadius: 14, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: colors.border },
   statValue: { fontSize: 22, fontWeight: '800', color: colors.primary },
   statLabel: { fontSize: 11, color: colors.textSecondary, marginTop: 2 },
+  datePickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  datePickerModal: { backgroundColor: colors.card, borderRadius: 20, padding: 24, width: '90%', maxHeight: '80%' },
+  datePickerTitle: { fontSize: 18, fontWeight: '700', textAlign: 'center', marginBottom: 20 },
+  datePickerCols: { flexDirection: 'row', gap: 8 },
+  datePickerCol: { flex: 1, alignItems: 'center' },
+  datePickerLabel: { fontSize: 12, fontWeight: '700', marginBottom: 8, textTransform: 'uppercase' },
+  datePickerScroll: { maxHeight: 240, width: '100%' },
+  datePickerItem: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, alignItems: 'center', marginBottom: 2 },
+  datePickerItemText: { fontSize: 15, fontWeight: '500' },
+  datePickerActions: { flexDirection: 'row', gap: 12, marginTop: 16, justifyContent: 'center' },
+  datePickerBtn: { flex: 1, borderRadius: 12, borderWidth: 1, paddingVertical: 12, alignItems: 'center', borderColor: colors.border },
+  datePickerBtnText: { fontSize: 14, fontWeight: '700' },
 });
 
 return (
   <KeyboardAvoidingView
       style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      behavior="padding"
+      keyboardVerticalOffset={0}
     >
     <ScrollView
       contentContainerStyle={s.scroll}
@@ -324,6 +357,16 @@ return (
       <TouchableOpacity style={s.logoutBtn} onPress={logout}>
         <Ionicons name="log-out-outline" size={20} color={colors.error} />
         <Text style={s.logoutText}>{t('settings.logout')}</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={s.requestDataBtn}
+        onPress={() => {
+          Alert.alert('Data Request', 'Your data request has been submitted. We will email you a copy of your data within 7 days.');
+        }}
+      >
+        <Ionicons name="download-outline" size={18} color={colors.primary} />
+        <Text style={s.requestDataText}>Request My Data</Text>
       </TouchableOpacity>
 
       <TouchableOpacity

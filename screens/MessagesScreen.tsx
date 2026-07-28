@@ -33,6 +33,7 @@ import {
 
   onMessagesInsert,
 } from '../services/api';
+import { saveMessage as saveMessageLocal } from '../services/localDb';
 
 const { width } = Dimensions.get('window');
 
@@ -397,6 +398,20 @@ export function ChatDetail({ navigation, route }: any) {
     setInputText('');
     updateContactLastMessage(text);
 
+    // Save to local SQLite immediately
+    try {
+      saveMessageLocal({
+        content: text,
+        message_type: 'text',
+        sender_id: user?.id || '',
+        sender_type: 'user',
+        conversation_id: conversationId,
+        conversation_remote_id: null,
+        created_at: new Date(now).toISOString(),
+        read: 1,
+      }, 'pending');
+    } catch { /* local save best-effort */ }
+
     // Send to Supabase if we have a conversation
     if (conversationId && user?.id) {
       try {
@@ -445,6 +460,22 @@ export function ChatDetail({ navigation, route }: any) {
     };
     setMessages((prev) => [...prev, newMsg]);
     updateContactLastMessage('📷 Photo');
+
+    // Save to local SQLite immediately
+    try {
+      saveMessageLocal({
+        content: 'Photo',
+        message_type: 'image',
+        sender_id: user?.id || '',
+        sender_type: 'user',
+        conversation_id: conversationId,
+        conversation_remote_id: null,
+        file_url: '',
+        local_uri: localPath,
+        created_at: new Date(now).toISOString(),
+        read: 1,
+      }, 'pending');
+    } catch { /* local save best-effort */ }
 
     // Upload to Cloudinary + send to Supabase
     if (conversationId && user?.id) {
@@ -521,8 +552,8 @@ export function ChatDetail({ navigation, route }: any) {
   return (
     <KeyboardAvoidingView
       style={[s.chatContainer, { backgroundColor: colors.bg }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      behavior="padding"
+      keyboardVerticalOffset={0}
     >
       <View style={[s.chatHeader, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={s.backBtn}>

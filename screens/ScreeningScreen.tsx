@@ -21,6 +21,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { submitScreening } from '../services/api';
 import { getItem, setItem } from '../services/storage';
+import { saveScreening as saveScreeningLocal } from '../services/localDb';
 
 const { width } = Dimensions.get('window');
 
@@ -674,6 +675,25 @@ export default function ScreeningScreen() {
         family_history: String(answers.family ?? ''),
         previous_screening: String(answers.previous ?? ''),
       });
+      // Save to local SQLite for offline access
+      try {
+        saveScreeningLocal({
+          user_id: user?.id || '',
+          profile_id: user?.id || '',
+          verdict,
+          risk_tier: riskTier,
+          score: risk.score,
+          age: answers.age ? Number(answers.age) : null,
+          parity: answers.births ? Number(answers.births) : null,
+          vaccination: String(answers.vaccine ?? ''),
+          previous_screening: String(answers.previous ?? ''),
+          hiv_status: String(answers.hiv ?? ''),
+          smoking: String(answers.smoking ?? ''),
+          symptoms: String(answers.symptoms ?? ''),
+          family_history: String(answers.family ?? ''),
+          created_at: new Date().toISOString(),
+        }, 'pending');
+      } catch {}
       if (user?.id) {
         await setItem(`@cervitrack_screening_${user.id}`, JSON.stringify({
           riskLevel: risk.level,

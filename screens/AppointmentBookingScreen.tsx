@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -53,12 +53,23 @@ export default function AppointmentBookingScreen() {
   const [showBooking, setShowBooking] = useState(false);
   const [doctors, setDoctors] = useState<any[]>([]);
   const [selectedDoctor, setSelectedDoctor] = useState<any>(null);
+  const [selectedHospital, setSelectedHospital] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
   const [bookingNotes, setBookingNotes] = useState('');
   const [patientNote, setPatientNote] = useState('');
   const [fallbackDates, setFallbackDates] = useState<string[]>([]);
   const [bookingLoading, setBookingLoading] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>('all');
+
+  const uniqueHospitals = useMemo(() => {
+    const hospitals = new Set(doctors.map((d: any) => d.hospital).filter(Boolean));
+    return Array.from(hospitals).sort();
+  }, [doctors]);
+
+  const filteredDoctors = useMemo(() => {
+    if (!selectedHospital) return doctors;
+    return doctors.filter((d: any) => d.hospital === selectedHospital);
+  }, [doctors, selectedHospital]);
 
   useEffect(() => {
     loadData();
@@ -109,6 +120,7 @@ export default function AppointmentBookingScreen() {
 
   const openBookingForm = () => {
     setSelectedDoctor(null);
+    setSelectedHospital('');
     setSelectedDate('');
     setBookingNotes('');
     setPatientNote('');
@@ -125,10 +137,14 @@ export default function AppointmentBookingScreen() {
       Alert.alert('Error', 'Please log in to book an appointment.');
       return;
     }
+    if (!selectedDoctor) {
+      Alert.alert('Required', 'Please select a clinician.');
+      return;
+    }
     setBookingLoading(true);
     try {
-      const providerId = selectedDoctor?.id === 'any' ? '' : selectedDoctor?.id || '';
-      const doctorName = selectedDoctor?.id === 'any' ? 'Any Available Clinician' : selectedDoctor?.name || 'Clinician';
+      const providerId = selectedDoctor.id || '';
+      const doctorName = selectedDoctor.name || 'Clinician';
       await requestAppointment(
         user.id,
         providerId,
@@ -294,46 +310,52 @@ export default function AppointmentBookingScreen() {
                 </TouchableOpacity>
               </View>
 
-              <Text style={[s.fieldLabel, { color: colors.text }]}>Select Clinician</Text>
-              {doctors.length === 0 && (
-                <Text style={{ color: colors.textSecondary, fontSize: 13, marginBottom: 8 }}>No clinicians available. Try again later.</Text>
+              <Text style={[s.fieldLabel, { color: colors.text }]}>Select Hospital</Text>
+              {uniqueHospitals.length === 0 && (
+                <Text style={{ color: colors.textSecondary, fontSize: 13, marginBottom: 8 }}>No hospitals available.</Text>
               )}
-              <TouchableOpacity
-                style={[s.doctorItem, { backgroundColor: colors.inputBg, borderColor: colors.border }, selectedDoctor === null && selectedDoctor !== undefined && { borderColor: colors.primary, backgroundColor: colors.primary + '10' }]}
-                onPress={() => setSelectedDoctor({ id: 'any', name: 'Any Available Clinician' } as any)}
-              >
-                <View style={[s.avatar, { backgroundColor: colors.success + '20' }]}>
-                  <Ionicons name="people" size={20} color={colors.success} />
-                </View>
-                <View style={s.doctorInfo}>
-                  <Text style={[s.doctorName, { color: colors.text }]}>Any Available Clinician</Text>
-                  <Text style={[s.doctorSpecialty, { color: colors.textSecondary }]}>First available will be assigned</Text>
-                </View>
-                {selectedDoctor?.id === 'any' && (
-                  <MaterialCommunityIcons name="check-circle" size={22} color={colors.primary} />
-                )}
-              </TouchableOpacity>
-              {doctors.map((doc) => (
-                <TouchableOpacity
-                  key={doc.id}
-                  style={[s.doctorItem, { backgroundColor: colors.inputBg, borderColor: colors.border }, selectedDoctor?.id === doc.id && { borderColor: colors.primary, backgroundColor: colors.primary + '10' }]}
-                  onPress={() => setSelectedDoctor(doc)}
-                >
-                  <View style={[s.avatar, { backgroundColor: colors.primary + '20' }]}>
-                    <Text style={[s.avatarText, { color: colors.primary }]}>
-                      {doc.name.split(' ').slice(-2).map((n: string) => n[0]).join('')}
-                    </Text>
-                  </View>
-                  <View style={s.doctorInfo}>
-                    <Text style={[s.doctorName, { color: colors.text }]}>{doc.name}</Text>
-                    <Text style={[s.doctorSpecialty, { color: colors.textSecondary }]}>{doc.specialty || 'Clinician'}</Text>
-                    <Text style={[s.doctorHospital, { color: colors.textSecondary }]}>{doc.hospital || ''}</Text>
-                  </View>
-                  {selectedDoctor?.id === doc.id && (
-                    <MaterialCommunityIcons name="check-circle" size={22} color={colors.primary} />
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+                {uniqueHospitals.map((h) => (
+                  <TouchableOpacity
+                    key={h}
+                    style={[s.hospitalChip, { backgroundColor: colors.inputBg, borderColor: colors.border }, selectedHospital === h && { backgroundColor: colors.primary, borderColor: colors.primary }]}
+                    onPress={() => { setSelectedHospital(selectedHospital === h ? '' : h); setSelectedDoctor(null); }}
+                  >
+                    <Text style={[s.hospitalChipText, { color: selectedHospital === h ? '#FFF' : colors.text }]}>{h}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              {selectedHospital ? (
+                <>
+                  <Text style={[s.fieldLabel, { color: colors.text }]}>Select Clinician at {selectedHospital}</Text>
+                  {filteredDoctors.length === 0 && (
+                    <Text style={{ color: colors.textSecondary, fontSize: 13, marginBottom: 8 }}>No clinicians at this hospital.</Text>
                   )}
-                </TouchableOpacity>
-              ))}
+                  {filteredDoctors.map((doc) => (
+                    <TouchableOpacity
+                      key={doc.id}
+                      style={[s.doctorItem, { backgroundColor: colors.inputBg, borderColor: colors.border }, selectedDoctor?.id === doc.id && { borderColor: colors.primary, backgroundColor: colors.primary + '10' }]}
+                      onPress={() => setSelectedDoctor(doc)}
+                    >
+                      <View style={[s.avatar, { backgroundColor: colors.primary + '20' }]}>
+                        <Text style={[s.avatarText, { color: colors.primary }]}>
+                          {doc.name?.split(' ').slice(-2).map((n: string) => n[0]).join('')}
+                        </Text>
+                      </View>
+                      <View style={s.doctorInfo}>
+                        <Text style={[s.doctorName, { color: colors.text }]}>{doc.name}</Text>
+                        <Text style={[s.doctorSpecialty, { color: colors.textSecondary }]}>{doc.specialty || 'Clinician'}</Text>
+                      </View>
+                      {selectedDoctor?.id === doc.id && (
+                        <MaterialCommunityIcons name="check-circle" size={22} color={colors.primary} />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </>
+              ) : (
+                <Text style={{ color: colors.textSecondary, fontSize: 13, marginBottom: 8 }}>Please select a hospital first.</Text>
+              )}
 
               <Text style={[s.fieldLabel, { color: colors.text }]}>Select Date</Text>
               <View style={s.dateRow}>
@@ -452,6 +474,8 @@ const s = StyleSheet.create({
   dateRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   dateChip: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, borderWidth: 1 },
   dateChipText: { fontSize: 13, fontWeight: '600' },
+  hospitalChip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, borderWidth: 1, marginRight: 8 },
+  hospitalChipText: { fontSize: 13, fontWeight: '600' },
   refreshDates: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8, alignSelf: 'center' },
   refreshDatesText: { fontSize: 13, fontWeight: '600' },
   notesInput: { borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12, fontSize: 14, borderWidth: 1, minHeight: 80, textAlignVertical: 'top' },
