@@ -28,10 +28,6 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
-      - name: Decode keystore
-        run: |
-          echo "${{ secrets.RELEASE_KEYSTORE }}" | base64 -d > android/app/release.keystore
-
       - name: Build release APK
         run: |
           cd android
