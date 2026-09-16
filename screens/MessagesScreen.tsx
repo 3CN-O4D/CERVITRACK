@@ -353,6 +353,21 @@ export function ChatDetail({ navigation, route }: any) {
         createdAt: new Date(msg.created_at).getTime(),
       };
       setMessages((prev) => [...prev, incoming]);
+      // Persist incoming messages to local SQLite
+      try {
+        saveMessageLocal({
+          remote_id: String(msg.id),
+          content: msg.content || '',
+          message_type: msg.message_type || 'text',
+          sender_id: msg.sender_id || '',
+          sender_type: msg.sender_type || 'expert',
+          conversation_id: conversationId,
+          conversation_remote_id: msg.conversation_id,
+          file_url: msg.file_url || '',
+          created_at: msg.created_at,
+          read: 0,
+        }, 'synced');
+      } catch { /* local save best-effort */ }
     });
     return () => { sub.unsubscribe(); };
   }, [conversationId, user?.id]);
@@ -397,20 +412,6 @@ export function ChatDetail({ navigation, route }: any) {
     setMessages(updated);
     setInputText('');
     updateContactLastMessage(text);
-
-    // Save to local SQLite immediately
-    try {
-      saveMessageLocal({
-        content: text,
-        message_type: 'text',
-        sender_id: user?.id || '',
-        sender_type: 'user',
-        conversation_id: conversationId,
-        conversation_remote_id: null,
-        created_at: new Date(now).toISOString(),
-        read: 1,
-      }, 'pending');
-    } catch { /* local save best-effort */ }
 
     // Send to Supabase if we have a conversation
     if (conversationId && user?.id) {
@@ -460,22 +461,6 @@ export function ChatDetail({ navigation, route }: any) {
     };
     setMessages((prev) => [...prev, newMsg]);
     updateContactLastMessage('📷 Photo');
-
-    // Save to local SQLite immediately
-    try {
-      saveMessageLocal({
-        content: 'Photo',
-        message_type: 'image',
-        sender_id: user?.id || '',
-        sender_type: 'user',
-        conversation_id: conversationId,
-        conversation_remote_id: null,
-        file_url: '',
-        local_uri: localPath,
-        created_at: new Date(now).toISOString(),
-        read: 1,
-      }, 'pending');
-    } catch { /* local save best-effort */ }
 
     // Upload to Cloudinary + send to Supabase
     if (conversationId && user?.id) {

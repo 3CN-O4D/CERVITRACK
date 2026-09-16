@@ -1,5 +1,6 @@
 'use client';
 
+import { apiFetch } from '@/lib/api-fetch';
 import { useState, useEffect, useCallback } from 'react';
 import UserSearch from '../../../components/UserSearch';
 
@@ -30,7 +31,7 @@ export default function AdminReportsPage() {
     if (!uid) return;
     setLoadingReports(true);
     try {
-      const res = await fetch(`/api/admin/reports?user_id=${uid}`);
+      const res = await apiFetch(`/api/admin/reports?user_id=${uid}`);
       if (!res.ok) throw new Error('Failed to load reports');
       const json = await res.json();
       setReports(json.reports || json || []);
@@ -48,7 +49,7 @@ export default function AdminReportsPage() {
     setGenerating(true);
     setMessage({ type: '', text: '' });
     try {
-      const res = await fetch('/api/admin/report/generate', {
+      const res = await apiFetch('/api/admin/report/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: selectedUser.id, type: reportType }),

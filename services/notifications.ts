@@ -18,6 +18,7 @@ const CHANNEL_MAP: Record<string, string> = {
   admin: 'cervitrack',
   provider: 'cervitrack',
   system: 'cervitrack',
+  alarm: 'alarms',
 };
 
 export function pickChannel(type: NotifType): string {
@@ -112,6 +113,14 @@ export async function setupNotificationChannels() {
         vibrationPattern: [0, 250, 250, 250],
         lightColor: '#0891B2',
         sound: 'default',
+      }),
+      Notifications.setNotificationChannelAsync('alarms', {
+        name: 'Appointment Alarms',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 500, 200, 500, 200, 500, 500, 500, 200, 500],
+        lightColor: '#E53E3E',
+        sound: 'default',
+        bypassDnd: true,
       }),
     ]);
   } catch { /* silent */ }

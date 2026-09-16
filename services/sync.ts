@@ -18,7 +18,9 @@ import {
   saveKitRequest,
   saveSampleKit,
   saveChatContacts,
+  saveTestResult,
   markSynced,
+  now,
 } from './localDb';
 
 let isSyncing = false;
@@ -165,8 +167,8 @@ async function pushNotifications(session: Session) {
   for (const row of pending) {
     try {
       if (row.remote_id) {
-        await supabase.from('notifications').update({ read: !!row.read }).eq('id', row.remote_id);
-        markSynced('notifications', row.id);
+        const { error } = await supabase.from('notifications').update({ read: !!row.read }).eq('id', row.remote_id);
+        if (!error) markSynced('notifications', row.id);
       } else if (row.user_id) {
         const { data, error } = await supabase
           .from('notifications')
@@ -257,11 +259,86 @@ async function pushFeedback(session: Session) {
     try {
       const { data, error } = await supabase
         .from('feedback')
-        .insert({ user_id: row.user_id, category: row.category, message: row.message, contact: row.contact })
+        .insert({ user_id: row.user_id || null, category: row.category, message: row.message, contact: row.contact })
         .select('id')
         .single();
       if (!error && data) {
         db.runSync('UPDATE feedback SET remote_id = ?, sync_status = ? WHERE id = ?', String(data.id), 'synced', row.id);
+      }
+    } catch { incrementRetry(row.id); }
+  }
+}
+
+async function pushUsers(session: Session) {
+  const { getUnsyncedUsers, markUserSynced } = await import('./localDb');
+  const pending = getUnsyncedUsers();
+  for (const row of pending) {
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({
+          name: row.name, phone: row.phone, email: row.email,
+          birth_date: row.birth_date, last_healed_date: row.last_healed_date,
+          photo: row.photo, county: row.county, sub_county: row.sub_county, ward: row.ward,
+        })
+        .eq('id', row.id);
+      if (!error) markUserSynced(row.id);
+    } catch { /* keep pending for next sync */ }
+  }
+}
+
+async function pushTestResults(session: Session) {
+  const { getDb } = await import('./localDb');
+  const db = getDb();
+  const pending = db.getAllSync(
+    "SELECT * FROM test_results WHERE sync_status = 'pending'"
+  ) as any[];
+  for (const row of pending) {
+    try {
+      const { data, error } = await supabase
+        .from('test_results')
+        .insert({ user_id: row.user_id, result: row.result, date: row.date })
+        .select('id')
+        .single();
+      if (!error && data) {
+        db.runSync('UPDATE test_results SET remote_id = ?, sync_status = ? WHERE id = ?', String(data.id), 'synced', row.id);
+      }
+    } catch { incrementRetry(row.id); }
+  }
+}
+
+async function pushSampleKits(session: Session) {
+  const { getDb } = await import('./localDb');
+  const db = getDb();
+  const pending = db.getAllSync(
+    "SELECT * FROM sample_kits WHERE sync_status = 'pending'"
+  ) as any[];
+  for (const row of pending) {
+    try {
+      if (row.remote_id) {
+        const { error } = await supabase
+          .from('sample_kits')
+          .update({
+            status: row.status, result: row.result, result_notes: row.result_notes,
+            processed_at: row.processed_at, collected_at: row.collected_at,
+          })
+          .eq('id', row.remote_id);
+        if (!error) markSynced('sample_kits', row.id);
+        continue;
+      }
+      const { data, error } = await supabase
+        .from('sample_kits')
+        .insert({
+          barcode: row.barcode, kit_type: row.kit_type || 'HPV_SELF',
+          status: (row.status || 'REGISTERED').toUpperCase(),
+          facility_id: row.facility_id, patient_id: row.patient_id, patient_name: row.patient_name,
+          collection_method: row.collection_method, result: row.result, result_notes: row.result_notes,
+          collected_at: row.collected_at, processed_at: row.processed_at,
+        })
+        .select('id')
+        .single();
+      if (!error && data) {
+        db.runSync('UPDATE sample_kits SET remote_id = ?, sync_status = ? WHERE id = ?', String(data.id), 'synced', row.id);
       }
     } catch { incrementRetry(row.id); }
   }
@@ -328,27 +405,33 @@ async function pullScreenings(userId: string) {
     .select('*')
     .or(`profile_id.eq.${userId},user_id.eq.${userId}`)
     .order('created_at', { ascending: false });
-  if (lastSync) query.gt('created_at', lastSync);
+  if (lastSync) query.gte('updated_at', lastSync);
   const { data, error } = await query;
   if (error || !data) return;
 
   const { getDb } = await import('./localDb');
   const db = getDb();
+  let maxUpdated = lastSync;
   for (const row of data) {
+    const updated = row.updated_at || row.created_at;
+    if (updated && (!maxUpdated || new Date(updated).getTime() > new Date(maxUpdated).getTime())) {
+      maxUpdated = updated;
+    }
     const existing = db.getFirstSync(
-      'SELECT id FROM screenings WHERE remote_id = ?',
+      'SELECT id, sync_status FROM screenings WHERE remote_id = ?',
       String(row.id)
     ) as any;
     if (existing) {
+      if (existing.sync_status === 'pending') continue;
       db.runSync(
-        `UPDATE screenings SET verdict = ?, risk_tier = ?, hpv_result = ?, score = ?, sync_status = 'synced' WHERE remote_id = ?`,
-        row.verdict, row.risk_tier, row.hpv_result ?? '', row.score ?? null, String(row.id)
+        `UPDATE screenings SET verdict = ?, risk_tier = ?, hpv_result = ?, score = ?, updated_at = ?, sync_status = 'synced' WHERE remote_id = ?`,
+        row.verdict, row.risk_tier, row.hpv_result ?? '', row.score ?? null, now(), String(row.id)
       );
     } else {
       saveScreening({ ...row, remote_id: String(row.id), profile_id: row.profile_id, user_id: row.user_id }, 'synced');
     }
   }
-  setSyncMeta('screenings_synced_at', new Date().toISOString());
+  if (maxUpdated) setSyncMeta('screenings_synced_at', maxUpdated);
 }
 
 async function pullVaccines(userId: string) {
@@ -358,24 +441,30 @@ async function pullVaccines(userId: string) {
     .select('*')
     .eq('user_id', userId)
     .order('date', { ascending: false });
-  if (lastSync) query.gt('created_at', lastSync);
+  if (lastSync) query.gte('updated_at', lastSync);
   const { data, error } = await query;
   if (error || !data) return;
 
   const { getDb } = await import('./localDb');
   const db = getDb();
+  let maxUpdated = lastSync;
   for (const row of data) {
-    const existing = db.getFirstSync('SELECT id FROM vaccines WHERE remote_id = ?', String(row.id)) as any;
+    const updated = row.updated_at || row.created_at;
+    if (updated && (!maxUpdated || new Date(updated).getTime() > new Date(maxUpdated).getTime())) {
+      maxUpdated = updated;
+    }
+    const existing = db.getFirstSync('SELECT id, sync_status FROM vaccines WHERE remote_id = ?', String(row.id)) as any;
     if (existing) {
+      if (existing.sync_status === 'pending') continue;
       db.runSync(
-        `UPDATE vaccines SET name = ?, hospital = ?, date = ?, status = ?, reminder_day = ?, reminder_before = ?, sync_status = 'synced' WHERE remote_id = ?`,
-        row.name, row.hospital ?? '', row.date ?? '', row.status, row.reminder_day ? 1 : 0, row.reminder_before ? 1 : 0, String(row.id)
+        `UPDATE vaccines SET name = ?, hospital = ?, date = ?, status = ?, reminder_day = ?, reminder_before = ?, updated_at = ?, sync_status = 'synced' WHERE remote_id = ?`,
+        row.name, row.hospital ?? '', row.date ?? '', row.status, row.reminder_day ? 1 : 0, row.reminder_before ? 1 : 0, now(), String(row.id)
       );
     } else {
       saveVaccine({ ...row, remote_id: String(row.id) }, 'synced');
     }
   }
-  setSyncMeta('vaccines_synced_at', new Date().toISOString());
+  if (maxUpdated) setSyncMeta('vaccines_synced_at', maxUpdated);
 }
 
 async function pullAppointments(userId: string) {
@@ -385,24 +474,30 @@ async function pullAppointments(userId: string) {
     .select('*')
     .eq('user_id', userId)
     .order('date', { ascending: false });
-  if (lastSync) query.gt('created_at', lastSync);
+  if (lastSync) query.gte('updated_at', lastSync);
   const { data, error } = await query;
   if (error || !data) return;
 
   const { getDb } = await import('./localDb');
   const db = getDb();
+  let maxUpdated = lastSync;
   for (const row of data) {
-    const existing = db.getFirstSync('SELECT id FROM appointments WHERE remote_id = ?', String(row.id)) as any;
+    const updated = row.updated_at || row.created_at;
+    if (updated && (!maxUpdated || new Date(updated).getTime() > new Date(maxUpdated).getTime())) {
+      maxUpdated = updated;
+    }
+    const existing = db.getFirstSync('SELECT id, sync_status FROM appointments WHERE remote_id = ?', String(row.id)) as any;
     if (existing) {
+      if (existing.sync_status === 'pending') continue;
       db.runSync(
-        `UPDATE appointments SET title = ?, status = ?, date = ?, time = ?, notes = ?, sync_status = 'synced' WHERE remote_id = ?`,
-        row.title ?? '', row.status, row.date ?? '', row.time ?? '', row.notes ?? '', String(row.id)
+        `UPDATE appointments SET title = ?, status = ?, date = ?, time = ?, notes = ?, updated_at = ?, sync_status = 'synced' WHERE remote_id = ?`,
+        row.title ?? '', row.status, row.date ?? '', row.time ?? '', row.notes ?? '', now(), String(row.id)
       );
     } else {
       saveAppointment({ ...row, remote_id: String(row.id) }, 'synced');
     }
   }
-  setSyncMeta('appointments_synced_at', new Date().toISOString());
+  if (maxUpdated) setSyncMeta('appointments_synced_at', maxUpdated);
 }
 
 async function pullNotifications(userId: string) {
@@ -412,24 +507,30 @@ async function pullNotifications(userId: string) {
     .select('*')
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
-  if (lastSync) query.gt('created_at', lastSync);
+  if (lastSync) query.gte('updated_at', lastSync);
   const { data, error } = await query;
   if (error || !data) return;
 
   const { getDb } = await import('./localDb');
   const db = getDb();
+  let maxUpdated = lastSync;
   for (const row of data) {
-    const existing = db.getFirstSync('SELECT id FROM notifications WHERE remote_id = ?', String(row.id)) as any;
+    const updated = row.updated_at || row.created_at;
+    if (updated && (!maxUpdated || new Date(updated).getTime() > new Date(maxUpdated).getTime())) {
+      maxUpdated = updated;
+    }
+    const existing = db.getFirstSync('SELECT id, sync_status FROM notifications WHERE remote_id = ?', String(row.id)) as any;
     if (existing) {
+      if (existing.sync_status === 'pending') continue;
       db.runSync(
-        `UPDATE notifications SET title = ?, message = ?, type = ?, read = ?, sync_status = 'synced' WHERE remote_id = ?`,
-        row.title ?? '', row.message ?? '', row.type ?? '', row.read ? 1 : 0, String(row.id)
+        `UPDATE notifications SET title = ?, message = ?, type = ?, read = ?, updated_at = ?, sync_status = 'synced' WHERE remote_id = ?`,
+        row.title ?? '', row.message ?? '', row.type ?? '', row.read ? 1 : 0, now(), String(row.id)
       );
     } else {
       saveNotification({ ...row, remote_id: String(row.id) }, 'synced');
     }
   }
-  setSyncMeta('notifications_synced_at', new Date().toISOString());
+  if (maxUpdated) setSyncMeta('notifications_synced_at', maxUpdated);
 }
 
 async function pullArticles() {
@@ -543,44 +644,102 @@ async function pullChatContacts() {
 }
 
 async function pullLabResults(userId: string) {
-  const { data, error } = await supabase
+  const lastSync = getSyncMeta('lab_results_synced_at');
+  const query = supabase
     .from('lab_results')
     .select('*')
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
+  if (lastSync) query.gte('updated_at', lastSync);
+  const { data, error } = await query;
   if (error || !data) return;
 
   const { getDb } = await import('./localDb');
   const db = getDb();
+  let maxUpdated = lastSync;
   for (const row of data) {
-    const existing = db.getFirstSync('SELECT id FROM lab_results WHERE remote_id = ?', String(row.id)) as any;
-    if (!existing) {
+    const updated = row.updated_at || row.created_at;
+    if (updated && (!maxUpdated || new Date(updated).getTime() > new Date(maxUpdated).getTime())) {
+      maxUpdated = updated;
+    }
+    const existing = db.getFirstSync('SELECT id, sync_status FROM lab_results WHERE remote_id = ?', String(row.id)) as any;
+    if (existing) {
+      if (existing.sync_status === 'pending') continue;
+      db.runSync(
+        `UPDATE lab_results SET result = ?, notes = ?, updated_at = ?, sync_status = 'synced' WHERE remote_id = ?`,
+        row.result ?? '', row.notes ?? '', now(), String(row.id)
+      );
+    } else {
       saveLabResult({ ...row, remote_id: String(row.id) }, 'synced');
     }
   }
+  if (maxUpdated) setSyncMeta('lab_results_synced_at', maxUpdated);
+}
+
+async function pullTestResults(userId: string) {
+  const lastSync = getSyncMeta('test_results_synced_at');
+  const query = supabase
+    .from('test_results')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+  if (lastSync) query.gte('updated_at', lastSync);
+  const { data, error } = await query;
+  if (error || !data) return;
+
+  const { getDb } = await import('./localDb');
+  const db = getDb();
+  let maxUpdated = lastSync;
+  for (const row of data) {
+    const updated = row.updated_at || row.created_at;
+    if (updated && (!maxUpdated || new Date(updated).getTime() > new Date(maxUpdated).getTime())) {
+      maxUpdated = updated;
+    }
+    const existing = db.getFirstSync('SELECT id, sync_status FROM test_results WHERE remote_id = ?', String(row.id)) as any;
+    if (existing) {
+      if (existing.sync_status === 'pending') continue;
+      db.runSync(
+        `UPDATE test_results SET result = ?, date = ?, updated_at = ?, sync_status = 'synced' WHERE remote_id = ?`,
+        row.result ?? '', row.date ?? '', now(), String(row.id)
+      );
+    } else {
+      saveTestResult({ ...row, remote_id: String(row.id) }, 'synced');
+    }
+  }
+  if (maxUpdated) setSyncMeta('test_results_synced_at', maxUpdated);
 }
 
 async function pullSampleKits(userId: string) {
-  const { data, error } = await supabase
+  const lastSync = getSyncMeta('sample_kits_synced_at');
+  const query = supabase
     .from('sample_kits')
     .select('*')
     .eq('patient_id', userId)
     .order('created_at', { ascending: false });
+  if (lastSync) query.gte('updated_at', lastSync);
+  const { data, error } = await query;
   if (error || !data) return;
 
   const { getDb } = await import('./localDb');
   const db = getDb();
+  let maxUpdated = lastSync;
   for (const row of data) {
-    const existing = db.getFirstSync('SELECT id FROM sample_kits WHERE remote_id = ?', String(row.id)) as any;
+    const updated = row.updated_at || row.created_at;
+    if (updated && (!maxUpdated || new Date(updated).getTime() > new Date(maxUpdated).getTime())) {
+      maxUpdated = updated;
+    }
+    const existing = db.getFirstSync('SELECT id, sync_status FROM sample_kits WHERE remote_id = ?', String(row.id)) as any;
     if (existing) {
+      if (existing.sync_status === 'pending') continue;
       db.runSync(
-        `UPDATE sample_kits SET status = ?, result = ?, result_notes = ?, processed_at = ?, collected_at = ?, sync_status = 'synced' WHERE remote_id = ?`,
-        row.status, row.result ?? '', row.result_notes ?? '', row.processed_at ?? '', row.collected_at ?? '', String(row.id)
+        `UPDATE sample_kits SET status = ?, result = ?, result_notes = ?, processed_at = ?, collected_at = ?, updated_at = ?, sync_status = 'synced' WHERE remote_id = ?`,
+        row.status, row.result ?? '', row.result_notes ?? '', row.processed_at ?? '', row.collected_at ?? '', now(), String(row.id)
       );
     } else {
       saveSampleKit({ ...row, remote_id: String(row.id) }, 'synced');
     }
   }
+  if (maxUpdated) setSyncMeta('sample_kits_synced_at', maxUpdated);
 }
 
 // ─── Main Sync Function ───────────────────────────────────────
@@ -600,17 +759,22 @@ export async function syncAll(userId?: string): Promise<void> {
 
     const uid = userId || session.user.id;
 
-    // Phase 1: Push pending local changes
+    // Phase 1: Push conversations first (messages depend on remote conversation IDs)
+    await pushConversations(session);
+
+    // Phase 2: Push remaining pending local changes
     await Promise.allSettled([
       pushScreenings(session),
       pushVaccines(session),
       pushAppointments(session),
       pushNotifications(session),
       pushMessages(session),
-      pushConversations(session),
       pushFeedback(session),
       pushLabResults(session),
       pushKitRequests(session),
+      pushUsers(session),
+      pushTestResults(session),
+      pushSampleKits(session),
     ]);
 
     // Phase 2: Pull remote changes
@@ -624,6 +788,7 @@ export async function syncAll(userId?: string): Promise<void> {
       pullConversations(uid),
       pullChatContacts(),
       pullLabResults(uid),
+      pullTestResults(uid),
       pullSampleKits(uid),
     ]);
 

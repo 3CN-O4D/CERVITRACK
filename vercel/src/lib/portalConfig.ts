@@ -38,7 +38,7 @@ export const PORTAL_CONFIG: Record<string, PortalConfig> = {
     primaryDeep: 'bg-amber-600 hover:bg-amber-700',
     from: 'from-amber-50',
     to: 'to-orange-50',
-    allowedRoles: ['admin', 'system_admin', 'national_admin', 'county_admin'],
+    allowedRoles: ['admin', 'system_admin', 'national_admin'],
     pageTitle: 'Login as Admin',
     pageHint: 'Sign in to the CerviTrack administrative dashboard',
     iconColor: '#D97706',

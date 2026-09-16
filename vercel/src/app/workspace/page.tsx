@@ -1,5 +1,6 @@
 'use client';
 
+import { apiFetch } from '@/lib/api-fetch';
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -90,9 +91,9 @@ export default function WorkspaceDashboard() {
     setLoading(true);
     try {
       const [patientsRes, screeningsRes, appointmentsRes] = await Promise.all([
-        fetch('/api/patients'),
-        fetch('/api/screenings'),
-        fetch('/api/appointments'),
+        apiFetch('/api/patients'),
+        apiFetch('/api/screenings'),
+        apiFetch('/api/appointments'),
       ]);
       if (patientsRes.ok) {
         const d = await patientsRes.json();
@@ -142,7 +143,7 @@ export default function WorkspaceDashboard() {
     setFormError('');
     setFormSuccess('');
     try {
-      const res = await fetch('/api/screenings', {
+      const res = await apiFetch('/api/screenings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -177,7 +178,7 @@ export default function WorkspaceDashboard() {
     setFormError('');
     setFormSuccess('');
     try {
-      const res = await fetch('/api/appointments', {
+      const res = await apiFetch('/api/appointments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

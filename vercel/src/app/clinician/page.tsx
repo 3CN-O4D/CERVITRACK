@@ -1,5 +1,6 @@
 'use client';
 
+import { apiFetch } from '@/lib/api-fetch';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -74,10 +75,10 @@ export default function ClinicianPortal() {
     setLoading(true);
     try {
       const [convRes, patRes, apptRes, notifRes] = await Promise.all([
-        fetch('/api/chats/conversations'),
-        fetch('/api/providers/patients'),
-        fetch(`/api/appointments?provider_id=${providerId}`),
-        fetch(`/api/providers/notifications?provider_id=${providerId}`),
+        apiFetch('/api/chats/conversations'),
+        apiFetch('/api/providers/patients'),
+        apiFetch(`/api/appointments?provider_id=${providerId}`),
+        apiFetch(`/api/providers/notifications?provider_id=${providerId}`),
       ]);
       if (convRes.ok) {
         const data = await convRes.json();
@@ -102,7 +103,7 @@ export default function ClinicianPortal() {
   async function fetchMessages(convo: Conversation) {
     setActiveConvo(convo);
     try {
-      const res = await fetch(`/api/chats/messages?conversation_id=${convo.id}`);
+      const res = await apiFetch(`/api/chats/messages?conversation_id=${convo.id}`);
       if (res.ok) setMessages(await res.json());
     } catch {}
   }
@@ -110,7 +111,7 @@ export default function ClinicianPortal() {
   async function sendMessage() {
     if (!activeConvo || !newMessage.trim()) return;
     try {
-      await fetch('/api/chats/messages/send', {
+      await apiFetch('/api/chats/messages/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -127,7 +128,7 @@ export default function ClinicianPortal() {
   async function bookAppointment() {
     if (!bookModal) return;
     try {
-      const res = await fetch('/api/appointments/book', {
+      const res = await apiFetch('/api/appointments/book', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -148,7 +149,7 @@ export default function ClinicianPortal() {
 
   async function acceptAppointment(appt: Appointment) {
     try {
-      await fetch(`/api/appointments/${appt.id}/status`, {
+      await apiFetch(`/api/appointments/${appt.id}/status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'upcoming' }),

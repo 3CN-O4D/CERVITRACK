@@ -218,7 +218,9 @@ export default function KitTrackingScreen() {
         pairedBy: user?.id || 'self',
         pairedByName: user?.name || 'Patient (Self)',
       });
-      if (result) {
+      if (result && 'error' in result) {
+        setError(result.error);
+      } else if (result) {
         setKit(result);
         setAction(null);
         setSuccess('Kit paired to your account');
@@ -292,7 +294,9 @@ export default function KitTrackingScreen() {
         linkedBy: user?.id || 'system',
         linkedByName: user?.name || 'Clinician',
       });
-      if (result?.kit) {
+      if (result && 'error' in result) {
+        setError(result.error);
+      } else if (result?.kit) {
         setKit(result.kit);
         setAction(null);
         setSelectedPatient(null);
@@ -354,7 +358,7 @@ export default function KitTrackingScreen() {
             style={s.camera}
             facing="back"
             enableTorch={torchEnabled}
-            barcodeScannerSettings={{ barcodeTypes: ['qr', 'ean13', 'ean8', 'code128', 'code39', 'upc_a', 'upc_e', 'pdf417', 'aztec', 'data_matrix', 'interleaved2of5', 'codabar', 'itf'] }}
+            barcodeScannerSettings={{ barcodeTypes: ['qr', 'ean13', 'ean8', 'code128', 'code39', 'upc_a', 'upc_e', 'pdf417', 'aztec', 'datamatrix', 'codabar'] }}
             onBarcodeScanned={scanning ? undefined : handleBarCodeScanned}
           >
             <View style={s.scanOverlay}>

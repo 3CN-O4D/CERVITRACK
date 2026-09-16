@@ -1,5 +1,6 @@
 'use client';
 
+import { apiFetch } from '@/lib/api-fetch';
 import { useState } from 'react';
 import UserSearch from '../../../components/UserSearch';
 
@@ -27,7 +28,7 @@ export default function AdminNotificationsPage() {
     setSending(true);
     setResult({ type: '', text: '' });
     try {
-      const res = await fetch('/api/admin/notification/send', {
+      const res = await apiFetch('/api/admin/notification/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: selectedUser.id, title, message, type }),

@@ -84,6 +84,15 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     persist(notifications.map((n) => ({ ...n, read: true })));
   }, [notifications, persist]);
 
+  const deleteNotification = useCallback(
+    (id: string) => {
+      persist(notifications.filter((n) => n.id !== id));
+      // Fire-and-forget remote delete
+      import('../services/api').then(m => m.deleteNotification(Number(id), '')).catch(() => {});
+    },
+    [notifications, persist],
+  );
+
   const unreadCount = useMemo(
     () => notifications.filter((n) => !n.read).length,
     [notifications],
@@ -91,7 +100,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   return (
     <NotificationContext.Provider
-      value={{ notifications, unreadCount, addNotification, markRead, markAllRead }}
+      value={{ notifications, unreadCount, addNotification, markRead, deleteNotification, markAllRead }}
     >
       {children}
     </NotificationContext.Provider>

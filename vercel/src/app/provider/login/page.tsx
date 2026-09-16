@@ -1,5 +1,6 @@
 'use client';
 
+import { apiFetch } from '@/lib/api-fetch';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -21,7 +22,7 @@ export default function ProviderLoginPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/providers/login', {
+      const res = await apiFetch('/api/providers/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),

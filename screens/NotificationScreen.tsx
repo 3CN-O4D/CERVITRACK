@@ -2,7 +2,9 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
-import { useNotifications, Notification } from '../context/NotificationContext';
+import { useNotifications } from '../context/NotificationContext';
+import type { AppNotification } from '../context/NotificationContext';
+type Notification = AppNotification;
 
 const typeIcon = (type: Notification['type']) => {
   switch (type) {
@@ -11,12 +13,13 @@ const typeIcon = (type: Notification['type']) => {
     case 'appointment': return { name: 'calendar-outline' as const, family: Ionicons };
     case 'reminder': return { name: 'alarm-outline' as const, family: Ionicons };
     case 'alert': return { name: 'alert-circle' as const, family: Ionicons };
+    default: return { name: 'notifications-outline' as const, family: Ionicons };
   }
 };
 
 export default function NotificationScreen() {
   const { colors } = useTheme();
-  const { notifications, markRead, markAllRead } = useNotifications();
+  const { notifications, markRead, markAllRead, deleteNotification } = useNotifications();
   const s = styles(colors);
 
   return (
@@ -44,6 +47,7 @@ export default function NotificationScreen() {
               key={n.id}
               style={[s.notifCard, !n.read && s.unreadCard]}
               onPress={() => markRead(n.id)}
+              onLongPress={() => deleteNotification(n.id)}
             >
               <View style={[s.iconWrap, { backgroundColor: colors.primary + '15' }]}>
                 <IconComp name={icon.name as any} size={20} color={colors.primary} />

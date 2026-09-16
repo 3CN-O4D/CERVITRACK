@@ -1,56 +1,10 @@
--- Run this FIRST in Supabase SQL Editor (standalone fix)
+-- CerviTrack initial schema
 
--- 1. Enable extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
--- 2. Create extension first
--- (extensions already created above)
-
--- 3. Drop ALL tables first (so enum types can be dropped)
-DROP TABLE IF EXISTS sample_batch_items CASCADE;
-DROP TABLE IF EXISTS sample_batches CASCADE;
-DROP TABLE IF EXISTS sample_kit_events CASCADE;
-DROP TABLE IF EXISTS sample_kits CASCADE;
-DROP TABLE IF EXISTS telehealth_messages CASCADE;
-DROP TABLE IF EXISTS chat_messages CASCADE;
-DROP TABLE IF EXISTS chat_conversations CASCADE;
-DROP TABLE IF EXISTS chat_contacts CASCADE;
-DROP TABLE IF EXISTS articles CASCADE;
-DROP TABLE IF EXISTS facilities CASCADE;
-DROP TABLE IF EXISTS consent_log CASCADE;
-DROP TABLE IF EXISTS scheduled_actions CASCADE;
-DROP TABLE IF EXISTS feedback CASCADE;
-DROP TABLE IF EXISTS reports CASCADE;
-DROP TABLE IF EXISTS followups CASCADE;
-DROP TABLE IF EXISTS test_results CASCADE;
-DROP TABLE IF EXISTS lab_results CASCADE;
-DROP TABLE IF EXISTS notifications CASCADE;
-DROP TABLE IF EXISTS appointments CASCADE;
-DROP TABLE IF EXISTS vaccines CASCADE;
-DROP TABLE IF EXISTS screenings CASCADE;
-DROP TABLE IF EXISTS sync_log CASCADE;
-DROP TABLE IF EXISTS kit_requests CASCADE;
-DROP TABLE IF EXISTS providers CASCADE;
-DROP TABLE IF EXISTS users CASCADE;
-DROP TABLE IF EXISTS messages CASCADE;
-DROP TABLE IF EXISTS conversations CASCADE;
-
--- 4. Now drop old enum types (safe since no tables reference them)
-DROP TYPE IF EXISTS risk_tier CASCADE;
-DROP TYPE IF EXISTS user_role CASCADE;
-DROP TYPE IF EXISTS vaccine_status CASCADE;
-DROP TYPE IF EXISTS appointment_status CASCADE;
-DROP TYPE IF EXISTS notification_type CASCADE;
-DROP TYPE IF EXISTS message_type CASCADE;
-DROP TYPE IF EXISTS kit_status CASCADE;
-DROP TYPE IF EXISTS batch_status CASCADE;
-DROP TYPE IF EXISTS approval_status CASCADE;
-DROP TYPE IF EXISTS clinician_specialty CASCADE;
-DROP TYPE IF EXISTS sender_type CASCADE;
-
--- 5. Create enum types with correct values
+-- Create enum types
 CREATE TYPE user_role AS ENUM ('patient','lab_technician','clinician','facility_admin','county_admin','national_admin','system_admin');
 CREATE TYPE risk_tier AS ENUM ('low','medium','high','critical');
 CREATE TYPE vaccine_status AS ENUM ('scheduled','done','missed','cancelled');

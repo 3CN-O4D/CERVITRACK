@@ -22,7 +22,7 @@ import { getCountyNames, getSubCounties, getWards } from '../data/kenya';
 
 
 
-type AuthMode = 'otp' | 'email';
+type AuthMode = 'phone' | 'email';
 type RegStep = 'info' | 'otp';
 
 export default function AuthScreen() {
@@ -31,7 +31,7 @@ export default function AuthScreen() {
   const { t } = useTranslation();
 
   const [tab, setTab] = useState<'login' | 'register'>('login');
-  const [authMode, setAuthMode] = useState<AuthMode>('otp');
+  const [authMode, setAuthMode] = useState<AuthMode>('phone');
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -51,55 +51,37 @@ export default function AuthScreen() {
   const otpRefs = useRef<(TextInput | null)[]>([]);
   const [showPassword, setShowPassword] = useState(false);
 
-  const [loginShowOtpInput, setLoginShowOtpInput] = useState(false);
-  const [loginOtp, setLoginOtp] = useState(['', '', '', '', '', '']);
-  const loginOtpRefs = useRef<(TextInput | null)[]>([]);
-
-  const handleOtpChange = (index: number, value: string, isLogin: boolean) => {
-    const arr = isLogin ? [...loginOtp] : [...otp];
+  const handleOtpChange = (index: number, value: string) => {
+    const arr = [...otp];
     if (value.length > 1) return;
     arr[index] = value;
-    if (isLogin) {
-      setLoginOtp(arr);
-    } else {
-      setOtp(arr);
-    }
+    setOtp(arr);
     if (value && index < 5) {
-      const ref = isLogin ? loginOtpRefs.current[index + 1] : otpRefs.current[index + 1];
-      ref?.focus();
+      otpRefs.current[index + 1]?.focus();
     }
   };
 
-  const handleOtpKeyPress = (index: number, key: string, isLogin: boolean) => {
+  const handleOtpKeyPress = (index: number, key: string) => {
     if (key === 'Backspace') {
-      const arr = isLogin ? [...loginOtp] : [...otp];
-      const refs = isLogin ? loginOtpRefs : otpRefs;
+      const arr = [...otp];
       if (!arr[index] && index > 0) {
-        refs.current[index - 1]?.focus();
+        otpRefs.current[index - 1]?.focus();
       }
     }
   };
 
-  const handleLoginWithOtp = async () => {
-    setLoading(true);
+  const handleLoginPhone = async () => {
     setError('');
-    const result = await loginByPhone(phone.trim());
+    if (!phone.trim() || !password.trim()) {
+      setError('Please enter your phone number and password');
+      return;
+    }
+    setLoading(true);
+    const result = await loginByPhone(phone.trim(), password);
     setLoading(false);
     if (!result.success) {
       setError(result.error || 'Login failed');
-      setLoginOtp(['', '', '', '', '', '']);
-      loginOtpRefs.current[0]?.focus();
     }
-  };
-
-  const handleSendOtp = () => {
-    if (!phone.trim()) {
-      setError('Please enter your phone number');
-      return;
-    }
-    setError('');
-    setLoginShowOtpInput(true);
-    setTimeout(() => loginOtpRefs.current[0]?.focus(), 100);
   };
 
   const handleVerifyOtp = async () => {
@@ -191,50 +173,67 @@ export default function AuthScreen() {
     setError('');
     setRegStep('info');
     setOtp(['', '', '', '', '', '']);
-    setLoginOtp(['', '', '', '', '', '']);
-    setLoginShowOtpInput(false);
   };
 
   const s = styles(colors);
 
-  const renderOtpBoxes = (isLogin: boolean) => {
-    const code = isLogin ? loginOtp : otp;
-    const refs = isLogin ? loginOtpRefs : otpRefs;
+  const renderOtpBoxes = () => {
     return (
       <View style={s.otpRow}>
-        {code.map((digit, i) => (
+        {otp.map((digit, i) => (
           <TextInput
             key={i}
-            ref={(el) => { refs.current[i] = el; }}
+            ref={(el) => { otpRefs.current[i] = el; }}
             style={[s.otpBox, { borderColor: digit ? colors.primary : colors.border, color: colors.text }]}
             keyboardType="number-pad"
             maxLength={1}
             value={digit}
-            onChangeText={(v) => handleOtpChange(i, v, isLogin)}
-            onKeyPress={({ nativeEvent }) => handleOtpKeyPress(i, nativeEvent.key, isLogin)}
+            onChangeText={(v) => handleOtpChange(i, v)}
+            onKeyPress={({ nativeEvent }) => handleOtpKeyPress(i, nativeEvent.key)}
           />
         ))}
       </View>
     );
   };
 
-  const renderLoginOtp = () => (
+  const renderLoginPhone = () => (
     <>
-      <Text style={s.otpLabel}>Enter the 6-digit code sent to {phone}</Text>
-      {renderOtpBoxes(true)}
+      <Text style={s.fieldLabel}>Phone Number</Text>
+      <TextInput
+        style={s.input}
+        placeholder="e.g. +254 712 345 678"
+        placeholderTextColor={colors.textSecondary}
+        value={phone}
+        onChangeText={setPhone}
+        keyboardType="phone-pad"
+      />
+      <View style={s.passwordRow}>
+        <TextInput
+          style={s.inputPassword}
+          placeholder="Password"
+          placeholderTextColor={colors.textSecondary}
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry={!showPassword}
+          autoCapitalize="none"
+        />
+        <TouchableOpacity
+          onPress={() => setShowPassword(!showPassword)}
+          style={{ position: 'absolute', right: 12, top: 0, bottom: 0, justifyContent: 'center' }}
+        >
+          <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={20} color={colors.textSecondary} />
+        </TouchableOpacity>
+      </View>
       <TouchableOpacity
         style={[s.submitBtn, loading && s.submitBtnDisabled]}
-        onPress={handleLoginWithOtp}
-        disabled={loading || loginOtp.join('').length < 6}
+        onPress={handleLoginPhone}
+        disabled={loading}
       >
         {loading ? (
           <ActivityIndicator color="#FFF" />
         ) : (
-          <Text style={s.submitBtnText}>Verify & Sign In</Text>
+          <Text style={s.submitBtnText}>Sign In</Text>
         )}
-      </TouchableOpacity>
-      <TouchableOpacity onPress={() => setLoginShowOtpInput(false)} style={s.backLink}>
-        <Text style={s.backLinkText}>Change phone number</Text>
       </TouchableOpacity>
     </>
   );
@@ -285,11 +284,11 @@ export default function AuthScreen() {
     <>
       <View style={s.modeToggle}>
         <TouchableOpacity
-          style={[s.modeTab, authMode === 'otp' && s.modeTabActive]}
-          onPress={() => { setAuthMode('otp'); setError(''); setLoginShowOtpInput(false); setLoginOtp(['', '', '', '', '', '']); }}
+          style={[s.modeTab, authMode === 'phone' && s.modeTabActive]}
+          onPress={() => { setAuthMode('phone'); setError(''); }}
         >
-          <MaterialCommunityIcons name="cellphone" size={16} color={authMode === 'otp' ? '#FFF' : colors.textSecondary} />
-          <Text style={[s.modeTabText, authMode === 'otp' && s.modeTabTextActive]}>Phone & OTP</Text>
+          <MaterialCommunityIcons name="cellphone" size={16} color={authMode === 'phone' ? '#FFF' : colors.textSecondary} />
+          <Text style={[s.modeTabText, authMode === 'phone' && s.modeTabTextActive]}>Phone</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[s.modeTab, authMode === 'email' && s.modeTabActive]}
@@ -300,33 +299,7 @@ export default function AuthScreen() {
         </TouchableOpacity>
       </View>
 
-      {authMode === 'otp' ? (
-        loginShowOtpInput ? renderLoginOtp() : (
-          <>
-            <Text style={s.fieldLabel}>Phone Number</Text>
-            <TextInput
-              style={s.input}
-              placeholder="e.g. +254 712 345 678"
-              placeholderTextColor={colors.textSecondary}
-              value={phone}
-              onChangeText={setPhone}
-              keyboardType="phone-pad"
-            />
-            <Text style={s.hint}>We'll send a 6-digit code to verify your number</Text>
-            <TouchableOpacity
-              style={[s.submitBtn, loading && s.submitBtnDisabled]}
-              onPress={handleSendOtp}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#FFF" />
-              ) : (
-                <Text style={s.submitBtnText}>Send OTP</Text>
-              )}
-            </TouchableOpacity>
-          </>
-        )
-      ) : renderLoginEmail()}
+      {authMode === 'phone' ? renderLoginPhone() : renderLoginEmail()}
     </>
   );
 
@@ -434,7 +407,7 @@ export default function AuthScreen() {
         <Text style={s.otpInfoTitle}>Verify Your Phone</Text>
         <Text style={s.otpInfoText}>Enter the 6-digit code sent to {phone}</Text>
       </View>
-      {renderOtpBoxes(false)}
+      {renderOtpBoxes()}
       <TouchableOpacity
         style={[s.submitBtn, loading && s.submitBtnDisabled]}
         onPress={handleVerifyOtp}

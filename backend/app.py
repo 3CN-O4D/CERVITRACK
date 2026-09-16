@@ -111,14 +111,7 @@ TRANSLATIONS = {
     },
 }
 
-CHAT_CONTACTS = [
-    {"name": "Dr. Sarah Kimani", "role": "Obstetrician/Gynecologist", "online": 1},
-    {"name": "Nurse Mercy Wanjiku", "role": "HPV Screening Specialist", "online": 1},
-    {"name": "Dr. John Omondi", "role": "Oncologist", "online": 0},
-    {"name": "Lab Tech Paul Mwangi", "role": "Cytology", "online": 1},
-    {"name": "Nurse Esther Akinyi", "role": "Community Health", "online": 0},
-    {"name": "Dr. Anne Kamau", "role": "Reproductive Health", "online": 1},
-]
+CHAT_CONTACTS = []
 
 
 def get_db():

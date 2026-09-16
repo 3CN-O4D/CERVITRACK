@@ -64,7 +64,7 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
       mounted = false;
       if (scannerRef.current) {
         scannerRef.current.stop().catch(() => {});
-        scannerRef.current.clear().catch(() => {});
+        try { scannerRef.current.clear(); } catch {}
       }
     };
   }, [onScan, onClose, uniqueId]);

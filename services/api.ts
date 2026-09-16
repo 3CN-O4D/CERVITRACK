@@ -20,6 +20,7 @@ export interface ScreeningPayload {
 
 export interface Screening {
   id: number;
+  remote_id?: string;
   profile_id: string;
   verdict: string;
   risk_tier: string;
@@ -37,6 +38,7 @@ export interface Screening {
 
 export interface Vaccine {
   id: number;
+  remote_id?: string;
   user_id: string;
   name: string;
   hospital?: string;
@@ -48,6 +50,7 @@ export interface Vaccine {
 
 export interface Appointment {
   id: number;
+  remote_id?: string;
   user_id: string;
   clinician_id?: string;
   provider_id?: string;
@@ -65,6 +68,7 @@ export interface Appointment {
 
 export interface Notification {
   id: number;
+  remote_id?: string;
   user_id: string;
   title?: string;
   message?: string;
@@ -100,6 +104,7 @@ export interface Kit {
   barcode: string;
   kitType: string;
   status: string;
+  patientId?: string;
   patientName?: string;
   collectionMethod?: string;
   result?: string;
@@ -404,6 +409,13 @@ export async function markAllNotificationsRead(userId: string) {
   try {
     await supabase.from('notifications').update({ read: true }).eq('user_id', userId);
   } catch { /* queued */ }
+}
+
+export async function deleteNotification(id: number, userId: string) {
+  localDb.deleteNotification(id);
+  try {
+    await supabase.from('notifications').delete().eq('id', id).eq('user_id', userId);
+  } catch { /* queued for sync */ }
 }
 
 // ─── Lab Results ──────────────────────────────────────────────
@@ -820,17 +832,33 @@ export async function addLabResult(r: { user_id: string; patient_name: string; r
 }
 
 export async function getTestResults(userId: string) {
+  const local = localDb.getTestResults(userId);
   try {
     const { data, error } = await supabase.from('test_results').select('*').eq('user_id', userId).order('created_at', { ascending: false });
     if (error) throw error;
-    return data ?? [];
-  } catch { return []; }
+    for (const row of (data ?? [])) {
+      if (!local.find(l => l.remote_id === String(row.id))) {
+        localDb.saveTestResult({ ...row, remote_id: String(row.id) }, 'synced');
+      }
+    }
+    return data && data.length > 0 ? data : local;
+  } catch { return local; }
 }
 
 export async function addTestResult(r: { user_id: string; result: string; date: string }) {
+  localDb.saveTestResult({ ...r, sync_status: 'pending' }, 'pending');
   try {
     const { data, error } = await supabase.from('test_results').insert(r).select().single();
     if (error) throw error;
+    const { getDb } = await import('./localDb');
+    const db = getDb();
+    db.runSync(
+      `UPDATE test_results SET remote_id = ?, sync_status = 'synced' WHERE id = (
+        SELECT id FROM test_results WHERE user_id = ? AND result = ? AND date = ? AND sync_status = 'pending'
+        ORDER BY created_at DESC LIMIT 1
+      )`,
+      String(data.id), r.user_id, r.result, r.date
+    );
     return data;
   } catch { return { id: Date.now(), ...r }; }
 }
@@ -984,27 +1012,32 @@ export async function registerKit(barcode: string, data: { facilityId?: string; 
   } catch { return null; }
 }
 
-export async function pairKit(barcode: string, data: { patientId: string; patientName: string; pairedBy: string; pairedByName: string }): Promise<Kit | null> {
+export async function pairKit(barcode: string, data: { patientId: string; patientName: string; pairedBy: string; pairedByName: string; phone?: string }): Promise<Kit | { error: string } | null> {
   try {
-    const res = await fetch(KIT_API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'pair', barcode, ...data }) });
+    const payload = data.phone ? { ...data, notes: `Contact: ${data.phone}` } : data;
+    const res = await fetch(KIT_API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'pair', barcode, ...payload }) });
+    if (res.ok) return await res.json();
+    const err = await res.json().catch(() => ({}));
+    return { error: err.message || `Request failed (${res.status})` };
+  } catch { return null; }
+}
+
+export async function collectKit(barcode: string, data: { collectedBy: string; collectedByName: string; collectionMethod: string; location?: string; notes?: string; phone?: string }): Promise<Kit | null> {
+  try {
+    const notes = data.phone ? `${data.notes || ''} | Contact: ${data.phone}`.trim() : (data.notes || '');
+    const res = await fetch(KIT_API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'collect', barcode, ...data, notes }) });
     if (res.ok) return await res.json();
     return null;
   } catch { return null; }
 }
 
-export async function collectKit(barcode: string, data: { collectedBy: string; collectedByName: string; collectionMethod: string; location?: string; notes?: string }): Promise<Kit | null> {
+export async function linkKit(barcode: string, data: { patientId: string; patientName: string; linkedBy: string; linkedByName: string; phone?: string }): Promise<{ kit: Kit; notification: boolean } | { error: string } | null> {
   try {
-    const res = await fetch(KIT_API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'collect', barcode, ...data }) });
+    const payload = data.phone ? { ...data, notes: `Contact: ${data.phone}` } : data;
+    const res = await fetch(`${KIT_API}/link`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ barcode, ...payload }) });
     if (res.ok) return await res.json();
-    return null;
-  } catch { return null; }
-}
-
-export async function linkKit(barcode: string, data: { patientId: string; patientName: string; linkedBy: string; linkedByName: string }): Promise<{ kit: Kit; notification: boolean } | null> {
-  try {
-    const res = await fetch(`${KIT_API}/link`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ barcode, ...data }) });
-    if (res.ok) return await res.json();
-    return null;
+    const err = await res.json().catch(() => ({}));
+    return { error: err.message || `Request failed (${res.status})` };
   } catch { return null; }
 }
 

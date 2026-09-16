@@ -1,5 +1,6 @@
 'use client';
 
+import { apiFetch } from '@/lib/api-fetch';
 import { useState, useEffect, useRef, useMemo } from 'react';
 
 interface Conversation {
@@ -36,7 +37,7 @@ export default function AdminChatsPage() {
 
   const fetchConversations = async () => {
     try {
-      const res = await fetch('/api/admin/chats/conversations');
+      const res = await apiFetch('/api/admin/chats/conversations');
       if (!res.ok) throw new Error('Failed to load conversations');
       const json = await res.json();
       setConversations(json.conversations || json || []);
@@ -47,7 +48,7 @@ export default function AdminChatsPage() {
   const fetchMessages = async (convId: string) => {
     setLoadingMsgs(true);
     try {
-      const res = await fetch(`/api/admin/chats/messages?conversation_id=${convId}`);
+      const res = await apiFetch(`/api/admin/chats/messages?conversation_id=${convId}`);
       if (!res.ok) throw new Error('Failed to load messages');
       const json = await res.json();
       setMessages(json.messages || json || []);
@@ -60,7 +61,7 @@ export default function AdminChatsPage() {
     if (!newMessage.trim() || !selectedId) return;
     setSending(true);
     try {
-      await fetch('/api/admin/chats/send', {
+      await apiFetch('/api/admin/chats/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ conversation_id: selectedId, content: newMessage.trim() }),

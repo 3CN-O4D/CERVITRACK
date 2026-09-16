@@ -1,5 +1,6 @@
 'use client';
 
+import { apiFetch } from '@/lib/api-fetch';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
@@ -59,7 +60,7 @@ export default function AdminProvidersPage() {
   async function fetchProviders() {
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/providers?status=${filter}`);
+      const res = await apiFetch(`/api/admin/providers?status=${filter}`);
       if (res.ok) setProviders(await res.json());
     } catch { setError('Failed to load providers'); }
     finally { setLoading(false); }
@@ -70,7 +71,7 @@ export default function AdminProvidersPage() {
     setSubmitting(true);
     setError('');
     try {
-      const res = await fetch(`/api/admin/providers/${approving.id}`, {
+      const res = await apiFetch(`/api/admin/providers/${approving.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'approve', ...approveForm }),
@@ -90,7 +91,7 @@ export default function AdminProvidersPage() {
   async function handleReject(id: string) {
     if (!confirm('Reject this provider?')) return;
     try {
-      const res = await fetch(`/api/admin/providers/${id}`, {
+      const res = await apiFetch(`/api/admin/providers/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'reject' }),

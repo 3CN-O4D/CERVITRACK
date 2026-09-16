@@ -1,5 +1,6 @@
 'use client';
 
+import { apiFetch } from '@/lib/api-fetch';
 import { useState, useEffect, useMemo } from 'react';
 
 interface LabResult {
@@ -26,7 +27,7 @@ export default function AdminLabResultsPage() {
 
   const fetchResults = async () => {
     try {
-      const res = await fetch('/api/admin/lab-results');
+      const res = await apiFetch('/api/admin/lab-results');
       if (!res.ok) throw new Error('Failed to load lab results');
       const json = await res.json();
       setResults(json.results || json || []);

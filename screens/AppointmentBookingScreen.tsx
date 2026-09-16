@@ -55,11 +55,19 @@ export default function AppointmentBookingScreen() {
   const [selectedDoctor, setSelectedDoctor] = useState<any>(null);
   const [selectedHospital, setSelectedHospital] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
+  const [selectedTime, setSelectedTime] = useState('');
   const [bookingNotes, setBookingNotes] = useState('');
   const [patientNote, setPatientNote] = useState('');
   const [fallbackDates, setFallbackDates] = useState<string[]>([]);
   const [bookingLoading, setBookingLoading] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [anyAvailable, setAnyAvailable] = useState(false);
+
+  const timeSlots = [
+    '08:00', '09:00', '10:00', '11:00',
+    '12:00', '13:00', '14:00', '15:00',
+    '16:00', '17:00',
+  ];
 
   const uniqueHospitals = useMemo(() => {
     const hospitals = new Set(doctors.map((d: any) => d.hospital).filter(Boolean));
@@ -122,6 +130,8 @@ export default function AppointmentBookingScreen() {
     setSelectedDoctor(null);
     setSelectedHospital('');
     setSelectedDate('');
+    setSelectedTime('');
+    setAnyAvailable(false);
     setBookingNotes('');
     setPatientNote('');
     setFallbackDates(generateFallbackDates());
@@ -133,23 +143,27 @@ export default function AppointmentBookingScreen() {
       Alert.alert('Required', 'Please select a date.');
       return;
     }
+    if (!selectedTime) {
+      Alert.alert('Required', 'Please select a time.');
+      return;
+    }
     if (!user?.id) {
       Alert.alert('Error', 'Please log in to book an appointment.');
       return;
     }
-    if (!selectedDoctor) {
-      Alert.alert('Required', 'Please select a clinician.');
+    if (!selectedDoctor && !anyAvailable) {
+      Alert.alert('Required', 'Please select a clinician or tap "Any Available".');
       return;
     }
     setBookingLoading(true);
     try {
-      const providerId = selectedDoctor.id || '';
-      const doctorName = selectedDoctor.name || 'Clinician';
+      const providerId = selectedDoctor?.id || '';
+      const doctorName = anyAvailable ? 'Any Available' : (selectedDoctor?.name || 'Clinician');
       await requestAppointment(
         user.id,
         providerId,
         selectedDate,
-        '09:00',
+        selectedTime,
         `Appointment with ${doctorName}`,
         bookingNotes,
         patientNote,
@@ -157,39 +171,88 @@ export default function AppointmentBookingScreen() {
       setShowBooking(false);
       Alert.alert('Appointment Requested', `Your request for ${formatDate(selectedDate)} with ${doctorName} has been sent.`);
 
-      // Schedule day-before reminder
-      const apptDate = new Date(selectedDate + 'T09:00:00');
-      const dayBefore = new Date(apptDate);
-      dayBefore.setDate(dayBefore.getDate() - 1);
-      if (dayBefore.getTime() > Date.now()) {
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: 'Appointment Reminder',
-            body: `You have an appointment with ${doctorName} tomorrow at ${apptDate.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}.`,
-            sound: 'default',
-            priority: Notifications.AndroidNotificationPriority.HIGH,
-          },
-          trigger: {
-            type: Notifications.SchedulableTriggerInputTypes.DATE,
-            date: dayBefore,
-            channelId: 'reminders',
-          },
+      const doctorTime = selectedTime || '09:00';
+      const [hourStr, minStr] = doctorTime.split(':');
+      const apptDate = new Date(selectedDate + `T${hourStr}:${minStr}:00`);
+      const now = Date.now();
+
+      // Helper to schedule a notification
+      const schedule = async (opts: { title: string; body: string; date: Date; channelId?: string; type?: string }) => {
+        if (opts.date.getTime() <= now) return;
+        const channelId = opts.channelId || 'reminders';
+        try {
+          await Notifications.scheduleNotificationAsync({
+            content: {
+              title: opts.title,
+              body: opts.body,
+              sound: 'default',
+              priority: channelId === 'alarms'
+                ? Notifications.AndroidNotificationPriority.MAX
+                : Notifications.AndroidNotificationPriority.HIGH,
+              ...(Platform.OS === 'android' ? { channelId } : {}),
+            },
+            trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: opts.date } as any,
+          });
+        } catch { /* best-effort */ }
+      };
+
+      // Build reminder timeline
+      const reminders = [];
+
+      // 1. Previous day at 20:00 — first heads up
+      const prevEvening = new Date(apptDate);
+      prevEvening.setDate(prevEvening.getDate() - 1);
+      prevEvening.setHours(20, 0, 0, 0);
+      reminders.push({
+        title: 'Appointment Tomorrow',
+        body: `Reminder: you have an appointment with ${doctorName} tomorrow at ${apptDate.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}.`,
+        date: prevEvening,
+      });
+
+      // 2. Day-of at 08:00 — morning reminder
+      const morningOf = new Date(apptDate);
+      morningOf.setHours(8, 0, 0, 0);
+      if (morningOf.getTime() < apptDate.getTime()) {
+        reminders.push({
+          title: 'Appointment Today',
+          body: `Your appointment with ${doctorName} is today at ${apptDate.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}.`,
+          date: morningOf,
         });
       }
-      // Schedule day-of reminder (1 hour before)
-      if (apptDate.getTime() > Date.now()) {
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: 'Appointment Today',
-            body: `Your appointment with ${doctorName} is today at ${apptDate.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}.`,
-            sound: 'default',
-            priority: Notifications.AndroidNotificationPriority.HIGH,
-          },
-          trigger: {
-            type: Notifications.SchedulableTriggerInputTypes.DATE,
-            date: new Date(apptDate.getTime() - 60 * 60 * 1000),
-            channelId: 'reminders',
-          },
+
+      // 3. 2 hours before — getting close
+      const twoHoursBefore = new Date(apptDate.getTime() - 2 * 60 * 60 * 1000);
+      if (twoHoursBefore.getTime() > now && twoHoursBefore.getTime() > morningOf.getTime()) {
+        reminders.push({
+          title: 'Appointment Soon',
+          body: `Your appointment with ${doctorName} is in about 2 hours at ${apptDate.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}.`,
+          date: twoHoursBefore,
+        });
+      }
+
+      // Schedule all reminders
+      for (const r of reminders) {
+        await schedule({ ...r, channelId: 'reminders' });
+      }
+
+      // 4. 20 minutes before — ALARM (rings persistently)
+      const twentyMinBefore = new Date(apptDate.getTime() - 20 * 60 * 1000);
+      if (twentyMinBefore.getTime() > now) {
+        await schedule({
+          title: '⚠ Appointment in 20 Minutes',
+          body: `Your appointment with ${doctorName} is in 20 minutes at ${apptDate.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}.`,
+          date: twentyMinBefore,
+          channelId: 'alarms',
+        });
+      }
+
+      // 5. At appointment time — ALARM (due, rings persistently)
+      if (apptDate.getTime() > now) {
+        await schedule({
+          title: '🔔 Appointment Due Now',
+          body: `Your appointment with ${doctorName} is starting now at ${apptDate.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}.`,
+          date: apptDate,
+          channelId: 'alarms',
         });
       }
 
@@ -330,13 +393,24 @@ export default function AppointmentBookingScreen() {
                 <>
                   <Text style={[s.fieldLabel, { color: colors.text }]}>Select Clinician at {selectedHospital}</Text>
                   {filteredDoctors.length === 0 && (
-                    <Text style={{ color: colors.textSecondary, fontSize: 13, marginBottom: 8 }}>No clinicians at this hospital.</Text>
+                    <>
+                      <Text style={{ color: colors.textSecondary, fontSize: 13, marginBottom: 8 }}>No clinicians listed at this hospital.</Text>
+                      <TouchableOpacity
+                        style={[s.anyAvailableBtn, { borderColor: colors.primary }, anyAvailable && { backgroundColor: colors.primary }]}
+                        onPress={() => { setAnyAvailable(!anyAvailable); setSelectedDoctor(null); }}
+                      >
+                        <MaterialCommunityIcons name="account-question" size={18} color={anyAvailable ? '#FFF' : colors.primary} />
+                        <Text style={[s.anyAvailableText, { color: anyAvailable ? '#FFF' : colors.primary }]}>
+                          {anyAvailable ? '✓ Any Available Selected' : 'Any Available — I\'ll take whoever is free'}
+                        </Text>
+                      </TouchableOpacity>
+                    </>
                   )}
                   {filteredDoctors.map((doc) => (
                     <TouchableOpacity
                       key={doc.id}
                       style={[s.doctorItem, { backgroundColor: colors.inputBg, borderColor: colors.border }, selectedDoctor?.id === doc.id && { borderColor: colors.primary, backgroundColor: colors.primary + '10' }]}
-                      onPress={() => setSelectedDoctor(doc)}
+                      onPress={() => { setSelectedDoctor(doc); setAnyAvailable(false); }}
                     >
                       <View style={[s.avatar, { backgroundColor: colors.primary + '20' }]}>
                         <Text style={[s.avatarText, { color: colors.primary }]}>
@@ -384,6 +458,22 @@ export default function AppointmentBookingScreen() {
                 <Text style={[s.refreshDatesText, { color: colors.primary }]}>Show more dates</Text>
               </TouchableOpacity>
 
+              <Text style={[s.fieldLabel, { color: colors.text }]}>Select Time</Text>
+              <View style={s.timeRow}>
+                {timeSlots.map((t) => {
+                  const selected = selectedTime === t;
+                  return (
+                    <TouchableOpacity
+                      key={t}
+                      style={[s.timeChip, { backgroundColor: colors.inputBg, borderColor: colors.border }, selected && { backgroundColor: colors.primary, borderColor: colors.primary }]}
+                      onPress={() => setSelectedTime(t)}
+                    >
+                      <Text style={[s.timeChipText, { color: selected ? '#FFF' : colors.text }]}>{t}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
               <Text style={[s.fieldLabel, { color: colors.text }]}>Your Note (optional)</Text>
               <TextInput
                 style={[s.notesInput, { backgroundColor: colors.inputBg, color: colors.text, borderColor: colors.border }]}
@@ -405,9 +495,9 @@ export default function AppointmentBookingScreen() {
               />
 
               <TouchableOpacity
-                style={[s.submitBtn, { backgroundColor: !selectedDate ? colors.border : colors.primary }, bookingLoading && { opacity: 0.6 }]}
+                style={[s.submitBtn, { backgroundColor: (!selectedDate || !selectedTime) ? colors.border : colors.primary }, bookingLoading && { opacity: 0.6 }]}
                 onPress={handleBook}
-                disabled={bookingLoading || !selectedDate}
+                disabled={bookingLoading || !selectedDate || !selectedTime}
               >
                 {bookingLoading ? (
                   <ActivityIndicator color="#FFF" />
@@ -479,6 +569,11 @@ const s = StyleSheet.create({
   refreshDates: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8, alignSelf: 'center' },
   refreshDatesText: { fontSize: 13, fontWeight: '600' },
   notesInput: { borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12, fontSize: 14, borderWidth: 1, minHeight: 80, textAlignVertical: 'top' },
+  timeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  timeChip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, borderWidth: 1 },
+  timeChipText: { fontSize: 13, fontWeight: '600' },
+  anyAvailableBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 14, paddingVertical: 12, paddingHorizontal: 16, borderWidth: 1.5, marginBottom: 12 },
+  anyAvailableText: { fontSize: 14, fontWeight: '600', flex: 1 },
   submitBtn: { borderRadius: 14, paddingVertical: 15, alignItems: 'center', marginTop: 20, marginBottom: 20 },
   submitText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
 });

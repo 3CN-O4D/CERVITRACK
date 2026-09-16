@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -257,4 +257,51 @@ model RefreshToken {
 
   @@index([userId])
   @@index([token])
+}
+
+model SampleKit {
+  id               String   @id @default(uuid())
+  barcode          String   @unique
+  kitType          String   @default("HPV_DNA_SELF")
+  status           String   @default("REGISTERED") // REGISTERED | PAIRED | COLLECTED | IN_TRANSIT | IN_LAB | PROCESSED
+  facilityId       String?
+  registeredBy     String?
+  registeredByName String?
+  patientId        String?
+  patientName      String?
+  screeningId      String?
+  collectionMethod String?
+  collectedAt      DateTime?
+  currentLocation  String?
+  receivedAtLab    DateTime?
+  result           String?
+  resultNotes      String?
+  processedAt      DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  events KitEvent[]
+
+  @@index([barcode])
+  @@index([status])
+  @@index([facilityId])
+  @@index([patientId])
+  @@index([createdAt])
+}
+
+model KitEvent {
+  id            String   @id @default(uuid())
+  kitId         String
+  kit           SampleKit @relation(fields: [kitId], references: [id], onDelete: Cascade)
+  action        String   // REGISTERED | PAIRED | COLLECTED | IN_TRANSIT | IN_LAB | PROCESSED
+  scannedBy     String
+  scannedByName String
+  location      String?
+  facilityId    String?
+  notes         String?
+  timestamp     DateTime @default(now())
+
+  @@index([kitId])
+  @@index([action])
+  @@index([timestamp])
 }
