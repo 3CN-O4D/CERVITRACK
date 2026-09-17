@@ -26,7 +26,11 @@ export async function GET(request: NextRequest) {
       .order('created_at', { ascending: true });
 
     if (error) throw error;
-    return NextResponse.json(data);
+    const rows = data || [];
+    const visible = user.role === 'patient'
+      ? rows.filter((m) => !(Array.isArray(m.hidden_for) && m.hidden_for.includes(user.userId)))
+      : rows;
+    return NextResponse.json(visible);
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
   }

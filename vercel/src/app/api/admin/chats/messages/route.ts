@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
 
     const { data: conv } = await supabaseAdmin
       .from('chat_conversations')
-      .select('user_id')
+      .select('user_id, users:user_id(name)')
       .eq('id', conversation_id)
       .maybeSingle();
     if (!conv) return forbidden();
@@ -24,7 +24,14 @@ export async function GET(request: NextRequest) {
       .order('created_at', { ascending: true });
 
     if (error) throw error;
-    return NextResponse.json(data);
+    const rows = data || [];
+    const patientName = (conv.users as any)?.name || 'Patient';
+    const mapped = rows.map((m) => ({
+      ...m,
+      is_own: m.sender_id === user.userId,
+      sender_name: m.sender_type === 'patient' ? patientName : 'Staff',
+    }));
+    return NextResponse.json(mapped);
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
   }

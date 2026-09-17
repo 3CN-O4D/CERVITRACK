@@ -12,92 +12,11 @@ const stats = [
   { value: '47', label: 'Counties connected to the registry', color: 'text-sky-300' },
 ];
 
-const portals = [
-  {
-    title: 'Patient Mobile App',
-    subtitle: 'Android APK & iOS',
-    desc: 'Track your screening history, receive reminders, view lab results, and chat with your healthcare provider — all from your phone.',
-    features: ['Risk assessment questionnaire', 'Vaccine & appointment reminders', 'Secure provider messaging', 'Offline data storage'],
-    color: 'from-sky-500 to-sky-700',
-    icon: (
-      <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" />
-      </svg>
-    ),
-    href: '#download-apk',
-    cta: 'Download APK',
-  },
-  {
-    title: 'Lab Technician PWA',
-    subtitle: 'Offline-First Browser App',
-    desc: 'Enter cytology and HPV results from any device. Works offline in low-connectivity labs with automatic batch sync when back online.',
-    features: ['Offline result entry', 'Automatic batch sync', 'Specimen tracking', 'Quality assurance flags'],
-    color: 'from-violet-500 to-violet-700',
-    icon: (
-      <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23.693L5 14.5m14.8.8l1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0112 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5" />
-      </svg>
-    ),
-    href: '/login/lab',
-    cta: 'Open Lab PWA',
-  },
-  {
-    title: 'Clinician Workspace',
-    subtitle: 'Web-Based Point-of-Care',
-    desc: 'Manage patient records, capture VIA images, create screenings, make diagnoses, and coordinate referrals — optimized for clinic tablets.',
-    features: ['VIA image capture & annotation', 'Clinical protocol workflows', 'Referral management', 'DHIS2 reporting integration'],
-    color: 'from-emerald-500 to-emerald-700',
-    icon: (
-      <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
-      </svg>
-    ),
-    href: '/login/clinician',
-    cta: 'Open Workspace',
-  },
-  {
-    title: 'Sample Kit Tracking',
-    subtitle: 'Barcode-Based Chain of Custody',
-    desc: 'Track every sample kit from registration to lab results. Scan barcodes at each stage — pairing, collection, transit, lab receipt, and processing.',
-    features: ['QR/barcode scanning at every stage', 'Real-time movement tracking', 'Chain of custody audit trail', 'Patient self-collection confirmation'],
-    color: 'from-cyan-500 to-cyan-700',
-    icon: (
-      <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0113.5 9.375v-4.5z" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 6.75h.75v.75h-.75v-.75zM6.75 16.5h.75v.75h-.75v-.75zM16.5 6.75h.75v.75h-.75v-.75zM13.5 13.5h.75v.75h-.75v-.75zM13.5 19.5h.75v.75h-.75v-.75zM19.5 13.5h.75v.75h-.75v-.75zM19.5 19.5h.75v.75h-.75v-.75zM16.5 16.5h.75v.75h-.75v-.75z" />
-      </svg>
-    ),
-    href: '/workspace?tab=kits',
-    cta: 'Open Kit Tracker',
-  },
-  {
-    title: 'Clinician Portal',
-    subtitle: 'Doctor Dashboard',
-    desc: 'Manage your patients, chat with them, view records, book appointments, and handle scheduling — all in one place.',
-    features: ['Patient records & history', 'Secure messaging', 'Appointment management', 'Notification reminders'],
-    color: 'from-blue-500 to-blue-700',
-    icon: (
-      <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-      </svg>
-    ),
-    href: '/login/clinician',
-    cta: 'Open Clinician Portal',
-  },
-  {
-    title: 'Administrative Panels',
-    subtitle: 'County & National Surveillance',
-    desc: 'Real-time dashboards for screening coverage, disease burden, facility performance, and aggregate reporting across all 47 counties.',
-    features: ['Live aggregate dashboards', 'County & national roll-ups', 'DHIS2 export & MOH reporting', 'User & facility management'],
-    color: 'from-amber-500 to-amber-700',
-    icon: (
-      <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
-      </svg>
-    ),
-    href: '/login/admin',
-    cta: 'Open Admin Panel',
-  },
+const staffPortals = [
+  { label: 'Lab Technician PWA', href: '/login/lab' },
+  { label: 'Clinician Workspace', href: '/login/clinician' },
+  { label: 'County Admin', href: '/login/county-admin' },
+  { label: 'Admin Panel', href: '/login/admin' },
 ];
 
 const continuumSteps = [
@@ -201,10 +120,24 @@ export default function HomePage() {
         </Link>
         <div className="hidden md:flex items-center gap-6">
           <a href="#continuum" className="text-gray-600 hover:text-sky-700 text-sm font-medium">How It Works</a>
-          <a href="#portals" className="text-gray-600 hover:text-sky-700 text-sm font-medium">Portals</a>
           <Link href="/library" className="text-gray-600 hover:text-sky-700 text-sm font-medium">Library</Link>
           <a href="#faq" className="text-gray-600 hover:text-sky-700 text-sm font-medium">FAQ</a>
           <Link href="/privacy" className="text-gray-600 hover:text-sky-700 text-sm font-medium">Privacy</Link>
+          <details className="relative">
+            <summary className="cursor-pointer list-none flex items-center gap-1 text-gray-400 hover:text-sky-700 text-sm font-medium">
+              Staff Portals
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+              </svg>
+            </summary>
+            <div className="absolute right-0 top-full mt-2 w-56 rounded-xl border border-gray-100 bg-white shadow-xl py-2 z-20">
+              {staffPortals.map((p) => (
+                <a key={p.href} href={p.href} className="block px-4 py-2 text-sm text-gray-600 hover:bg-sky-50 hover:text-sky-700">
+                  {p.label}
+                </a>
+              ))}
+            </div>
+          </details>
         </div>
         <a href="#download-apk" className="bg-sky-700 text-white px-5 py-2 rounded-lg font-medium hover:bg-sky-800 text-sm">
           Get the App
@@ -228,7 +161,8 @@ export default function HomePage() {
             </p>
             <div className="mt-8 flex flex-wrap gap-4">
               <a
-                href="#"
+                href="/CerviTrack.apk"
+                download
                 className="bg-sky-700 text-white px-8 py-4 rounded-xl font-semibold hover:bg-sky-800 flex items-center gap-3 text-lg shadow-lg shadow-sky-200"
               >
                 <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M3 20.5v-17A1.5 1.5 0 014.5 2h15A1.5 1.5 0 0121 3.5v17l-9-4-9 4z"/></svg>
@@ -345,50 +279,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── Portal Access Breakout ── */}
-      <section id="portals" className="py-24">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold text-sky-900">One System, Five Portals</h2>
-            <p className="mt-3 text-gray-500 max-w-2xl mx-auto">Every stakeholder gets a purpose-built interface — all reading from and writing to the same unified database.</p>
-          </div>
-          <div className="grid md:grid-cols-2 gap-8">
-            {portals.map((p) => (
-              <div key={p.title} className="rounded-2xl border border-gray-100 bg-white p-8 hover:shadow-xl transition-all duration-300 group">
-                <div className="flex items-start gap-4">
-                  <div className={`w-14 h-14 bg-gradient-to-br ${p.color} rounded-xl flex items-center justify-center text-white shadow-lg group-hover:scale-105 transition-transform`}>
-                    {p.icon}
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-lg text-sky-900">{p.title}</h3>
-                    <p className="text-xs text-gray-400 mt-0.5">{p.subtitle}</p>
-                  </div>
-                </div>
-                <p className="mt-4 text-sm text-gray-600 leading-relaxed">{p.desc}</p>
-                <ul className="mt-4 space-y-2">
-                  {p.features.map((f) => (
-                    <li key={f} className="flex items-center gap-2 text-sm text-gray-600">
-                      <svg className="w-4 h-4 text-emerald-500 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                      </svg>
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-                <div className="mt-6">
-                  <a href={p.href} className="inline-flex items-center gap-2 text-sky-700 font-semibold text-sm hover:underline">
-                    {p.cta}
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-                    </svg>
-                  </a>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* ── Features Grid ── */}
       <section className="py-24 bg-sky-50">
         <div className="max-w-7xl mx-auto px-6">
@@ -417,7 +307,8 @@ export default function HomePage() {
           </p>
           <div className="flex flex-wrap justify-center gap-4">
             <a
-              href="#"
+              href="/CerviTrack.apk"
+              download
               className="bg-white text-emerald-700 px-8 py-4 rounded-xl font-semibold hover:bg-emerald-50 flex items-center gap-3 text-lg shadow-lg"
             >
               <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M3 20.5v-17A1.5 1.5 0 014.5 2h15A1.5 1.5 0 0121 3.5v17l-9-4-9 4z"/></svg>
@@ -531,12 +422,14 @@ export default function HomePage() {
               </p>
             </div>
             <div>
-              <h4 className="font-semibold text-sky-900 mb-3 text-sm">Portals</h4>
+              <h4 className="font-semibold text-sky-900 mb-3 text-sm">Get Started</h4>
               <ul className="space-y-2 text-sm text-gray-500">
-                <li><a href="#download-apk" className="hover:text-sky-700">Patient APK</a></li>
-                <li><a href="/lab" className="hover:text-sky-700">Lab Technician PWA</a></li>
-                <li><a href="/workspace" className="hover:text-sky-700">Clinician Workspace</a></li>
-                <li><a href="/admin" className="hover:text-sky-700">Admin Panel</a></li>
+                <li><Link href="/auth" className="hover:text-sky-700">Patient Sign In</Link></li>
+                <li><a href="/CerviTrack.apk" download className="hover:text-sky-700">Patient APK</a></li>
+                <li><a href="/login/lab" className="hover:text-sky-700">Lab Technician PWA</a></li>
+                <li><a href="/login/clinician" className="hover:text-sky-700">Clinician Workspace</a></li>
+                <li><a href="/login/county-admin" className="hover:text-sky-700">County Admin</a></li>
+                <li><a href="/login/admin" className="hover:text-sky-700">Admin Panel</a></li>
               </ul>
             </div>
             <div>
