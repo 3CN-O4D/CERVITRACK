@@ -43,14 +43,17 @@ CREATE POLICY "Staff read grants to them" ON consent_grants FOR SELECT USING (st
 ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS edited_at  timestamptz;
 ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
 ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS hidden_for uuid[] DEFAULT '{}';
+ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS read boolean DEFAULT false;
 
 DROP POLICY IF EXISTS "Users update own chat_messages" ON chat_messages;
 CREATE POLICY "Users update own chat_messages" ON chat_messages FOR UPDATE
   USING (EXISTS (SELECT 1 FROM chat_conversations cc WHERE cc.id = chat_messages.conversation_id AND cc.user_id = auth.uid()) AND chat_messages.sender_id = auth.uid())
   WITH CHECK (EXISTS (SELECT 1 FROM chat_conversations cc WHERE cc.id = chat_messages.conversation_id AND cc.user_id = auth.uid()) AND chat_messages.sender_id = auth.uid());
 
-CREATE OR REPLACE FUNCTION hide_message_for_me(p_message_id uuid) RETURNS boolean AS $$
-DECLARE v_conversation_id uuid;
+DROP FUNCTION IF EXISTS hide_message_for_me(uuid);
+DROP FUNCTION IF EXISTS hide_message_for_me(bigint);
+CREATE OR REPLACE FUNCTION hide_message_for_me(p_message_id bigint) RETURNS boolean AS $$
+DECLARE v_conversation_id bigint;
 BEGIN
   SELECT cm.conversation_id INTO v_conversation_id FROM chat_messages cm WHERE cm.id = p_message_id;
   IF v_conversation_id IS NULL THEN RETURN false; END IF;
@@ -59,7 +62,9 @@ BEGIN
   RETURN true;
 END; $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
-CREATE OR REPLACE FUNCTION mark_chat_messages_read(p_conversation_id uuid) RETURNS void AS $$
+DROP FUNCTION IF EXISTS mark_chat_messages_read(uuid);
+DROP FUNCTION IF EXISTS mark_chat_messages_read(bigint);
+CREATE OR REPLACE FUNCTION mark_chat_messages_read(p_conversation_id bigint) RETURNS void AS $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM chat_conversations cc WHERE cc.id = p_conversation_id AND cc.user_id = auth.uid()) THEN RETURN; END IF;
   UPDATE chat_messages SET read = true, status = 'read' WHERE conversation_id = p_conversation_id AND sender_id <> auth.uid();

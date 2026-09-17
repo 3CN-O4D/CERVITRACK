@@ -337,6 +337,7 @@ CREATE TABLE chat_messages (
   file_url        text,
   duration        text,
   status          text DEFAULT 'sent',
+  read            boolean DEFAULT false,
   edited_at       timestamptz,
   deleted_at      timestamptz,
   hidden_for      uuid[] DEFAULT '{}',
@@ -537,8 +538,8 @@ CREATE INDEX IF NOT EXISTS idx_kit_requests_created_at ON kit_requests (created_
 CREATE OR REPLACE FUNCTION increment_screenings(uid uuid) RETURNS void AS $$ BEGIN UPDATE users SET total_screenings = total_screenings + 1, last_screening_date = now()::text WHERE id = uid; END; $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE OR REPLACE FUNCTION increment_vaccines(uid uuid) RETURNS void AS $$ BEGIN UPDATE users SET total_vaccines = total_vaccines + 1, last_vaccine_date = now()::text WHERE id = uid; END; $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-CREATE OR REPLACE FUNCTION hide_message_for_me(p_message_id uuid) RETURNS boolean AS $$
-DECLARE v_conversation_id uuid;
+CREATE OR REPLACE FUNCTION hide_message_for_me(p_message_id bigint) RETURNS boolean AS $$
+DECLARE v_conversation_id bigint;
 BEGIN
   SELECT cm.conversation_id INTO v_conversation_id FROM chat_messages cm WHERE cm.id = p_message_id;
   IF v_conversation_id IS NULL THEN RETURN false; END IF;
@@ -547,7 +548,7 @@ BEGIN
   RETURN true;
 END; $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
-CREATE OR REPLACE FUNCTION mark_chat_messages_read(p_conversation_id uuid) RETURNS void AS $$
+CREATE OR REPLACE FUNCTION mark_chat_messages_read(p_conversation_id bigint) RETURNS void AS $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM chat_conversations cc WHERE cc.id = p_conversation_id AND cc.user_id = auth.uid()) THEN RETURN; END IF;
   UPDATE chat_messages SET read = true, status = 'read' WHERE conversation_id = p_conversation_id AND sender_id <> auth.uid();
