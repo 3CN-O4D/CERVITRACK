@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase-browser';
 import { apiFetch } from '@/lib/api-fetch';
+import BarcodeScanner from '@/components/BarcodeScanner';
 
 const VIABILITY_DAYS = 25;
 const VIDEO_URL = 'https://www.youtube.com/embed/njsHSnDGcDk?autoplay=0&modestbranding=1&rel=0';
@@ -141,6 +142,7 @@ export default function PatientSelfSampling() {
   const [collectedAt, setCollectedAt] = useState<number | null>(null);
   const [now, setNow] = useState(Date.now());
   const [faqOpen, setFaqOpen] = useState<number | null>(null);
+  const [showScanner, setShowScanner] = useState(false);
 
   useEffect(() => {
     async function init() {
@@ -197,13 +199,15 @@ export default function PatientSelfSampling() {
   const viabilityTarget = collectedAt ? collectedAt + VIABILITY_DAYS * 86400000 : null;
   const remaining = viabilityTarget ? countdown(viabilityTarget) : null;
 
-  async function findKit() {
-    if (!barcode.trim()) return;
+  async function findKit(codeArg?: string) {
+    const code = (codeArg ?? barcode).trim();
+    if (!code) return;
+    setBarcode(code);
     setLoading(true);
     setError('');
     setMessage('');
     try {
-      const res = await apiFetch(`/api/sample-kits/scan/${encodeURIComponent(barcode.trim())}`);
+      const res = await apiFetch(`/api/sample-kits/scan/${encodeURIComponent(code)}`);
       if (res.ok) {
         const found = await res.json();
         setKit(found);
@@ -381,10 +385,19 @@ export default function PatientSelfSampling() {
             placeholder="Enter kit barcode..."
             className="mt-4 w-full rounded-xl border p-3 text-center font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-primary"
           />
-          <button onClick={findKit} disabled={!barcode.trim() || loading}
+          <button onClick={() => findKit()} disabled={!barcode.trim() || loading}
             className="mt-3 w-full rounded-xl bg-primary px-4 py-3 font-semibold text-white disabled:opacity-50">
             {loading ? 'Checking…' : 'Find Kit'}
           </button>
+          <button onClick={() => setShowScanner((v) => !v)}
+            className="mt-2 w-full rounded-xl border border-primary px-4 py-2.5 text-sm font-semibold text-primary">
+            {showScanner ? 'Close Camera' : '📷 Scan with Camera'}
+          </button>
+          {showScanner && (
+            <div className="mt-3 overflow-hidden rounded-xl border">
+              <BarcodeScanner onScan={(code) => { setShowScanner(false); findKit(code); }} onClose={() => setShowScanner(false)} />
+            </div>
+          )}
         </section>
       )}
 
@@ -526,6 +539,15 @@ export default function PatientSelfSampling() {
             className="mt-4 w-full rounded-xl bg-primary px-4 py-3 font-semibold text-white disabled:opacity-50">
             {loading ? 'Confirming…' : 'Confirm Sample Taken'}
           </button>
+          <button onClick={() => setShowScanner((v) => !v)}
+            className="mt-2 w-full rounded-xl border border-primary px-4 py-2.5 text-sm font-semibold text-primary">
+            {showScanner ? 'Close Camera' : '📷 Re-scan with Camera'}
+          </button>
+          {showScanner && (
+            <div className="mt-3 overflow-hidden rounded-xl border">
+              <BarcodeScanner onScan={(code) => { setShowScanner(false); setBarcode(code.toUpperCase()); }} onClose={() => setShowScanner(false)} />
+            </div>
+          )}
         </section>
       )}
 

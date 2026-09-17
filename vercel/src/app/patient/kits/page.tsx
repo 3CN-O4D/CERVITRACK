@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase-browser';
 import { apiFetch } from '@/lib/api-fetch';
+import BarcodeScanner from '@/components/BarcodeScanner';
 
 const VIABILITY_DAYS = 25;
 const LAB_PROCESSING_MINUTES = 99;
@@ -37,27 +38,58 @@ export default function PatientKits() {
   const [kits, setKits] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [, setTick] = useState(0);
+  const [userId, setUserId] = useState('');
+  const [showScanner, setShowScanner] = useState(false);
+  const [scanMsg, setScanMsg] = useState('');
 
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 60000);
     return () => clearInterval(id);
   }, []);
 
+  async function loadKits(uid: string) {
+    try {
+      const res = await apiFetch('/api/sample-kits?patientId=' + encodeURIComponent(uid) + '&limit=50');
+      if (res.ok) {
+        const d = await res.json();
+        setKits(d.data || []);
+      }
+    } catch { /* ignore */ }
+  }
+
   useEffect(() => {
     async function init() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { setLoading(false); return; }
-      try {
-        const res = await apiFetch('/api/sample-kits?patientId=' + encodeURIComponent(session.user.id) + '&limit=50');
-        if (res.ok) {
-          const d = await res.json();
-          setKits(d.data || []);
-        }
-      } catch { /* ignore */ }
+      setUserId(session.user.id);
+      await loadKits(session.user.id);
       setLoading(false);
     }
     init();
   }, []);
+
+  async function handleScan(code: string) {
+    setShowScanner(false);
+    const clean = code.trim().toUpperCase();
+    setScanMsg(`Looking up ${clean}…`);
+    try {
+      const res = await apiFetch(`/api/sample-kits/scan/${encodeURIComponent(clean)}`);
+      if (res.status === 404) {
+        setScanMsg(`Kit ${clean} is not registered yet. Use Self-Sampling to register and link it.`);
+        return;
+      }
+      if (!res.ok) { setScanMsg('Could not look up that kit. Please try again.'); return; }
+      const found = await res.json();
+      if (found.patient_id && userId && found.patient_id !== userId) {
+        setScanMsg(`Kit ${clean} is linked to a different account.`);
+        return;
+      }
+      setScanMsg(`Kit ${clean} — ${found.status || 'found'}.`);
+      await loadKits(userId);
+    } catch {
+      setScanMsg('Network error — check your connection and try again.');
+    }
+  }
 
   if (loading) return <div className="h-96 flex items-center justify-center text-gray-500">Loading…</div>;
 
@@ -65,10 +97,23 @@ export default function PatientKits() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Kit Tracker</h1>
-        <Link href="/patient/self-sampling" className="rounded bg-primary px-3 py-2 text-sm font-medium text-white">
-          Scan / Self-Sampling
-        </Link>
+        <div className="flex gap-2">
+          <button onClick={() => setShowScanner((v) => !v)}
+            className="rounded border border-primary px-3 py-2 text-sm font-medium text-primary">
+            {showScanner ? 'Close Camera' : '📷 Scan'}
+          </button>
+          <Link href="/patient/self-sampling" className="rounded bg-primary px-3 py-2 text-sm font-medium text-white">
+            Scan / Self-Sampling
+          </Link>
+        </div>
       </div>
+
+      {showScanner && (
+        <div className="overflow-hidden rounded-lg border">
+          <BarcodeScanner onScan={handleScan} onClose={() => setShowScanner(false)} />
+        </div>
+      )}
+      {scanMsg && <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">{scanMsg}</div>}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {kits.map((k) => {
