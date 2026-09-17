@@ -109,6 +109,7 @@ export default function PatientDashboard() {
           { label: 'Self-Assessment', href: '/patient/screening', Icon: '📋' },
           { label: 'My Results', href: '/patient/results', Icon: '📊' },
           { label: 'Self-Test', href: '/patient/test', Icon: '🧪' },
+          { label: 'Self-Sampling', href: '/patient/self-sampling', Icon: '🧬' },
           { label: 'Kit Tracker', href: '/patient/kits', Icon: '📦' },
         ].map((it) => (
           <Link

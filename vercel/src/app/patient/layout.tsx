@@ -67,6 +67,7 @@ export default function PatientLayout({
     { label: 'Self-Assessment', href: '/patient/screening', disabled: userRole !== 'patient' },
     { label: 'My Results', href: '/patient/results', disabled: userRole !== 'patient' },
     { label: 'Self-Test', href: '/patient/test', disabled: userRole !== 'patient' },
+    { label: 'Self-Sampling', href: '/patient/self-sampling', disabled: userRole !== 'patient' },
     { label: 'Kit Tracker', href: '/patient/kits', disabled: userRole !== 'patient' },
     { label: 'Vaccinations', href: '/patient/vaccines', disabled: userRole !== 'patient' },
     { label: 'Appointments', href: '/patient/appointments', disabled: userRole !== 'patient' },

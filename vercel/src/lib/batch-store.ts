@@ -192,14 +192,63 @@ export async function submitBatch(batchId: string) {
   if (batch.status !== 'testing') return { error: 'Batch must be in testing phase to submit', status: 400 };
   if (batch.processed_count < batch.sample_count) return { error: `Only ${batch.processed_count}/${batch.sample_count} samples tested`, status: 400 };
 
+  const now = new Date().toISOString();
+
   await supabaseAdmin
     .from('sample_batches')
     .update({
       status: 'submitted',
-      submitted_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      submitted_at: now,
+      updated_at: now,
     })
     .eq('id', batchId);
+
+  const tested = (batch.items || []).filter((item: any) => item.result);
+
+  for (const item of tested) {
+    let kitQuery = supabaseAdmin.from('sample_kits').update({
+      status: 'PROCESSED',
+      result: item.result,
+      result_notes: item.result_notes || '',
+      processed_at: now,
+      updated_at: now,
+    });
+    if (item.kit_id) kitQuery = kitQuery.eq('id', item.kit_id);
+    else kitQuery = kitQuery.eq('barcode', item.kit_barcode);
+    await kitQuery;
+
+    if (item.patient_id) {
+      await supabaseAdmin.from('lab_results').insert({
+        user_id: item.patient_id,
+        patient_name: item.patient_name || '',
+        result: item.result,
+        notes: item.result_notes || `Batch ${batch.batch_code}`,
+      });
+
+      await supabaseAdmin.from('notifications').insert({
+        user_id: item.patient_id,
+        title: 'Lab result ready',
+        message: `Your sample (${item.kit_barcode}) has been processed. Result: ${item.result}. Open My Results for details.`,
+        type: 'info',
+      });
+    }
+  }
+
+  const { data: staff } = await supabaseAdmin
+    .from('users')
+    .select('id')
+    .in('role', ['clinician', 'provider', 'county_admin', 'admin', 'national_admin', 'system_admin', 'facility_admin']);
+
+  const staffRows = (staff || []).map((u: any) => ({
+    user_id: u.id,
+    title: 'Batch results submitted',
+    message: `Batch ${batch.batch_code} was submitted by ${batch.lab_tech_name || 'the lab'} with ${tested.length} result(s).`,
+    type: 'info',
+  }));
+
+  if (staffRows.length) {
+    await supabaseAdmin.from('notifications').insert(staffRows);
+  }
 
   return { batch: await getBatch(batchId) };
 }
