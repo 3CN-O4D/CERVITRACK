@@ -17,6 +17,11 @@ export class SampleKitsController {
     return this.sampleKitsService.pairToPatient(body);
   }
 
+  @Post('link')
+  linkKit(@Body() body: { barcode: string; patientId: string; patientName: string; linkedBy: string; linkedByName: string }) {
+    return this.sampleKitsService.linkKitToPatient(body);
+  }
+
   @Post('collect')
   confirmCollection(@Body() body: { barcode: string; collectedBy: string; collectedByName: string; collectionMethod: string; facilityId?: string; location?: string; notes?: string }) {
     return this.sampleKitsService.confirmCollection(body);

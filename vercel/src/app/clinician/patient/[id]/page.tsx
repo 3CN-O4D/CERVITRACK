@@ -1,5 +1,6 @@
 'use client';
 
+import { apiFetch } from '@/lib/api-fetch';
 import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 
@@ -67,10 +68,10 @@ export default function ClinicianPatientProfile({ params }: { params: { id: stri
     setLoading(true);
     try {
       const [patRes, scrRes, vacRes, apptRes] = await Promise.all([
-        fetch(`/api/providers/patient/${id}`),
-        fetch(`/api/screening/history?user_id=${id}`),
-        fetch(`/api/vaccines?user_id=${id}`),
-        fetch(`/api/appointments?user_id=${id}`),
+        apiFetch(`/api/providers/patient/${id}`),
+        apiFetch(`/api/screening/history?user_id=${id}`),
+        apiFetch(`/api/vaccines?user_id=${id}`),
+        apiFetch(`/api/appointments?user_id=${id}`),
       ]);
       if (patRes.ok) setPatient(await patRes.json());
       if (scrRes.ok) {
@@ -91,7 +92,7 @@ export default function ClinicianPatientProfile({ params }: { params: { id: stri
 
   async function sendNotification() {
     try {
-      await fetch('/api/providers/notification/send', {
+      await apiFetch('/api/providers/notification/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: id, ...notifyForm }),
@@ -104,7 +105,7 @@ export default function ClinicianPatientProfile({ params }: { params: { id: stri
 
   async function bookAppointment() {
     try {
-      await fetch('/api/appointments/book', {
+      await apiFetch('/api/appointments/book', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: id, provider_id: providerId, ...bookForm, status: 'upcoming' }),

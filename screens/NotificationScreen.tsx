@@ -3,7 +3,9 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'rea
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
-import { useNotifications, Notification } from '../context/NotificationContext';
+import { useNotifications } from '../context/NotificationContext';
+import type { AppNotification } from '../context/NotificationContext';
+type Notification = AppNotification;
 
 const NOTIF_ROUTES: Record<string, string> = {
   screening: 'Screening',
@@ -21,16 +23,13 @@ const typeIcon = (type: Notification['type']) => {
     case 'appointment': return { name: 'calendar-outline' as const, family: Ionicons };
     case 'reminder': return { name: 'alarm-outline' as const, family: Ionicons };
     case 'alert': return { name: 'alert-circle' as const, family: Ionicons };
-    case 'lab_result': return { name: 'flask-outline' as const, family: Ionicons };
     default: return { name: 'notifications-outline' as const, family: Ionicons };
   }
 };
 
 export default function NotificationScreen({ navigation }: any) {
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
   const { notifications, markRead, markAllRead, deleteNotification } = useNotifications();
-  const [showMenu, setShowMenu] = useState<string | null>(null);
   const s = styles(colors);
 
   const confirmDelete = (id: string) => {
@@ -64,14 +63,8 @@ export default function NotificationScreen({ navigation }: any) {
             <TouchableOpacity
               key={n.id}
               style={[s.notifCard, !n.read && s.unreadCard]}
-              onPress={() => {
-                markRead(n.id);
-                const route = n.type ? NOTIF_ROUTES[n.type] : undefined;
-                if (route && navigation?.navigate) {
-                  navigation.navigate(route);
-                }
-              }}
-              onLongPress={() => setShowMenu(showMenu === n.id ? null : n.id)}
+              onPress={() => markRead(n.id)}
+              onLongPress={() => deleteNotification(n.id)}
             >
               <View style={[s.iconWrap, { backgroundColor: colors.primary + '15' }]}>
                 <IconComp name={icon.name as any} size={20} color={colors.primary} />

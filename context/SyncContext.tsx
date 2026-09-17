@@ -3,6 +3,7 @@ import { Platform, AppState, AppStateStatus } from 'react-native';
 import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
 import { syncAll, onSyncStateChange, getIsSyncing } from '../services/sync';
 import { getSyncQueueCount, initLocalDb } from '../services/localDb';
+import { initChatCrypto } from '../services/crypto';
 
 interface SyncContextType {
   isOnline: boolean;
@@ -28,7 +29,10 @@ export function SyncProvider({ children }: { children: ReactNode }) {
 
   // Initialize SQLite on mount
   useEffect(() => {
-    initLocalDb();
+    (async () => {
+      await initChatCrypto();
+      initLocalDb();
+    })();
   }, []);
 
   // Listen to sync state changes

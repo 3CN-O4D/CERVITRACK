@@ -1,10 +1,12 @@
 'use client';
 
+import { apiFetch } from '@/lib/api-fetch';
 import { useState, useEffect, useRef, useMemo } from 'react';
 
 interface Conversation {
   id: string;
-  contact_name: string;
+  contact_name?: string;
+  users?: { name?: string };
   last_message: string;
   last_message_at: string;
   unread: number;
@@ -13,10 +15,35 @@ interface Conversation {
 interface Message {
   id: string;
   sender_id: string;
-  sender_name: string;
+  sender_name?: string;
   content: string;
   created_at: string;
-  is_own: boolean;
+  edited_at?: string | null;
+  deleted_at?: string | null;
+  status?: string;
+  sender_type?: string;
+  is_own?: boolean;
+}
+
+function dayLabel(ts: number) {
+  const d = new Date(ts);
+  const today = new Date();
+  const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((startOfDay(today) - startOfDay(d)) / 86400000);
+  if (diff === 0) return 'Today';
+  if (diff === 1) return 'Yesterday';
+  return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+function sameDay(a: number, b: number) {
+  const x = new Date(a);
+  const y = new Date(b);
+  return x.getFullYear() === y.getFullYear() && x.getMonth() === y.getMonth() && x.getDate() === y.getDate();
+}
+
+function timeLabel(ts: string) {
+  if (!ts) return '';
+  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
 export default function AdminChatsPage() {
@@ -24,6 +51,7 @@ export default function AdminChatsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
+  const [editing, setEditing] = useState<string | null>(null);
   const [loadingConvs, setLoadingConvs] = useState(true);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [sending, setSending] = useState(false);
@@ -36,7 +64,7 @@ export default function AdminChatsPage() {
 
   const fetchConversations = async () => {
     try {
-      const res = await fetch('/api/admin/chats/conversations');
+      const res = await apiFetch('/api/admin/chats/conversations');
       if (!res.ok) throw new Error('Failed to load conversations');
       const json = await res.json();
       setConversations(json.conversations || json || []);
@@ -46,8 +74,10 @@ export default function AdminChatsPage() {
 
   const fetchMessages = async (convId: string) => {
     setLoadingMsgs(true);
+    setEditing(null);
+    setNewMessage('');
     try {
-      const res = await fetch(`/api/admin/chats/messages?conversation_id=${convId}`);
+      const res = await apiFetch(`/api/admin/chats/messages?conversation_id=${convId}`);
       if (!res.ok) throw new Error('Failed to load messages');
       const json = await res.json();
       setMessages(json.messages || json || []);
@@ -57,27 +87,50 @@ export default function AdminChatsPage() {
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || !selectedId) return;
+    if (!selectedId) return;
+    const text = newMessage.trim();
+    if (!text) return;
     setSending(true);
     try {
-      await fetch('/api/admin/chats/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conversation_id: selectedId, content: newMessage.trim() }),
-      });
-      setNewMessage('');
-      fetchMessages(selectedId);
+      if (editing) {
+        const res = await apiFetch('/api/admin/chats/messages/' + editing, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: text }),
+        });
+        if (res.ok) fetchMessages(selectedId);
+      } else {
+        await apiFetch('/api/admin/chats/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ conversation_id: selectedId, content: text }),
+        });
+        setNewMessage('');
+        fetchMessages(selectedId);
+      }
     } catch { /* silently fail */ }
     finally { setSending(false); }
+  };
+
+  const handleDelete = async (id: string, everyone: boolean) => {
+    if (!selectedId) return;
+    if (everyone && !window.confirm('Delete this message for everyone? This cannot be undone.')) return;
+    try {
+      await apiFetch('/api/admin/chats/messages/' + id, { method: 'DELETE' });
+      fetchMessages(selectedId);
+    } catch { /* silently fail */ }
   };
 
   const filteredConvs = useMemo(() => {
     if (!convSearch) return conversations;
     const q = convSearch.toLowerCase();
-    return conversations.filter(c => c.contact_name?.toLowerCase().includes(q) || c.last_message?.toLowerCase().includes(q));
+    return conversations.filter(c =>
+      (c.contact_name || c.users?.name || '')!.toLowerCase().includes(q) ||
+      c.last_message?.toLowerCase().includes(q));
   }, [conversations, convSearch]);
 
   const selectedConv = conversations.find(c => c.id === selectedId);
+  const selectedName = selectedConv?.contact_name || selectedConv?.users?.name || 'Chat';
 
   return (
     <div className="p-8">
@@ -104,7 +157,7 @@ export default function AdminChatsPage() {
               <button key={c.id} onClick={() => setSelectedId(c.id)}
                 className={`w-full text-left px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition-colors ${selectedId === c.id ? 'bg-sky-50' : ''}`}>
                 <div className="flex justify-between items-start">
-                  <span className="font-medium text-sm text-gray-900">{c.contact_name}</span>
+                  <span className="font-medium text-sm text-gray-900">{c.contact_name || c.users?.name || 'Chat'}</span>
                   {c.unread > 0 && <span className="bg-sky-600 text-white text-xs rounded-full px-1.5 py-0.5">{c.unread}</span>}
                 </div>
                 <p className="text-xs text-gray-500 mt-0.5 truncate">{c.last_message}</p>
@@ -121,39 +174,67 @@ export default function AdminChatsPage() {
             </div>
           ) : (
             <>
-              {selectedConv && (
-                <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
-                  <span className="font-medium text-sm text-gray-900">{selectedConv.contact_name}</span>
-                </div>
-              )}
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
+                <span className="font-medium text-sm text-gray-900">{selectedName}</span>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 space-y-2">
                 {loadingMsgs ? (
                   <div className="text-sm text-gray-400">Loading messages…</div>
                 ) : messages.length === 0 ? (
                   <div className="text-sm text-gray-400">No messages yet</div>
-                ) : messages.map((m) => (
-                  <div key={m.id} className={`flex ${m.is_own ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-xs px-4 py-2.5 rounded-2xl text-sm ${
-                      m.is_own ? 'bg-sky-700 text-white rounded-br-md' : 'bg-gray-100 text-gray-900 rounded-bl-md'
-                    }`}>
-                      {!m.is_own && <p className="text-xs font-medium text-sky-600 mb-0.5">{m.sender_name}</p>}
-                      <p>{m.content}</p>
-                      <p className={`text-xs mt-1 ${m.is_own ? 'text-sky-200' : 'text-gray-400'}`}>
-                        {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </p>
+                ) : messages.map((m, i) => {
+                  const prev = i > 0 ? messages[i - 1] : null;
+                  const showDay = !prev || !sameDay(new Date(prev.created_at).getTime(), new Date(m.created_at).getTime());
+                  const deleted = !!m.deleted_at;
+                  return (
+                    <div key={m.id}>
+                      {showDay && (
+                        <div className="flex justify-center py-1.5">
+                          <span className="rounded-full bg-gray-200 text-gray-600 text-[10px] font-semibold px-3 py-1">
+                            {dayLabel(new Date(m.created_at).getTime())}
+                          </span>
+                        </div>
+                      )}
+                      <div className={`flex ${m.is_own ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-xs px-4 py-2.5 rounded-2xl text-sm ${
+                          m.is_own ? 'bg-sky-700 text-white rounded-br-md' : 'bg-gray-100 text-gray-900 rounded-bl-md'
+                        }`}>
+                          {!m.is_own && <p className="text-xs font-medium text-sky-600 mb-0.5">{m.sender_name || 'Patient'}</p>}
+                          <p>{deleted
+                            ? <em className="text-xs opacity-70">{m.is_own ? 'You deleted this message' : 'Message deleted'}</em>
+                            : m.content}</p>
+                          <p className={`text-xs mt-1 ${m.is_own ? 'text-sky-200' : 'text-gray-400'}`}>
+                            {timeLabel(m.created_at)}
+                            {!!m.edited_at && <span className="italic ml-1">edited</span>}
+                            {m.is_own && (m.status === 'read' || m.status === 'delivered' ? <span className="ml-1">✓✓</span> : <span className="ml-1">✓</span>)}
+                          </p>
+                          {m.is_own && !deleted && editing !== m.id && (
+                            <div className="mt-1 space-x-2 text-xs opacity-80">
+                              <button onClick={() => { setEditing(m.id); setNewMessage(m.content); }}>Edit</button>
+                              <button className="text-red-200" onClick={() => handleDelete(m.id, true)}>Delete</button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
                 <div ref={messagesEndRef} />
               </div>
 
               <form onSubmit={handleSend} className="p-4 border-t border-gray-200 flex gap-3">
-                <input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="Type a message…"
+                <input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder={editing ? 'Edit message…' : 'Type a message…'}
                   className="flex-1 border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
                 <button type="submit" disabled={sending || !newMessage.trim()}
                   className="bg-sky-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-sky-800 disabled:opacity-50">
-                  Send
+                  {editing ? 'Save' : 'Send'}
                 </button>
+                {editing && (
+                  <button type="button" onClick={() => { setEditing(null); setNewMessage(''); }}
+                    className="bg-gray-200 text-gray-700 px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-300">
+                    Cancel
+                  </button>
+                )}
               </form>
             </>
           )}

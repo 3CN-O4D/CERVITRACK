@@ -13,18 +13,8 @@ DB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cervitrack.d
 CHATS_DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'chats.db')
 
 MOCK_ARTICLES = [
-    {"id": 1, "title": "Understanding Cervical Cancer", "summary": "Learn about the causes, symptoms, and risk factors of cervical cancer.", "content": "Cervical cancer develops in the cervix and is primarily caused by HPV infection. Regular screening can detect precancerous changes early.", "image": "https://images.unsplash.com/photo-1579154204601-01588f351e67?w=400", "category": "education", "readTime": "5 min"},
-    {"id": 2, "title": "HPV Vaccination Guide", "summary": "Everything you need to know about the HPV vaccine and its benefits.", "content": "The HPV vaccine protects against the most common cancer-causing HPV strains. It is recommended for girls and boys aged 9-14.", "image": "https://images.unsplash.com/photo-1584982751601-97dcc096659c?w=400", "category": "prevention", "readTime": "4 min"},
-    {"id": 3, "title": "Screening Methods Explained", "summary": "A breakdown of Pap smears, HPV tests, and visual inspection methods.", "content": "Different screening methods are available depending on resources and patient history. Pap smear remains the gold standard in many countries.", "image": "https://images.unsplash.com/photo-1579684385127-1ef15d508118?w=400", "category": "education", "readTime": "6 min"},
-    {"id": 4, "title": "Healthy Living After Treatment", "summary": "Tips for maintaining health and wellness after cervical cancer treatment.", "content": "Post-treatment care includes regular follow-ups, healthy diet, exercise, and emotional support. Survivorship care plans help coordinate long-term care.", "image": "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=400", "category": "wellness", "readTime": "7 min"},
-    {"id": 5, "title": "Understanding Your Screening Results", "summary": "What your screening results mean and what to do next.", "content": "Screening results can be negative, positive, or inconclusive. Each result has specific follow-up recommendations based on guidelines.", "image": "https://images.unsplash.com/photo-1631217868264-e5b90bb7e133?w=400", "category": "education", "readTime": "5 min"},
-    {"id": 6, "title": "Risk Factors for Cervical Cancer", "summary": "Key risk factors every woman should be aware of.", "content": "Risk factors include HPV infection, smoking, multiple pregnancies, long-term oral contraceptive use, and family history of cervical cancer.", "image": "https://images.unsplash.com/photo-1584515933487-779824d29309?w=400", "category": "awareness", "readTime": "4 min"},
-    {"id": 7, "title": "Cervical Cancer in Kenya", "summary": "Statistics, challenges, and progress in cervical cancer prevention in Kenya.", "content": "Cervical cancer is the leading cause of cancer-related deaths among women in Kenya. Screening coverage remains low at about 16%.", "image": "https://images.unsplash.com/photo-1576671081837-49000212a370?w=400", "category": "awareness", "readTime": "6 min"},
-    {"id": 8, "title": "Nutrition for Cervical Health", "summary": "Dietary choices that support cervical health and immunity.", "content": "Foods rich in folate, vitamins A, C, E, and antioxidants may help protect against cervical cancer. A balanced diet supports immune function.", "image": "https://images.unsplash.com/photo-1498837167922-ddd27525d352?w=400", "category": "wellness", "readTime": "4 min"},
-    {"id": 9, "title": "Frequently Asked Questions About Screening", "summary": "Common questions and answers about cervical cancer screening.", "content": "When should I start screening? How often do I need it? Is it painful? Answers to these and more common screening questions.", "image": "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=400", "category": "education", "readTime": "3 min"},
-    {"id": 10, "title": "Support Resources for Patients", "summary": "Where to find support groups, counseling, and financial assistance.", "content": "Several organizations provide support for cervical cancer patients including counseling services, support groups, and financial aid programs.", "image": "https://images.unsplash.com/photo-1544027993-37dbfe43562a?w=400", "category": "support", "readTime": "5 min"},
-    {"id": 11, "title": "Self-Care During Screening", "summary": "How to prepare for and care for yourself during the screening process.", "content": "Self-care tips before and after screening include staying hydrated, wearing comfortable clothing, and practicing relaxation techniques.", "image": "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=400", "category": "wellness", "readTime": "3 min"},
-    {"id": 12, "title": "Advances in Cervical Cancer Research", "summary": "Latest research developments in prevention, screening, and treatment.", "content": "New screening technologies including HPV DNA testing and AI-assisted screening are improving early detection rates in low-resource settings.", "image": "https://images.unsplash.com/photo-1532094349884-543bc11b234d?w=400", "category": "research", "readTime": "8 min"},
+    {"id": 1, "title": "Understanding Cervical Cancer", "summary": "Detailed overview of HPV and cervical health.", "content": "Cervical cancer is largely preventable through regular screening and HPV vaccination. The human papillomavirus (HPV) is a common virus that can cause precancerous changes. Early detection via Pap smears or HPV testing is crucial as the cancer often develops slowly over many years, starting with precancerous lesions that can be treated successfully. Understanding these stages empowers women to take proactive control of their reproductive health through informed screening choices.", "image": "https://images.unsplash.com/photo-1579154204601-01588f351e67?w=800", "category": "education", "readTime": "10 min"},
+    {"id": 2, "title": "Comprehensive HPV Vaccination Guide", "summary": "Benefits, safety, and national guidelines.", "content": "The HPV vaccine is highly effective at preventing the most common strains that lead to cervical cancer. It is recommended for adolescents before they become sexually active, but it can also provide benefits to adults. In Kenya, the vaccine is integrated into the national immunization schedule. Misinformation often surrounds the vaccine; however, clinical studies have consistently shown it to be safe and effective. Preventing infection early is the single most important step in long-term prevention.", "image": "https://images.unsplash.com/photo-1584982751601-97dcc096659c?w=800", "category": "prevention", "readTime": "8 min"},
 ]
 
 MOCK_FACILITIES = [
@@ -121,14 +111,7 @@ TRANSLATIONS = {
     },
 }
 
-CHAT_CONTACTS = [
-    {"name": "Dr. Sarah Kimani", "role": "Obstetrician/Gynecologist", "online": 1},
-    {"name": "Nurse Mercy Wanjiku", "role": "HPV Screening Specialist", "online": 1},
-    {"name": "Dr. John Omondi", "role": "Oncologist", "online": 0},
-    {"name": "Lab Tech Paul Mwangi", "role": "Cytology", "online": 1},
-    {"name": "Nurse Esther Akinyi", "role": "Community Health", "online": 0},
-    {"name": "Dr. Anne Kamau", "role": "Reproductive Health", "online": 1},
-]
+CHAT_CONTACTS = []
 
 
 def get_db():
@@ -422,13 +405,28 @@ def run_db_migration():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
-        CREATE TABLE IF NOT EXISTS consent_log (
+        CREATE TABLE IF NOT EXISTS kit_requests (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
-            consent_type TEXT NOT NULL,
-            accepted BOOLEAN DEFAULT 1,
-            accepted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            user_name TEXT,
+            user_phone TEXT,
+            user_county TEXT,
+            user_sub_county TEXT,
+            user_ward TEXT,
+            status TEXT DEFAULT 'pending',
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
+
+        CREATE TABLE IF NOT EXISTS sample_kits (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            barcode TEXT UNIQUE NOT NULL,
+            status TEXT DEFAULT 'REGISTERED',
+            patient_id INTEGER,
+            collected_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
     """)
     conn.commit()
     conn.close()
@@ -1741,18 +1739,25 @@ def admin_chat_send():
 
 # ───────────────────────── Feedback ──────────────────────
 
-@app.route("/api/feedback", methods=["POST"])
-def submit_feedback():
-    data = request.json
-    if not data:
-        return jsonify({"error": "Request body required"}), 400
+@app.route("/api/kit/requests", methods=["GET"])
+def get_kit_requests():
     conn = get_db()
-    conn.execute(
-        "INSERT INTO feedback (user_id, category, message, contact) VALUES (?, ?, ?, ?)",
-        (data.get("user_id"), data.get("category"), data.get("message"), data.get("contact", "")),
-    )
-    conn.commit(); conn.close()
-    return jsonify({"success": True}), 201
+    rows = conn.execute("SELECT * FROM kit_requests ORDER BY created_at DESC").fetchall()
+    conn.close()
+    return jsonify(rows_to_list(rows)), 200
+
+@app.route("/api/sample-kits/awaiting", methods=["GET"])
+def awaiting_collection():
+    conn = get_db()
+    # Query kits registered but not collected, calculate days left (25 - elapsed)
+    rows = conn.execute("""
+        SELECT *, 
+               CAST((julianday('now') - julianday(created_at)) AS INTEGER) as elapsed_days
+        FROM sample_kits 
+        WHERE status = 'REGISTERED'
+    """).fetchall()
+    conn.close()
+    return jsonify([{**dict(r), "days_left": max(0, 25 - r["elapsed_days"])} for r in rows]), 200
 
 
 # ───────────────────────── Providers ──────────────────────

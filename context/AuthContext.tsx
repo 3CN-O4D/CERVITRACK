@@ -2,8 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, Rea
 import { Alert, Platform } from 'react-native';
 import { supabase } from '../lib/supabase/client';
 import { getItem, setItem, removeItem } from '../services/storage';
-import { saveUser as saveUserToLocal, getCurrentUser, getUser as getLocalUser, getDb } from '../services/localDb';
-import { registerViaApi, loginViaApi } from '../services/api';
+import { saveUser as saveUserToLocal, getCurrentUser, clearAllData, updateUserLocally, markUserSynced } from '../services/localDb';
 import type { User } from './types';
 
 interface AuthContextType {
@@ -15,7 +14,7 @@ interface AuthContextType {
   deleteAccount: () => Promise<void>;
   requestData: () => Promise<void>;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  loginByPhone: (phone: string) => Promise<{ success: boolean; error?: string }>;
+  loginByPhone: (phone: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (name: string, email: string, phone: string, password: string, role: string, location?: string, county?: string, subCounty?: string, ward?: string, photoUri?: string) => Promise<{ success: boolean; error?: string }>;
   updateProfile: (updates: Partial<User>) => Promise<void>;
   logout: () => Promise<void>;
@@ -80,21 +79,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (consent === 'true') setConsentAccepted(true);
       } catch {}
 
-      // Try remote session first
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (mounted && session) {
-          const { data: profile } = await supabase
-            .from('users')
-            .select('*')
-            .eq('id', session.user.id)
-            .maybeSingle();
-          if (profile && mounted) {
-            setUser(mapSupabaseUser(session.user, profile));
-            saveUserToLocal(profile);
-            if (mounted) setLoading(false);
-            return;
-          }
+      const { data: { session } } = await supabase.auth.getSession();
+      if (mounted && session) {
+        const { data: profile } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', session.user.id)
+          .maybeSingle();
+        if (profile && mounted) {
+          setUser(mapSupabaseUser(session.user, profile));
+          saveUserToLocal(profile);
+        }
+      } else {
+        // No supabase session — try local SQLite for offline-first
+        const localUser = getCurrentUser();
+        if (localUser && mounted) {
+          const u: User = {
+            id: localUser.id,
+            name: localUser.name || '',
+            email: localUser.email || '',
+            phone: localUser.phone || '',
+            password: '',
+            role: localUser.role || 'patient',
+            photo: localUser.photo || '',
+            birthDate: localUser.birth_date || '',
+            lastHealedDate: localUser.last_healed_date || '',
+            location: [localUser.county, localUser.sub_county, localUser.ward].filter(Boolean).join(', '),
+            county: localUser.county || '',
+            subCounty: localUser.sub_county || '',
+            ward: localUser.ward || '',
+            createdAt: localUser.created_at || new Date().toISOString(),
+          };
+          setUser(u);
         }
       } catch {}
 
@@ -223,45 +239,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     await supabase.auth.signOut();
     await removeItem(CONSENT_KEY);
-  }, [user, clearLocalSession]);
-
-  const requestData = useCallback(async () => {
-    if (!user) return;
-    try {
-      const tables = [
-        'screenings', 'vaccines', 'appointments', 'notifications',
-        'lab_results', 'test_results', 'followups', 'feedback',
-        'consent_log', 'kit_requests', 'sample_kits',
-      ];
-      let report = `=== CERVITRACK DATA EXPORT ===\nUser: ${user.name} (${user.email})\nID: ${user.id}\nDate: ${new Date().toISOString()}\n\n`;
-
-      for (const table of tables) {
-        try {
-          const { data } = await supabase
-            .from(table)
-            .select('*')
-            .or(`user_id.eq.${user.id},profile_id.eq.${user.id},patient_id.eq.${user.id}`);
-          if (data && data.length > 0) {
-            report += `\n--- ${table.toUpperCase()} ---\n`;
-            report += JSON.stringify(data, null, 2) + '\n';
-          }
-        } catch {}
-      }
-
-      // Save report to local
-      const db = getDb();
-      db.runSync(
-        `INSERT OR REPLACE INTO sync_meta (key, value) VALUES (?, ?)`,
-        `data_export_${user.id}`, report
-      );
-
-      Alert.alert(
-        'Data Export',
-        'Your data has been compiled and saved locally. An admin will be notified to provide you with a downloadable copy.'
-      );
-    } catch {
-      Alert.alert('Error', 'Could not export data. Please try again later.');
-    }
+    await clearAllData();
   }, [user]);
 
   const ensureUserIsolation = useCallback(async (userId: string) => {
@@ -302,17 +280,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await ensureUserIsolation(localUser.id);
         return { success: true };
       }
-      return { success: false, error: 'Invalid credentials' };
+      // Clear old user data before saving new user
+      clearAllData();
+      if (profile) {
+        saveUserToLocal(profile);
+      }
+      return { success: true };
     } catch {
       return { success: false, error: 'Login failed' };
     }
   }, [ensureUserIsolation]);
 
-  const loginByPhone = useCallback(async (phone: string) => {
+  const loginByPhone = useCallback(async (phone: string, password: string) => {
     try {
       const { data: profile, error: profileErr } = await supabase
         .from('users')
-        .select('email, password, role')
+        .select('email, role')
         .eq('phone', phone.trim())
         .maybeSingle();
       if (profileErr || !profile?.email) {
@@ -328,13 +311,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const { data, error } = await supabase.auth.signInWithPassword({
         email: profile.email,
-        password: profile.password || 'default123',
+        password,
       });
       if (error || !data.user) {
         return { success: false, error: error?.message ?? 'Login failed' };
       }
-
-      await ensureUserIsolation(data.user.id);
+      // Clear old user data before saving new user
+      clearAllData();
+      saveUserToLocal(profile);
       return { success: true };
     } catch {
       return { success: false, error: 'Login failed' };
@@ -344,19 +328,66 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const register = useCallback(
     async (name: string, email: string, phone: string, password: string, role: string, location?: string, county?: string, subCounty?: string, ward?: string, photoUri?: string) => {
       try {
-        const result = await registerViaApi({ email, password, name, phone, role, county, sub_county: subCounty, ward });
-        if (result.error) return { success: false, error: result.error };
-        const userData = result.user || result;
-        const uid = userData.id || userData.user_id || `local-${Date.now()}`;
-        saveUserToLocal({
-          id: uid,
-          name: userData.name || name,
-          email: userData.email || email,
-          phone: userData.phone || phone,
+        const { data, error } = await supabase.auth.signUp({
+          email,
           password,
-          role: userData.role || role || 'patient',
-          patient_id: userData.patient_id || uid,
+          phone: phone || undefined,
+          options: {
+            data: {
+              name,
+              phone,
+              role,
+              county,
+              sub_county: subCounty,
+              ward,
+              photo: photoUri ?? null,
+              consent_terms: true,
+              consent_medical: true,
+              consent_at: new Date().toISOString(),
+            },
+          },
+        });
+        if (error || !data.user) {
+          return { success: false, error: error?.message ?? 'Registration failed' };
+        }
+
+        // If email confirmation is required, signIn directly so user doesn't hang
+        if (!data.session) {
+          const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
+          if (signInErr) {
+            // User created but needs email confirmation — tell them
+            return { success: false, error: 'Account created. Check your email to verify, then sign in.' };
+          }
+        }
+
+        // Create profile row in users table
+        const uid = data.user.id;
+        const patientId = `PT-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9999)).padStart(4, '0')}`;
+        const { error: profileErr } = await supabase.from('users').upsert({
+          id: uid,
+          name,
+          email,
+          phone,
+          role: role || 'patient',
+          photo: photoUri || null,
+          county: county || '',
+          sub_county: subCounty || '',
+          ward: ward || '',
+          patient_id: patientId,
+          consent_terms: true,
+          consent_medical: true,
+          consent_at: new Date().toISOString(),
           created_at: new Date().toISOString(),
+        }, { onConflict: 'id' });
+        if (profileErr) {
+          console.warn('Profile insert failed:', profileErr.message);
+        }
+
+        // Save user to local SQLite (password is never stored locally)
+        saveUserToLocal({
+          id: uid, name, email, phone, role: role || 'patient',
+          photo: photoUri || null, county: county || '', sub_county: subCounty || '',
+          ward: ward || '', patient_id: patientId, created_at: new Date().toISOString(),
         });
         return { success: true };
       } catch {
@@ -386,13 +417,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if ('ward' in updates) payload.ward = updates.ward;
     }
 
+    // Apply locally first (offline-first), then try to push to server.
+    updateUserLocally(user.id, payload);
+    setUser((prev) => (prev ? { ...prev, ...updates } : prev));
+
     const { error } = await supabase
       .from('users')
       .update(payload)
       .eq('id', user.id);
 
     if (!error) {
-      setUser((prev) => (prev ? { ...prev, ...updates } : prev));
+      markUserSynced(user.id);
     }
   }, [user]);
 

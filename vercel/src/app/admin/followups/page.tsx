@@ -1,5 +1,6 @@
 'use client';
 
+import { apiFetch } from '@/lib/api-fetch';
 import { useState, useEffect, useMemo } from 'react';
 
 interface FollowUp {
@@ -26,7 +27,7 @@ export default function AdminFollowupsPage() {
 
   const fetchFollowups = async () => {
     try {
-      const res = await fetch('/api/admin/followups');
+      const res = await apiFetch('/api/admin/followups');
       if (!res.ok) throw new Error('Failed to load follow-ups');
       const json = await res.json();
       setFollowups(json.followups || json || []);

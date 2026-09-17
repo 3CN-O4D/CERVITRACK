@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { getRequestUser, resolveUserScope, forbidden } from '@/lib/api-auth';
 
 export async function GET(request: NextRequest) {
   try {
-    const user_id = request.nextUrl.searchParams.get('user_id');
-
-    if (!user_id) {
-      return NextResponse.json({ error: 'user_id required' }, { status: 400 });
-    }
+    const user = await getRequestUser(request);
+    if (!user) return forbidden();
+    const claimed = request.nextUrl.searchParams.get('user_id');
+    const user_id = resolveUserScope(user, claimed);
+    if (!user_id) return forbidden();
 
     const { data, error } = await supabaseAdmin
       .from('scheduled_actions')
@@ -25,13 +26,18 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const user = await getRequestUser(request);
+    if (!user) return forbidden();
     const body = await request.json();
     const { user_id, type, scheduled_date, title, notes } = body;
+
+    const scopedId = resolveUserScope(user, user_id);
+    if (!scopedId) return forbidden();
 
     const { data: action, error } = await supabaseAdmin
       .from('scheduled_actions')
       .insert({
-        user_id,
+        user_id: scopedId,
         type,
         scheduled_date,
         title,

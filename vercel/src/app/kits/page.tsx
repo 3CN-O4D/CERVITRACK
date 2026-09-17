@@ -1,5 +1,6 @@
 'use client';
 
+import { apiFetch } from '@/lib/api-fetch';
 import { useState, useCallback } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase-browser';
@@ -60,7 +61,7 @@ export default function KitPage() {
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(`/api/sample-kits/scan/${barcode}`, {
+      const res = await apiFetch(`/api/sample-kits/scan/${barcode}`, {
         headers: { Authorization: `Bearer ${session?.access_token || ''}` },
       });
 
@@ -139,7 +140,7 @@ export default function KitPage() {
     setLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch('/api/sample-kits?limit=50', {
+      const res = await apiFetch('/api/sample-kits?limit=50', {
         headers: { Authorization: `Bearer ${session?.access_token || ''}` },
       });
       if (res.ok) {

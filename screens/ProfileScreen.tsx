@@ -11,11 +11,8 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { uploadToCloudinary } from '../lib/cloudinary';
-import { getPinStatus, removePin } from '../components/BiometricLock';
-import * as SecureStore from 'expo-secure-store';
-
-const PIN_SETUP_DONE_KEY = '@cervitrack_pin_setup_done';
-const PIN_KEY = '@cervitrack_pin';
+import SearchableDropdown from '../components/SearchableDropdown';
+import { getCountyNames, getSubCounties, getWards } from '../data/kenya';
 
 export default function ProfileScreen({ navigation }: any) {
   const { colors } = useTheme();
@@ -217,90 +214,254 @@ export default function ProfileScreen({ navigation }: any) {
                 <Ionicons name="person" size={40} color={colors.primary} />
               )}
             </View>
-            <View style={styles.cameraBadge}>
-              <Ionicons name="camera" size={14} color="#FFF" />
+          )}
+          <View style={s.cameraBadge}>
+            <Ionicons name="camera" size={14} color="#FFF" />
+          </View>
+        </TouchableOpacity>
+        <Text style={s.nameText}>{user?.name || 'User'}</Text>
+        <View style={s.roleBadge}>
+          <Text style={s.roleText}>
+            {t(`roles.${user?.role || 'patient'}`)}
+          </Text>
+        </View>
+      </View>
+
+      {hpvFreeDays !== null && (
+        <View style={s.hpvCard}>
+          <Text style={s.hpvEmoji}>🎉</Text>
+          <View style={s.hpvTextWrap}>
+            <Text style={s.hpvCount}>{hpvFreeDays.toLocaleString()}</Text>
+            <Text style={s.hpvLabel}>days HPV-free!</Text>
+          </View>
+        </View>
+      )}
+      {hpvFreeDays === null && (
+        <View style={s.hpvCard}>
+          <Text style={s.hpvEmoji}>📋</Text>
+          <Text style={s.hpvEmpty}>No data yet</Text>
+        </View>
+      )}
+
+      <View style={s.formSection}>
+        <Text style={s.sectionTitle}>{t('profile.personalInfo')}</Text>
+
+        <Text style={s.fieldLabel}>{t('auth.name')}</Text>
+        <TextInput
+          style={s.input}
+          value={name}
+          onChangeText={setName}
+          placeholderTextColor={colors.textSecondary}
+        />
+
+        <Text style={s.fieldLabel}>{t('auth.email')}</Text>
+        <TextInput
+          style={s.input}
+          value={email}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          placeholderTextColor={colors.textSecondary}
+        />
+
+        <Text style={s.fieldLabel}>{t('auth.phone')}</Text>
+        <TextInput
+          style={s.input}
+          value={phone}
+          onChangeText={setPhone}
+          keyboardType="phone-pad"
+          placeholderTextColor={colors.textSecondary}
+        />
+
+        <Text style={s.fieldLabel}>{t('profile.birthDate')}</Text>
+        <TouchableOpacity
+          style={[s.input, s.dateInput]}
+          onPress={() => {
+            const d = birthDate ? new Date(birthDate) : new Date(1990, 0, 1);
+            setPickerYear(d.getFullYear());
+            setPickerMonth(d.getMonth() + 1);
+            setPickerDay(d.getDate());
+            setShowDatePicker('birth');
+          }}
+        >
+          <MaterialCommunityIcons name="calendar" size={18} color={colors.textSecondary} />
+          <Text style={[s.dateText, { color: birthDate ? colors.text : colors.textSecondary }]}>
+            {birthDate || 'Select date of birth'}
+          </Text>
+        </TouchableOpacity>
+
+        <Text style={s.fieldLabel}>{t('profile.lastTreated')}</Text>
+        <TouchableOpacity
+          style={[s.input, s.dateInput]}
+          onPress={() => {
+            const d = lastHealedDate ? new Date(lastHealedDate) : new Date();
+            setPickerYear(d.getFullYear());
+            setPickerMonth(d.getMonth() + 1);
+            setPickerDay(d.getDate());
+            setShowDatePicker('healed');
+          }}
+        >
+          <MaterialCommunityIcons name="calendar" size={18} color={colors.textSecondary} />
+          <Text style={[s.dateText, { color: lastHealedDate ? colors.text : colors.textSecondary }]}>
+            {lastHealedDate || 'Select last treatment date'}
+          </Text>
+        </TouchableOpacity>
+
+        <Text style={[s.sectionTitle, { marginTop: 16 }]}>{t('profile.location') || 'Location'}</Text>
+
+        <SearchableDropdown
+          label={t('profile.county') || 'County'}
+          items={getCountyNames()}
+          selected={county}
+          onSelect={(v) => { setCounty(v); setSubCounty(''); setWard(''); }}
+          placeholder="Select your county"
+        />
+
+        {county ? (
+          <SearchableDropdown
+            label={t('profile.subCounty') || 'Sub-County'}
+            items={getSubCounties(county)}
+            selected={subCounty}
+            onSelect={(v) => { setSubCounty(v); setWard(''); }}
+            placeholder="Select sub-county"
+          />
+        ) : null}
+        {county && subCounty ? (
+          <SearchableDropdown
+            label={t('profile.ward') || 'Ward'}
+            items={getWards(county, subCounty)}
+            selected={ward}
+            onSelect={setWard}
+            placeholder="Select ward"
+          />
+        ) : null}
+
+        <TouchableOpacity
+          style={[s.saveBtn, saving && s.saveBtnDisabled]}
+          onPress={handleSave}
+          disabled={saving}
+        >
+          {saving ? (
+            <ActivityIndicator color="#FFF" />
+          ) : (
+            <>
+              <MaterialCommunityIcons name="content-save" size={18} color="#FFF" />
+              <Text style={s.saveBtnText}>{t('profile.saveChanges')}</Text>
+            </>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      <TouchableOpacity style={s.feedbackBtn} onPress={() => navigation?.navigate('Feedback')}>
+        <Ionicons name="chatbubble-ellipses-outline" size={20} color={colors.primary} />
+        <Text style={s.feedbackText}>Send Feedback</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={s.logoutBtn} onPress={logout}>
+        <Ionicons name="log-out-outline" size={20} color={colors.error} />
+        <Text style={s.logoutText}>{t('settings.logout')}</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={s.requestDataBtn}
+        onPress={() => {
+          Alert.alert('Data Request', 'Your data request has been submitted. We will email you a copy of your data within 7 days.');
+        }}
+      >
+        <Ionicons name="download-outline" size={18} color={colors.primary} />
+        <Text style={s.requestDataText}>Request My Data</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[s.deleteBtn]}
+        onPress={() => {
+          Alert.alert(
+            'Delete My Data',
+            'This will permanently delete all your data from CerviTrack, including screening history, messages, and profile. This action cannot be undone.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Delete Everything', style: 'destructive', onPress: deleteAccount },
+            ],
+          );
+        }}
+      >
+        <Ionicons name="trash-outline" size={18} color={colors.error} />
+        <Text style={s.deleteText}>Delete My Data & Revoke Consent</Text>
+      </TouchableOpacity>
+
+      {/* Date Picker Modal */}
+      <Modal visible={showDatePicker !== null} transparent animationType="fade">
+        <View style={s.datePickerOverlay}>
+          <View style={[s.datePickerModal, { backgroundColor: colors.card }]}>
+            <Text style={[s.datePickerTitle, { color: colors.text }]}>
+              {showDatePicker === 'birth' ? 'Date of Birth' : 'Last Treatment Date'}
+            </Text>
+            <View style={s.datePickerCols}>
+              <View style={s.datePickerCol}>
+                <Text style={[s.datePickerLabel, { color: colors.textSecondary }]}>Year</Text>
+                  <ScrollView style={[s.datePickerScroll, { height: 200 }]}>
+                  {Array.from({ length: 100 }, (_, i) => 1940 + i).reverse().map((y) => (
+                    <TouchableOpacity
+                      key={y}
+                      style={[s.datePickerItem, pickerYear === y && { backgroundColor: colors.primary + '20' }]}
+                      onPress={() => setPickerYear(y)}
+                    >
+                      <Text style={[s.datePickerItemText, { color: pickerYear === y ? colors.primary : colors.text }]}>{y}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+              <View style={s.datePickerCol}>
+                <Text style={[s.datePickerLabel, { color: colors.textSecondary }]}>Month</Text>
+                <ScrollView style={s.datePickerScroll}>
+                  {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m, i) => (
+                    <TouchableOpacity
+                      key={i}
+                      style={[s.datePickerItem, pickerMonth === i + 1 && { backgroundColor: colors.primary + '20' }]}
+                      onPress={() => {
+                        setPickerMonth(i + 1);
+                        const maxDay = new Date(pickerYear, i + 1, 0).getDate();
+                        if (pickerDay > maxDay) setPickerDay(maxDay);
+                      }}
+                    >
+                      <Text style={[s.datePickerItemText, { color: pickerMonth === i + 1 ? colors.primary : colors.text }]}>{m}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+              <View style={s.datePickerCol}>
+                <Text style={[s.datePickerLabel, { color: colors.textSecondary }]}>Day</Text>
+                <ScrollView style={s.datePickerScroll}>
+                  {Array.from({ length: new Date(pickerYear, pickerMonth, 0).getDate() }, (_, i) => i + 1).map((d) => (
+                    <TouchableOpacity
+                      key={d}
+                      style={[s.datePickerItem, pickerDay === d && { backgroundColor: colors.primary + '20' }]}
+                      onPress={() => setPickerDay(d)}
+                    >
+                      <Text style={[s.datePickerItemText, { color: pickerDay === d ? colors.primary : colors.text }]}>{d}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
             </View>
-          </TouchableOpacity>
-          <Text style={styles.nameText}>{user?.name || 'User'}</Text>
-          <View style={[styles.roleBadge, { backgroundColor: colors.primary + '20' }]}>
-            <Text style={[styles.roleText, { color: colors.primary }]}>
-              {t(`roles.${user?.role || 'patient'}`)}
-            </Text>
-          </View>
-        </View>
-
-        {/* HPV Free Days */}
-        <View style={[styles.statCard, { backgroundColor: colors.primary + '15' }]}>
-          <Text style={styles.statEmoji}>{hpvFreeDays !== null ? '🎉' : '📋'}</Text>
-          <View>
-            {hpvFreeDays !== null ? (
-              <>
-                <Text style={[styles.statValue, { color: colors.primary }]}>{hpvFreeDays.toLocaleString()}</Text>
-                <Text style={styles.statLabel}>days HPV-free!</Text>
-              </>
-            ) : (
-              <Text style={styles.statLabel}>No data yet</Text>
-            )}
-          </View>
-        </View>
-
-        {/* Personal Info */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Personal Information</Text>
-          <Text style={styles.fieldLabel}>Full Name</Text>
-          <TextInput style={styles.input} value={name} onChangeText={setName} placeholderTextColor={colors.textSecondary} />
-          <Text style={styles.fieldLabel}>Email</Text>
-          <TextInput style={styles.input} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" placeholderTextColor={colors.textSecondary} />
-          <Text style={styles.fieldLabel}>Phone</Text>
-          <TextInput style={styles.input} value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholderTextColor={colors.textSecondary} />
-
-          <Text style={styles.fieldLabel}>Date of Birth</Text>
-          <TouchableOpacity style={styles.dateInput} onPress={() => openDatePicker('birth')}>
-            <MaterialCommunityIcons name="calendar" size={18} color={colors.textSecondary} />
-            <Text style={[styles.dateText, { color: birthDate ? colors.text : colors.textSecondary }]}>
-              {birthDate || 'Select date of birth'}
-            </Text>
-          </TouchableOpacity>
-
-          <Text style={styles.fieldLabel}>Last Treatment Date</Text>
-          <TouchableOpacity style={styles.dateInput} onPress={() => openDatePicker('healed')}>
-            <MaterialCommunityIcons name="calendar" size={18} color={colors.textSecondary} />
-            <Text style={[styles.dateText, { color: lastHealedDate ? colors.text : colors.textSecondary }]}>
-              {lastHealedDate || 'Select last treatment date'}
-            </Text>
-          </TouchableOpacity>
-
-          <Text style={[styles.sectionTitle, { marginTop: 20 }]}>Location</Text>
-          <Text style={styles.fieldLabel}>County</Text>
-          <TextInput style={styles.input} value={county} onChangeText={setCounty} placeholder="e.g. Nairobi" placeholderTextColor={colors.textSecondary} />
-          <Text style={styles.fieldLabel}>Sub-County</Text>
-          <TextInput style={styles.input} value={subCounty} onChangeText={setSubCounty} placeholder="e.g. Westlands" placeholderTextColor={colors.textSecondary} />
-          <Text style={styles.fieldLabel}>Ward</Text>
-          <TextInput style={styles.input} value={ward} onChangeText={setWard} placeholder="e.g. Parklands" placeholderTextColor={colors.textSecondary} />
-
-          <TouchableOpacity
-            style={[styles.saveBtn, saving && { opacity: 0.6 }]}
-            onPress={handleSave}
-            disabled={saving}
-          >
-            {saving ? (
-              <ActivityIndicator color="#FFF" />
-            ) : (
-              <>
-                <MaterialCommunityIcons name="content-save" size={18} color="#FFF" />
-                <Text style={styles.saveBtnText}>Save Changes</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        {/* Security */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Security</Text>
-          <View style={styles.switchRow}>
-            <View>
-              <Text style={{ color: colors.text, fontSize: 15, fontWeight: '600' }}>App Lock PIN</Text>
-              <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}>Require a 4-digit PIN to open the app</Text>
+            <View style={s.datePickerActions}>
+              <TouchableOpacity
+                style={[s.datePickerBtn, { borderColor: colors.border }]}
+                onPress={() => setShowDatePicker(null)}
+              >
+                <Text style={[s.datePickerBtnText, { color: colors.text }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.datePickerBtn, { backgroundColor: colors.primary }]}
+                onPress={() => {
+                  const formatted = `${pickerYear}-${pickerMonth.toString().padStart(2, '0')}-${pickerDay.toString().padStart(2, '0')}`;
+                  if (showDatePicker === 'birth') setBirthDate(formatted);
+                  else setLastHealedDate(formatted);
+                  setShowDatePicker(null);
+                }}
+              >
+                <Text style={[s.datePickerBtnText, { color: '#FFF' }]}>Confirm</Text>
+              </TouchableOpacity>
             </View>
             <Switch
               value={pinEnabled}

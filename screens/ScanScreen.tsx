@@ -10,23 +10,25 @@ import {
   ActivityIndicator,
   Animated,
   ScrollView,
+  TextInput,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
+import * as ImagePicker from 'expo-image-picker';
 import { WebView } from 'react-native-webview';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { getItem, setItem } from '../services/storage';
-import { addTestResult } from '../services/api';
+import { addTestResult, scanKit, registerKit, pairKit } from '../services/api';
 
 const { width } = Dimensions.get('window');
 const GUIDE_W = width * 0.75;
 const GUIDE_H = GUIDE_W * 0.35;
 
-type ScanStep = 'camera' | 'preview' | 'processing' | 'result';
+type ScanStep = 'reaffirm' | 'reaffirm-result' | 'camera' | 'preview' | 'processing' | 'result';
 type TestResult = 'positive' | 'negative' | 'invalid';
 
 interface TestLog {
@@ -35,6 +37,7 @@ interface TestLog {
   imageUri: string;
   result: TestResult;
   submitted: boolean;
+  kitBarcode?: string;
 }
 
 const LOG_KEY = '@cervitrack_test_logs';
@@ -88,6 +91,7 @@ export default function ScanScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const [torch, setTorch] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
   const webViewRef = useRef<WebView>(null);
@@ -100,7 +104,14 @@ export default function ScanScreen() {
   const [torchOn, setTorchOn] = useState(false);
   const scanAnim = useRef(new Animated.Value(0)).current;
   const analysisCallback = useRef<((r: TestResult) => void) | null>(null);
+  const [kitBarcode, setKitBarcode] = useState('');
+  const [kitStatus, setKitStatus] = useState('');
+  const [reaffirmCode, setReaffirmCode] = useState('');
+  const [reaffirmState, setReaffirmState] = useState<'link-needed' | 'not-found' | 'not-yours'>('link-needed');
+  const [reaffirmLoading, setReaffirmLoading] = useState(false);
+  const scanLock = useRef(false);
 
+  useEffect(() => { setStep('reaffirm'); }, []);
   useEffect(() => { loadLogs(); }, []);
 
   useEffect(() => {
@@ -144,6 +155,129 @@ export default function ScanScreen() {
     }
   };
 
+  const pickImageFromGallery = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Access to gallery required.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.8,
+      allowsEditing: true,
+    });
+    if (!result.canceled && result.assets?.[0]) {
+      setCapturedUri(result.assets[0].uri);
+      setStep('preview');
+    }
+  };
+
+  const doReaffirm = async (code: string) => {
+    const trimmed = code.trim();
+    if (!trimmed || reaffirmLoading) return;
+    setReaffirmLoading(true);
+    try {
+      const kit = await scanKit(trimmed);
+      if (kit) {
+        setKitBarcode(kit.barcode || trimmed);
+        setKitStatus(kit.status);
+        if (kit.patientId === user?.id || kit.status === 'PAIRED' || kit.status === 'COLLECTED' || kit.status === 'IN_TRANSIT' || kit.status === 'IN_LAB' || kit.status === 'PROCESSED') {
+          setStep('camera');
+        } else if (kit.status === 'REGISTERED') {
+          setReaffirmState('link-needed');
+          setStep('reaffirm-result');
+        } else {
+          setReaffirmState('not-yours');
+          setStep('reaffirm-result');
+        }
+      } else {
+        setKitBarcode(trimmed);
+        setReaffirmState('not-found');
+        setStep('reaffirm-result');
+      }
+    } catch {
+      setKitBarcode(trimmed);
+      setReaffirmState('not-found');
+      setStep('reaffirm-result');
+    } finally {
+      setReaffirmLoading(false);
+    }
+  };
+
+  const handleReaffirmScan = useCallback(({ data }: { data: string }) => {
+    if (scanLock.current) return;
+    scanLock.current = true;
+    setReaffirmCode(data);
+    doReaffirm(data);
+  }, [reaffirmLoading]);
+
+  const handleManualReaffirm = () => {
+    if (reaffirmCode.trim()) doReaffirm(reaffirmCode);
+  };
+
+  const handleLinkKit = async () => {
+    if (!kitBarcode || !user?.id) return;
+    setReaffirmLoading(true);
+    try {
+      const paired = await pairKit(kitBarcode, {
+        patientId: user.id,
+        patientName: user.name || 'Patient',
+        pairedBy: user.id,
+        pairedByName: user.name || 'Patient (Self)',
+      });
+      if (paired && 'error' in paired) {
+        Alert.alert('Cannot Link Kit', paired.error);
+      } else if (paired) {
+        setKitStatus('PAIRED');
+        setStep('camera');
+      } else {
+        Alert.alert('Error', 'Failed to link kit. Please try again.');
+      }
+    } catch {
+      Alert.alert('Error', 'Network error. Please try again.');
+    } finally {
+      setReaffirmLoading(false);
+    }
+  };
+
+  const handleRegisterNewKit = async () => {
+    if (!kitBarcode || !user?.id) return;
+    setReaffirmLoading(true);
+    try {
+      const registered = await registerKit(kitBarcode, {
+        facilityId: 'home',
+        registeredBy: user.id,
+        registeredByName: user.name || 'Patient',
+      });
+      if (registered) {
+        const paired = await pairKit(kitBarcode, {
+          patientId: user.id,
+          patientName: user.name || 'Patient',
+          pairedBy: user.id,
+          pairedByName: user.name || 'Patient (Self)',
+        });
+        if (paired && 'error' in paired) {
+          setKitStatus('REGISTERED');
+          setReaffirmState('link-needed');
+          setStep('reaffirm-result');
+        } else if (paired) {
+          setKitStatus('PAIRED');
+          setStep('camera');
+        } else {
+          setKitStatus('REGISTERED');
+          setReaffirmState('link-needed');
+          setStep('reaffirm-result');
+        }
+      } else {
+        Alert.alert('Error', 'Failed to register kit. Please try again.');
+      }
+    } catch {
+      Alert.alert('Error', 'Network error. Please try again.');
+    } finally {
+      setReaffirmLoading(false);
+    }
+  };
+
   const handleWebViewMessage = useCallback((event: any) => {
     const res = event.nativeEvent.data as TestResult;
     setResult(res);
@@ -156,6 +290,7 @@ export default function ScanScreen() {
       imageUri: capturedUri,
       result: res,
       submitted: false,
+      kitBarcode,
     };
     saveLogs([log, ...testLogs]);
 
@@ -166,7 +301,7 @@ export default function ScanScreen() {
     } else {
       Alert.alert('Invalid', 'Could not read test. Please try again.');
     }
-  }, [capturedUri, testLogs]);
+  }, [capturedUri, testLogs, kitBarcode]);
 
   const processImage = async () => {
     if (!capturedUri) return;
@@ -195,6 +330,7 @@ export default function ScanScreen() {
             imageUri: capturedUri,
             result: 'negative',
             submitted: false,
+            kitBarcode,
           };
           saveLogs([log, ...testLogs]);
         }
@@ -263,22 +399,129 @@ await addTestResult({ user_id: user?.id || '', result: log.result, date: log.dat
         javaScriptEnabled
       />
 
+      {step === 'reaffirm' && (
+        <>
+          <View style={s.header}>
+            <MaterialCommunityIcons name="barcode-scan" size={24} color={colors.primary} />
+            <Text style={[s.headerTitle, { color: colors.text }]}>Scan Your Test Kit</Text>
+          </View>
+          <Text style={[s.instruction, { color: colors.textSecondary }]}>
+            Scan the barcode on the test kit you are about to use. This reaffirms the kit before you take your test.
+          </Text>
+          <View style={s.cameraWrap}>
+            <CameraView
+              style={s.camera}
+              facing="back"
+              enableTorch={torch}
+              barcodeScannerSettings={{ barcodeTypes: ['qr', 'ean13', 'ean8', 'code128', 'code39', 'upc_a', 'upc_e', 'pdf417', 'aztec', 'datamatrix', 'codabar'] }}
+              onBarcodeScanned={handleReaffirmScan}
+            >
+              <View style={s.cameraControls}>
+                <TouchableOpacity style={s.controlBtn} onPress={() => setTorch(!torch)}>
+                  <Ionicons name={torch ? 'flash' : 'flash-outline'} size={24} color="#FFF" />
+                </TouchableOpacity>
+              </View>
+              <View style={s.reaffirmOverlay}>
+                <View style={[s.reaffirmBox, { borderColor: '#FFF' }]} />
+                <Text style={s.reaffirmScanText}>Point camera at kit barcode</Text>
+              </View>
+            </CameraView>
+          </View>
+          <View style={s.manualRow}>
+            <TextInput
+              style={[s.manualInput, { borderColor: colors.border, color: colors.text, backgroundColor: colors.card }]}
+              value={reaffirmCode}
+              onChangeText={(v) => { setReaffirmCode(v); scanLock.current = false; }}
+              placeholder="Or enter kit barcode..."
+              placeholderTextColor={colors.textSecondary}
+              autoCapitalize="characters"
+            />
+            <TouchableOpacity
+              style={[s.manualBtn, { backgroundColor: colors.primary }]}
+              onPress={handleManualReaffirm}
+              disabled={!reaffirmCode.trim() || reaffirmLoading}
+            >
+              {reaffirmLoading ? <ActivityIndicator color="#FFF" size="small" /> : <Ionicons name="checkmark" size={18} color="#FFF" />}
+            </TouchableOpacity>
+          </View>
+          <Text style={[s.reaffirmHint, { color: colors.textSecondary }]}>
+            Don't have a kit yet? Pick up a free self-sampling kit, then scan its barcode here to register and link it.
+          </Text>
+        </>
+      )}
+
+      {step === 'reaffirm-result' && (
+        <View style={s.reaffirmResult}>
+          <MaterialCommunityIcons
+            name={reaffirmState === 'not-found' ? 'alert-circle' : reaffirmState === 'link-needed' ? 'link-variant' : 'information'}
+            size={52}
+            color={reaffirmState === 'not-found' ? colors.error : colors.warning}
+          />
+          <Text style={[s.reaffirmResultTitle, { color: colors.text }]}>
+            {reaffirmState === 'not-found' ? 'Kit Not Registered' : reaffirmState === 'link-needed' ? 'Not Linked to You' : 'Different Kit Status'}
+          </Text>
+          <Text style={[s.confirmBarcodeText, { color: colors.primary }]}>{kitBarcode}</Text>
+          <Text style={[s.reaffirmResultDesc, { color: colors.textSecondary }]}>
+            {reaffirmState === 'not-found'
+              ? 'This kit isn\'t in the system yet. Register it as a new kit to continue.'
+              : reaffirmState === 'link-needed'
+                ? 'This kit is registered but not linked to your account. Link it before taking your test.'
+                : `This kit is currently: ${kitStatus}. Use a kit that belongs to you.`}
+          </Text>
+          <View style={s.reaffirmResultActions}>
+            {reaffirmState === 'not-found' ? (
+              <TouchableOpacity style={[s.actionBtn, { backgroundColor: colors.primary }]} onPress={handleRegisterNewKit} disabled={reaffirmLoading}>
+                {reaffirmLoading ? <ActivityIndicator color="#FFF" size="small" /> : <Ionicons name="add-circle" size={18} color="#FFF" />}
+                <Text style={s.actionBtnText}>Register New Kit</Text>
+              </TouchableOpacity>
+            ) : reaffirmState === 'link-needed' ? (
+              <TouchableOpacity style={[s.actionBtn, { backgroundColor: colors.primary }]} onPress={handleLinkKit} disabled={reaffirmLoading}>
+                {reaffirmLoading ? <ActivityIndicator color="#FFF" size="small" /> : <Ionicons name="link" size={18} color="#FFF" />}
+                <Text style={s.actionBtnText}>Link to My Account</Text>
+              </TouchableOpacity>
+            ) : null}
+            <TouchableOpacity style={[s.actionBtn, { backgroundColor: colors.error }]} onPress={() => { setStep('reaffirm'); scanLock.current = false; }}>
+              <Ionicons name="refresh" size={18} color="#FFF" />
+              <Text style={s.actionBtnText}>Rescan</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
       {step === 'camera' && (
         <>
           <View style={s.header}>
             <MaterialCommunityIcons name="test-tube" size={24} color={colors.primary} />
             <Text style={[s.headerTitle, { color: colors.text }]}>Test Kit Scanner</Text>
           </View>
+          <View style={[s.kitConfirmedBar, { backgroundColor: colors.success + '15', borderColor: colors.success + '40' }]}>
+            <MaterialCommunityIcons name="check-decagram" size={18} color={colors.success} />
+            <Text style={[s.kitConfirmedText, { color: colors.text }]} numberOfLines={1}>
+              Kit confirmed: {kitBarcode}
+            </Text>
+            <TouchableOpacity onPress={() => { setStep('reaffirm'); scanLock.current = false; }}>
+              <Text style={[s.changeKitText, { color: colors.primary }]}>Change</Text>
+            </TouchableOpacity>
+          </View>
           <Text style={[s.instruction, { color: colors.textSecondary }]}>
             Place test kit flat on a surface. Position result window inside the guide.
           </Text>
           <View style={s.cameraWrap}>
-            <CameraView ref={cameraRef} style={s.camera} facing="back" enableTorch={torchOn} />
-            <View style={s.guideOverlay} pointerEvents="none">
-              <View style={[s.guideBox, { borderColor: '#FFF' }]}>
-                <View style={s.guideLabel_left}><Text style={{color:'#FFF',fontSize:10,fontWeight:'800'}}>C</Text></View>
-                <View style={s.guideLabel_right}><Text style={{color:'#FFF',fontSize:10,fontWeight:'800'}}>T</Text></View>
-                <Animated.View style={[s.scanLine, { backgroundColor: colors.primary, transform: [{ translateY: scanLineY }] }]} />
+            <CameraView ref={cameraRef} style={s.camera} facing="back" enableTorch={torch}>
+              <View style={s.cameraControls}>
+                <TouchableOpacity style={s.controlBtn} onPress={() => setTorch(!torch)}>
+                  <Ionicons name={torch ? 'flash' : 'flash-outline'} size={24} color="#FFF" />
+                </TouchableOpacity>
+                <TouchableOpacity style={s.controlBtn} onPress={pickImageFromGallery}>
+                  <Ionicons name="images-outline" size={24} color="#FFF" />
+                </TouchableOpacity>
+              </View>
+              <View style={s.guideOverlay}>
+                <View style={[s.guideBox, { borderColor: '#FFF' }]}>
+                  <View style={s.guideLabel_left}><Text style={{color:'#FFF',fontSize:10,fontWeight:'800'}}>C</Text></View>
+                  <View style={s.guideLabel_right}><Text style={{color:'#FFF',fontSize:10,fontWeight:'800'}}>T</Text></View>
+                  <Animated.View style={[s.scanLine, { backgroundColor: colors.primary, transform: [{ translateY: scanLineY }] }]} />
+                </View>
               </View>
             </View>
             <View style={s.cameraControls}>
@@ -386,7 +629,24 @@ const styles = (colors: any) => StyleSheet.create({
   instruction: { fontSize: 13, fontWeight: '500', textAlign: 'center', lineHeight: 20, marginBottom: 12 },
   cameraWrap: { width: width - 32, height: (width - 32) * 0.75, borderRadius: 20, overflow: 'hidden', marginBottom: 16 },
   camera: { flex: 1 },
-  guideOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' },
+  cameraControls: { position: 'absolute', top: 40, right: 20, gap: 16, zIndex: 10 },
+  controlBtn: { padding: 10, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20 },
+  reaffirmOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  reaffirmBox: { width: GUIDE_W, height: 90, borderRadius: 12, borderWidth: 2.5 },
+  reaffirmScanText: { color: '#FFF', fontSize: 13, fontWeight: '600', marginTop: 12, textShadowColor: 'rgba(0,0,0,0.6)', textShadowRadius: 4 },
+  manualRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
+  manualInput: { flex: 1, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, letterSpacing: 1 },
+  manualBtn: { width: 48, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  reaffirmHint: { fontSize: 12, textAlign: 'center', lineHeight: 18, marginBottom: 8, paddingHorizontal: 8 },
+  reaffirmResult: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 },
+  reaffirmResultTitle: { fontSize: 20, fontWeight: '800', marginTop: 12 },
+  confirmBarcodeText: { fontSize: 16, fontWeight: '800', letterSpacing: 1, marginTop: 8, fontFamily: 'monospace' },
+  reaffirmResultDesc: { fontSize: 13, textAlign: 'center', lineHeight: 19, marginTop: 10, paddingHorizontal: 6 },
+  reaffirmResultActions: { flexDirection: 'row', gap: 10, marginTop: 28 },
+  kitConfirmedBar: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 10 },
+  kitConfirmedText: { flex: 1, fontSize: 13, fontWeight: '700' },
+  changeKitText: { fontSize: 13, fontWeight: '700' },
+  guideOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   guideBox: {
     width: GUIDE_W, height: GUIDE_H,
     borderWidth: 2.5, borderRadius: 12,

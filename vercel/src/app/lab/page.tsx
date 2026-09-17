@@ -1,5 +1,6 @@
 'use client';
 
+import { apiFetch } from '@/lib/api-fetch';
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import BarcodeScanner from '@/components/BarcodeScanner';
@@ -85,8 +86,8 @@ export default function LabDashboard() {
     setLoading(true);
     try {
       const [batchRes, statsRes] = await Promise.all([
-        fetch('/api/batches'),
-        fetch('/api/batches?stats=1'),
+        apiFetch('/api/batches'),
+        apiFetch('/api/batches?stats=1'),
       ]);
       if (batchRes.ok) {
         const data = await batchRes.json();
@@ -101,7 +102,7 @@ export default function LabDashboard() {
 
   async function fetchBatch(id: string) {
     try {
-      const res = await fetch(`/api/batches/${id}`);
+      const res = await apiFetch(`/api/batches/${id}`);
       if (res.ok) {
         const batch = await res.json();
         setActiveBatch(batch);
@@ -112,7 +113,7 @@ export default function LabDashboard() {
 
   async function createBatch() {
     try {
-      const res = await fetch('/api/batches', {
+      const res = await apiFetch('/api/batches', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ lab_tech_id: 'lab_tech_1', lab_tech_name: 'Lab Technician' }),
@@ -132,7 +133,7 @@ export default function LabDashboard() {
     setError('');
     setSuccess('');
     try {
-      const res = await fetch('/api/batches/scan', {
+      const res = await apiFetch('/api/batches/scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ batch_code: activeBatch.batch_code, kit_barcode: scanBarcode.trim() }),
@@ -155,7 +156,7 @@ export default function LabDashboard() {
     setSubmitting(true);
     setError('');
     try {
-      const res = await fetch(`/api/batches/${activeBatch.id}/items/${editingItem.id}`, {
+      const res = await apiFetch(`/api/batches/${activeBatch.id}/items/${editingItem.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ result: itemResult, result_notes: itemNotes }),
@@ -177,7 +178,7 @@ export default function LabDashboard() {
   async function startTesting() {
     if (!activeBatch) return;
     try {
-      const res = await fetch(`/api/batches/${activeBatch.id}`, {
+      const res = await apiFetch(`/api/batches/${activeBatch.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'start_testing' }),
@@ -196,7 +197,7 @@ export default function LabDashboard() {
     if (!activeBatch) return;
     setSubmitting(true);
     try {
-      const res = await fetch(`/api/batches/${activeBatch.id}/submit`, {
+      const res = await apiFetch(`/api/batches/${activeBatch.id}/submit`, {
         method: 'POST',
       });
       if (res.ok) {

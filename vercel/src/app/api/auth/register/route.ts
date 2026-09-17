@@ -9,9 +9,30 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Email, password, and name are required.' }, { status: 400 });
     }
 
-    const existing = findUserByEmail(email);
-    if (existing) {
-      return NextResponse.json({ error: 'Email already exists.' }, { status: 409 });
+    const userRole = role || 'patient';
+    if (userRole !== 'patient') {
+      return NextResponse.json(
+        { error: 'Public registration is only available for patients. Staff accounts are created by an administrator.' },
+        { status: 403 },
+      );
+    }
+
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      phone: phone || undefined,
+      user_metadata: {
+        name,
+        role: userRole,
+        consent_terms: true,
+        consent_medical: true,
+        consent_at: new Date().toISOString(),
+      },
+    });
+
+    if (authError) {
+      return NextResponse.json({ error: authError.message }, { status: 400 });
     }
 
     const user = createUser({ email, password, name, phone, role, county, sub_county, ward });

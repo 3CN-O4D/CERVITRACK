@@ -11,7 +11,9 @@ import {
   ActivityIndicator,
   Linking,
   Dimensions,
+  Platform,
 } from 'react-native';
+import { WebView } from 'react-native-webview';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
 import { useTheme } from '../context/ThemeContext';
@@ -76,6 +78,7 @@ export default function SelfSamplingScreen() {
   const [kitBarcode, setKitBarcode] = useState('');
   const [checklist, setChecklist] = useState<Record<string, boolean>>({});
   const [collectLoading, setCollectLoading] = useState(false);
+  const [contactPhone, setContactPhone] = useState('');
 
   const handleRequestKit = async () => {
     if (!user?.id) { Alert.alert('Error', 'Please log in to request a kit.'); return; }
@@ -138,7 +141,9 @@ export default function SelfSamplingScreen() {
     setKitLoading(true);
     try {
       const paired = await pairKit(kitBarcode, { patientId: user.id, patientName: user.name || 'Patient', pairedBy: 'self', pairedByName: user.name || 'Patient (Self)' });
-      if (paired) {
+      if (paired && 'error' in paired) {
+        Alert.alert('Cannot Link Kit', paired.error);
+      } else if (paired) {
         setKitStatus('PAIRED');
         Alert.alert('Kit Linked', 'This kit is now linked to your account. Proceed to learn how to take your sample.', [
           { text: 'Continue', onPress: () => setStep('learn') },
@@ -161,9 +166,23 @@ export default function SelfSamplingScreen() {
     setKitLoading(true);
     setKitMessage('');
     try {
+      // First check kit is linked to user before allowing collection
+      const kit = await scanKit(barcode2.trim());
+      if (!kit) {
+        setKitMessage('Kit not found. Please register and link it to your account first.');
+        setKitLoading(false);
+        return;
+      }
+      if (kit.status !== 'PAIRED') {
+        setKitMessage(`Kit is ${kit.status}. It must be linked to your account before sampling. Please go back and link the kit first.`);
+        setKitLoading(false);
+        return;
+      }
       const collected = await collectKit(barcode2.trim(), {
         collectedBy: 'self', collectedByName: user?.name || 'Patient (Self-Collection)',
-        collectionMethod: 'HPV_SELF', location: 'home', notes: 'Self-collected after completing sampling checklist',
+        collectionMethod: 'HPV_SELF', location: 'home',
+        phone: contactPhone || undefined,
+        notes: 'Self-collected after completing sampling checklist',
       });
       if (collected) {
         setStep('post-scan-result');
@@ -340,20 +359,24 @@ export default function SelfSamplingScreen() {
             </View>
 
             <View style={styles.videoEmbed}>
-              <WebView
-                source={{ html: `<html><body style="margin:0;background:#000"><iframe width="100%" height="100%" src="${VIDEO_EMBED}" frameborder="0" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowfullscreen></iframe></body></html>` }}
-                style={{ width: '100%', height: '100%' }}
-                javaScriptEnabled
-                allowsFullscreenVideo
-              />
+              {Platform.OS === 'web' ? (
+                <iframe
+                  src="https://www.youtube.com/embed/njsHSnDGcDk?autoplay=0&modestbranding=1&rel=0"
+                  style={{ width: '100%', height: 220, border: 'none', borderRadius: 12 }}
+                  allowFullScreen
+                  allow="autoplay; encrypted-media"
+                />
+              ) : (
+                <WebView
+                  source={{ uri: 'https://www.youtube.com/embed/njsHSnDGcDk?autoplay=0&modestbranding=1&rel=0' }}
+                  style={styles.videoFrame}
+                  javaScriptEnabled
+                  domStorageEnabled
+                  allowsFullscreenVideo
+                  scrollEnabled={false}
+                />
+              )}
             </View>
-            <TouchableOpacity style={styles.videoBtn} onPress={() => Linking.openURL('https://youtu.be/njsHSnDGcDk')}>
-              <View style={styles.videoIcon}>
-                <Ionicons name="play" size={18} color="#FFF" />
-              </View>
-              <Text style={styles.videoBtnText}>Open in YouTube</Text>
-              <Ionicons name="chevron-forward" size={18} color={colors.primary} />
-            </TouchableOpacity>
 
             <View style={styles.sectionHeader}>
               <MaterialCommunityIcons name="clipboard-list" size={20} color={colors.primary} />
@@ -467,6 +490,14 @@ export default function SelfSamplingScreen() {
                 placeholderTextColor={colors.textSecondary}
                 autoCapitalize="characters"
               />
+              <TextInput
+                style={[styles.phoneInput, { borderColor: colors.border, color: colors.text, backgroundColor: colors.card }]}
+                value={contactPhone}
+                onChangeText={setContactPhone}
+                placeholder="Phone number for follow-up (optional)"
+                placeholderTextColor={colors.textSecondary}
+                keyboardType="phone-pad"
+              />
               <TouchableOpacity
                 style={[styles.scanBtn, { backgroundColor: colors.primary }]}
                 onPress={handlePostScan}
@@ -520,6 +551,7 @@ export default function SelfSamplingScreen() {
                 setKitMessage('');
                 setKitStatus(null);
                 setChecklist({});
+                setContactPhone('');
               }}
             >
               <Ionicons name="home" size={18} color="#FFF" />
@@ -588,6 +620,7 @@ const makeStyles = (colors: any, isDark: boolean) =>
 
     scanSection: { marginHorizontal: 20, backgroundColor: colors.card, borderRadius: 16, borderWidth: 1, borderColor: colors.border, padding: 16 },
     scanInput: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16, marginBottom: 12, textAlign: 'center', letterSpacing: 2 },
+    phoneInput: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, marginBottom: 12 },
     scanBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 12, paddingVertical: 12, gap: 8 },
     scanBtnText: { fontSize: 14, fontWeight: '700', color: '#FFF' },
     statusMsg: { fontSize: 13, textAlign: 'center', marginTop: 10, fontWeight: '500' },
@@ -596,10 +629,8 @@ const makeStyles = (colors: any, isDark: boolean) =>
     statusCardTitle: { fontSize: 18, fontWeight: '800', color: colors.text, textAlign: 'center', marginTop: 12 },
     statusCardDesc: { fontSize: 13, color: colors.textSecondary, textAlign: 'center', lineHeight: 18, marginTop: 6 },
 
-    videoEmbed: { marginHorizontal: 20, height: (width - 40) * 0.5625, borderRadius: 14, overflow: 'hidden', marginBottom: 12, backgroundColor: '#000' },
-    videoBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.primaryLight, marginHorizontal: 20, paddingVertical: 14, paddingHorizontal: 20, borderRadius: 14, borderWidth: 1, borderColor: colors.border, marginBottom: 20, gap: 10 },
-    videoIcon: { width: 34, height: 34, borderRadius: 10, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
-    videoBtnText: { fontSize: 15, fontWeight: '700', color: colors.primary, flex: 1 },
+    videoEmbed: { marginHorizontal: 20, marginBottom: 20, borderRadius: 14, overflow: 'hidden', height: 200 },
+    videoFrame: { width: '100%', height: 200 },
 
     sectionHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, gap: 8, marginBottom: 10, marginTop: 4 },
     sectionTitle: { fontSize: 16, fontWeight: '800', color: colors.text, flex: 1 },

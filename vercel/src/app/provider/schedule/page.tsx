@@ -1,5 +1,6 @@
 'use client';
 
+import { apiFetch } from '@/lib/api-fetch';
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 
@@ -48,7 +49,7 @@ export default function ProviderSchedulePage() {
 
   const fetchActions = async () => {
     try {
-      const res = await fetch('/api/scheduled-actions');
+      const res = await apiFetch('/api/scheduled-actions');
       if (res.ok) {
         const json = await res.json();
         setActions(json.actions || json || []);
@@ -59,7 +60,7 @@ export default function ProviderSchedulePage() {
 
   const fetchPatients = async () => {
     try {
-      const res = await fetch('/api/providers/patients');
+      const res = await apiFetch('/api/providers/patients');
       if (res.ok) {
         const json = await res.json();
         setPatients(json.patients || json || []);
@@ -108,7 +109,7 @@ export default function ProviderSchedulePage() {
     }
     setCreating(true);
     try {
-      const res = await fetch('/api/scheduled-actions', {
+      const res = await apiFetch('/api/scheduled-actions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ patient_id: patientId, date: actionDate, action: actionDesc }),

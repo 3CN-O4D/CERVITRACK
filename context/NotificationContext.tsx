@@ -29,6 +29,7 @@ interface NotificationContextType {
   unreadCount: number;
   addNotification: (n: Omit<AppNotification, 'id' | 'read' | 'createdAt'>) => void;
   markRead: (id: string) => void;
+  deleteNotification: (id: string) => void;
   markAllRead: () => void;
   deleteNotification: (id: string) => void;
 }
@@ -86,9 +87,14 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     persist(notifications.map((n) => ({ ...n, read: true })));
   }, [notifications, persist]);
 
-  const deleteNotification = useCallback((id: string) => {
-    persist(notifications.filter((n) => n.id !== id));
-  }, [notifications, persist]);
+  const deleteNotification = useCallback(
+    (id: string) => {
+      persist(notifications.filter((n) => n.id !== id));
+      // Fire-and-forget remote delete
+      import('../services/api').then(m => m.deleteNotification(Number(id), '')).catch(() => {});
+    },
+    [notifications, persist],
+  );
 
   const unreadCount = useMemo(
     () => notifications.filter((n) => !n.read).length,
@@ -97,7 +103,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   return (
     <NotificationContext.Provider
-      value={{ notifications, unreadCount, addNotification, markRead, markAllRead, deleteNotification }}
+      value={{ notifications, unreadCount, addNotification, markRead, deleteNotification, markAllRead }}
     >
       {children}
     </NotificationContext.Provider>

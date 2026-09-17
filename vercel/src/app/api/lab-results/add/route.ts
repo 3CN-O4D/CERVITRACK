@@ -1,15 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { getRequestUser, resolveUserScope, forbidden } from '@/lib/api-auth';
 
 export async function POST(request: NextRequest) {
   try {
+    const user = await getRequestUser(request);
+    if (!user) return forbidden();
     const body = await request.json();
     const { user_id, patient_name, result, notes } = body;
+
+    const scopedId = resolveUserScope(user, user_id);
+    if (!scopedId) return forbidden();
 
     const { data: labResult, error } = await supabaseAdmin
       .from('lab_results')
       .insert({
-        user_id,
+        user_id: scopedId,
         patient_name,
         result,
         notes,

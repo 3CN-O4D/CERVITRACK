@@ -1,5 +1,6 @@
 'use client';
 
+import { apiFetch } from '@/lib/api-fetch';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -30,7 +31,7 @@ export default function ProviderDashboard() {
 
   const fetchPatientCount = async () => {
     try {
-      const res = await fetch('/api/providers/patients');
+      const res = await apiFetch('/api/providers/patients');
       if (res.ok) {
         const json = await res.json();
         setPatientCount((json.patients || json || []).length);

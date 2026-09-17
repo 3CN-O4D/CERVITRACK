@@ -1,5 +1,7 @@
 'use client';
 
+import { apiFetch } from '@/lib/api-fetch';
+import { getCountyNames } from '@/lib/kenya';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
@@ -32,10 +34,7 @@ const SPECIALTIES = [
   { value: 'other', label: 'Other' },
 ];
 
-const COUNTIES = [
-  'Nairobi', 'Mombasa', 'Kisumu', 'Nakuru', 'Uasin Gishu', 'Nyeri', 'Meru',
-  'Machakos', 'Garissa', 'Kakamega', 'Busia', 'Trans-Nzoia', 'Kiambu', 'Embu',
-];
+const COUNTIES = getCountyNames();
 
 export default function AdminProvidersPage() {
   const [providers, setProviders] = useState<Provider[]>([]);
@@ -59,7 +58,7 @@ export default function AdminProvidersPage() {
   async function fetchProviders() {
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/providers?status=${filter}`);
+      const res = await apiFetch(`/api/admin/providers?status=${filter}`);
       if (res.ok) setProviders(await res.json());
     } catch { setError('Failed to load providers'); }
     finally { setLoading(false); }
@@ -70,7 +69,7 @@ export default function AdminProvidersPage() {
     setSubmitting(true);
     setError('');
     try {
-      const res = await fetch(`/api/admin/providers/${approving.id}`, {
+      const res = await apiFetch(`/api/admin/providers/${approving.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'approve', ...approveForm }),
@@ -90,7 +89,7 @@ export default function AdminProvidersPage() {
   async function handleReject(id: string) {
     if (!confirm('Reject this provider?')) return;
     try {
-      const res = await fetch(`/api/admin/providers/${id}`, {
+      const res = await apiFetch(`/api/admin/providers/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'reject' }),

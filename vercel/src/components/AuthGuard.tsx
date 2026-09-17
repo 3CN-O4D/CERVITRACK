@@ -37,7 +37,7 @@ export default function AuthGuard({ children, allowedRoles, redirectTo = '/auth'
           role = profile?.role || '';
         }
 
-        if (allowedRoles.includes(role) || role === 'system_admin' || role === 'national_admin') {
+        if (allowedRoles.includes(role)) {
           setAllowed(true);
         } else {
           router.push(redirectTo);

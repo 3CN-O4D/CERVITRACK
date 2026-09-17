@@ -80,12 +80,29 @@ export default function AppointmentBookingScreen() {
   const [selectedHospital, setSelectedHospital] = useState<Facility | null>(null);
   const [selectedClinician, setSelectedClinician] = useState<Clinician | null>(null);
   const [selectedDate, setSelectedDate] = useState('');
+  const [selectedTime, setSelectedTime] = useState('');
+  const [bookingNotes, setBookingNotes] = useState('');
   const [patientNote, setPatientNote] = useState('');
   const [dateOptions, setDateOptions] = useState<string[]>([]);
   const [bookingLoading, setBookingLoading] = useState(false);
-  const [searchHospital, setSearchHospital] = useState('');
-  const [searchDoctor, setSearchDoctor] = useState('');
-  const [step, setStep] = useState<'hospital' | 'doctor' | 'date'>('hospital');
+  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [anyAvailable, setAnyAvailable] = useState(false);
+
+  const timeSlots = [
+    '08:00', '09:00', '10:00', '11:00',
+    '12:00', '13:00', '14:00', '15:00',
+    '16:00', '17:00',
+  ];
+
+  const uniqueHospitals = useMemo(() => {
+    const hospitals = new Set(doctors.map((d: any) => d.hospital).filter(Boolean));
+    return Array.from(hospitals).sort();
+  }, [doctors]);
+
+  const filteredDoctors = useMemo(() => {
+    if (!selectedHospital) return doctors;
+    return doctors.filter((d: any) => d.hospital === selectedHospital);
+  }, [doctors, selectedHospital]);
 
   useEffect(() => {
     loadData();
@@ -129,6 +146,9 @@ export default function AppointmentBookingScreen() {
     setSelectedHospital(null);
     setSelectedClinician(null);
     setSelectedDate('');
+    setSelectedTime('');
+    setAnyAvailable(false);
+    setBookingNotes('');
     setPatientNote('');
     setDateOptions(generateDateOptions());
     setSearchHospital('');
@@ -157,34 +177,116 @@ export default function AppointmentBookingScreen() {
       Alert.alert('Required', 'Please select a date.');
       return;
     }
+    if (!selectedTime) {
+      Alert.alert('Required', 'Please select a time.');
+      return;
+    }
+    if (!user?.id) {
+      Alert.alert('Error', 'Please log in to book an appointment.');
+      return;
+    }
+    if (!selectedDoctor && !anyAvailable) {
+      Alert.alert('Required', 'Please select a clinician or tap "Any Available".');
+      return;
+    }
     setBookingLoading(true);
     try {
-      const payload: any = {
-        user_id: user.id,
-        provider_id: selectedClinician?.id || null,
-        date: selectedDate,
-        time: '09:00',
-        title: `Appointment with ${selectedClinician?.name || selectedHospital?.name || 'Clinician'}`,
-        facility: selectedHospital?.name || '',
-        facility_name: selectedHospital?.name || '',
-        facility_location: `${selectedHospital?.county || ''}`.trim(),
-        custom_text: patientNote,
-        status: 'pending',
+      const providerId = selectedDoctor?.id || '';
+      const doctorName = anyAvailable ? 'Any Available' : (selectedDoctor?.name || 'Clinician');
+      await requestAppointment(
+        user.id,
+        providerId,
+        selectedDate,
+        selectedTime,
+        `Appointment with ${doctorName}`,
+        bookingNotes,
+        patientNote,
+      );
+      setShowBooking(false);
+      Alert.alert('Appointment Requested', `Your request for ${formatDate(selectedDate)} with ${doctorName} has been sent.`);
+
+      const doctorTime = selectedTime || '09:00';
+      const [hourStr, minStr] = doctorTime.split(':');
+      const apptDate = new Date(selectedDate + `T${hourStr}:${minStr}:00`);
+      const now = Date.now();
+
+      // Helper to schedule a notification
+      const schedule = async (opts: { title: string; body: string; date: Date; channelId?: string; type?: string }) => {
+        if (opts.date.getTime() <= now) return;
+        const channelId = opts.channelId || 'reminders';
+        try {
+          await Notifications.scheduleNotificationAsync({
+            content: {
+              title: opts.title,
+              body: opts.body,
+              sound: 'default',
+              priority: channelId === 'alarms'
+                ? Notifications.AndroidNotificationPriority.MAX
+                : Notifications.AndroidNotificationPriority.HIGH,
+              ...(Platform.OS === 'android' ? { channelId } : {}),
+            },
+            trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: opts.date } as any,
+          });
+        } catch { /* best-effort */ }
       };
 
-      const { data, error } = await supabase.from('appointments').insert(payload).select().single();
-      if (error) throw error;
+      // Build reminder timeline
+      const reminders = [];
 
-      setShowBooking(false);
-      Alert.alert('Success', `Appointment requested for ${formatDate(selectedDate)}.`);
+      // 1. Previous day at 20:00 — first heads up
+      const prevEvening = new Date(apptDate);
+      prevEvening.setDate(prevEvening.getDate() - 1);
+      prevEvening.setHours(20, 0, 0, 0);
+      reminders.push({
+        title: 'Appointment Tomorrow',
+        body: `Reminder: you have an appointment with ${doctorName} tomorrow at ${apptDate.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}.`,
+        date: prevEvening,
+      });
 
-      const apptDate = new Date(selectedDate + 'T09:00:00');
-      const dayBefore = new Date(apptDate);
-      dayBefore.setDate(dayBefore.getDate() - 1);
-      if (dayBefore.getTime() > Date.now()) {
-        await Notifications.scheduleNotificationAsync({
-          content: { title: 'Appointment Reminder', body: `Appointment tomorrow at 09:00.` },
-          trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: dayBefore, channelId: 'reminders' },
+      // 2. Day-of at 08:00 — morning reminder
+      const morningOf = new Date(apptDate);
+      morningOf.setHours(8, 0, 0, 0);
+      if (morningOf.getTime() < apptDate.getTime()) {
+        reminders.push({
+          title: 'Appointment Today',
+          body: `Your appointment with ${doctorName} is today at ${apptDate.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}.`,
+          date: morningOf,
+        });
+      }
+
+      // 3. 2 hours before — getting close
+      const twoHoursBefore = new Date(apptDate.getTime() - 2 * 60 * 60 * 1000);
+      if (twoHoursBefore.getTime() > now && twoHoursBefore.getTime() > morningOf.getTime()) {
+        reminders.push({
+          title: 'Appointment Soon',
+          body: `Your appointment with ${doctorName} is in about 2 hours at ${apptDate.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}.`,
+          date: twoHoursBefore,
+        });
+      }
+
+      // Schedule all reminders
+      for (const r of reminders) {
+        await schedule({ ...r, channelId: 'reminders' });
+      }
+
+      // 4. 20 minutes before — ALARM (rings persistently)
+      const twentyMinBefore = new Date(apptDate.getTime() - 20 * 60 * 1000);
+      if (twentyMinBefore.getTime() > now) {
+        await schedule({
+          title: '⚠ Appointment in 20 Minutes',
+          body: `Your appointment with ${doctorName} is in 20 minutes at ${apptDate.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}.`,
+          date: twentyMinBefore,
+          channelId: 'alarms',
+        });
+      }
+
+      // 5. At appointment time — ALARM (due, rings persistently)
+      if (apptDate.getTime() > now) {
+        await schedule({
+          title: '🔔 Appointment Due Now',
+          body: `Your appointment with ${doctorName} is starting now at ${apptDate.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}.`,
+          date: apptDate,
+          channelId: 'alarms',
         });
       }
 
@@ -311,40 +413,115 @@ export default function AppointmentBookingScreen() {
                     </Text>
                   </TouchableOpacity>
                 ))}
-                <View style={[styles.stepLine, { backgroundColor: colors.border }]} />
+              </ScrollView>
+
+              {selectedHospital ? (
+                <>
+                  <Text style={[s.fieldLabel, { color: colors.text }]}>Select Clinician at {selectedHospital}</Text>
+                  {filteredDoctors.length === 0 && (
+                    <>
+                      <Text style={{ color: colors.textSecondary, fontSize: 13, marginBottom: 8 }}>No clinicians listed at this hospital.</Text>
+                      <TouchableOpacity
+                        style={[s.anyAvailableBtn, { borderColor: colors.primary }, anyAvailable && { backgroundColor: colors.primary }]}
+                        onPress={() => { setAnyAvailable(!anyAvailable); setSelectedDoctor(null); }}
+                      >
+                        <MaterialCommunityIcons name="account-question" size={18} color={anyAvailable ? '#FFF' : colors.primary} />
+                        <Text style={[s.anyAvailableText, { color: anyAvailable ? '#FFF' : colors.primary }]}>
+                          {anyAvailable ? '✓ Any Available Selected' : 'Any Available — I\'ll take whoever is free'}
+                        </Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
+                  {filteredDoctors.map((doc) => (
+                    <TouchableOpacity
+                      key={doc.id}
+                      style={[s.doctorItem, { backgroundColor: colors.inputBg, borderColor: colors.border }, selectedDoctor?.id === doc.id && { borderColor: colors.primary, backgroundColor: colors.primary + '10' }]}
+                      onPress={() => { setSelectedDoctor(doc); setAnyAvailable(false); }}
+                    >
+                      <View style={[s.avatar, { backgroundColor: colors.primary + '20' }]}>
+                        <Text style={[s.avatarText, { color: colors.primary }]}>
+                          {doc.name?.split(' ').slice(-2).map((n: string) => n[0]).join('')}
+                        </Text>
+                      </View>
+                      <View style={s.doctorInfo}>
+                        <Text style={[s.doctorName, { color: colors.text }]}>{doc.name}</Text>
+                        <Text style={[s.doctorSpecialty, { color: colors.textSecondary }]}>{doc.specialty || 'Clinician'}</Text>
+                      </View>
+                      {selectedDoctor?.id === doc.id && (
+                        <MaterialCommunityIcons name="check-circle" size={22} color={colors.primary} />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </>
+              ) : (
+                <Text style={{ color: colors.textSecondary, fontSize: 13, marginBottom: 8 }}>Please select a hospital first.</Text>
+              )}
+
+              <Text style={[s.fieldLabel, { color: colors.text }]}>Select Date</Text>
+              <View style={s.dateRow}>
+                {fallbackDates.map((d) => {
+                  const selected = selectedDate === d;
+                  const parts = d.split('-');
+                  const display = `${parseInt(parts[2])} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(parts[1])-1]}`;
+                  return (
+                    <TouchableOpacity
+                      key={d}
+                      style={[s.dateChip, { backgroundColor: colors.inputBg, borderColor: colors.border }, selected && { backgroundColor: colors.primary, borderColor: colors.primary }]}
+                      onPress={() => setSelectedDate(d)}
+                    >
+                      <Text style={[s.dateChipText, { color: selected ? '#FFF' : colors.text }]}>
+                        {display}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
 
-              <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: '75%' }}>
-                {/* Step 1: Select Hospital */}
-                {step === 'hospital' && (
-                  <>
-                    <Text style={[styles.stepTitle, { color: colors.text }]}>1. Select Hospital</Text>
-                    <View style={[styles.searchBar, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
-                      <Ionicons name="search" size={18} color={colors.textSecondary} />
-                      <TextInput
-                        style={[styles.searchInput, { color: colors.text }]}
-                        placeholder="Search hospitals..."
-                        placeholderTextColor={colors.textSecondary}
-                        value={searchHospital}
-                        onChangeText={setSearchHospital}
-                      />
-                    </View>
-                    {filteredHospitals.map((h) => (
-                      <TouchableOpacity
-                        key={h.id}
-                        style={[styles.selectItem, { backgroundColor: colors.inputBg, borderColor: colors.border }, selectedHospital?.id === h.id && { borderColor: colors.primary, backgroundColor: colors.primary + '10' }]}
-                        onPress={() => handleSelectHospital(h)}
-                      >
-                        <View style={[styles.selectItemIcon, { backgroundColor: colors.primary + '20' }]}>
-                          <Ionicons name="business" size={20} color={colors.primary} />
-                        </View>
-                        <View style={styles.selectItemInfo}>
-                          <Text style={[styles.selectItemName, { color: colors.text }]}>{h.name}</Text>
-                          <Text style={[styles.selectItemDetail, { color: colors.textSecondary }]}>{h.county}{h.sub_county ? ` · ${h.sub_county}` : ''}</Text>
-                        </View>
-                      </TouchableOpacity>
-                    ))}
-                  </>
+              <Text style={[s.fieldLabel, { color: colors.text }]}>Select Time</Text>
+              <View style={s.timeRow}>
+                {timeSlots.map((t) => {
+                  const selected = selectedTime === t;
+                  return (
+                    <TouchableOpacity
+                      key={t}
+                      style={[s.timeChip, { backgroundColor: colors.inputBg, borderColor: colors.border }, selected && { backgroundColor: colors.primary, borderColor: colors.primary }]}
+                      onPress={() => setSelectedTime(t)}
+                    >
+                      <Text style={[s.timeChipText, { color: selected ? '#FFF' : colors.text }]}>{t}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <Text style={[s.fieldLabel, { color: colors.text }]}>Your Note (optional)</Text>
+              <TextInput
+                style={[s.notesInput, { backgroundColor: colors.inputBg, color: colors.text, borderColor: colors.border }]}
+                placeholder="Reason for visit, symptoms, questions..."
+                placeholderTextColor={colors.textSecondary}
+                value={patientNote}
+                onChangeText={setPatientNote}
+                multiline
+              />
+
+              <Text style={[s.fieldLabel, { color: colors.text }]}>Additional Notes (optional)</Text>
+              <TextInput
+                style={[s.notesInput, { backgroundColor: colors.inputBg, color: colors.text, borderColor: colors.border }]}
+                placeholder="Anything else you'd like to mention..."
+                placeholderTextColor={colors.textSecondary}
+                value={bookingNotes}
+                onChangeText={setBookingNotes}
+                multiline
+              />
+
+              <TouchableOpacity
+                style={[s.submitBtn, { backgroundColor: (!selectedDate || !selectedTime) ? colors.border : colors.primary }, bookingLoading && { opacity: 0.6 }]}
+                onPress={handleBook}
+                disabled={bookingLoading || !selectedDate || !selectedTime}
+              >
+                {bookingLoading ? (
+                  <ActivityIndicator color="#FFF" />
+                ) : (
+                  <Text style={s.submitText}>Request Appointment</Text>
                 )}
 
                 {/* Step 2: Select Doctor */}
@@ -531,6 +708,11 @@ const createStyles = (colors: any, insets: any) => StyleSheet.create({
   dateCardDay: { fontSize: 18, fontWeight: '800', marginVertical: 2 },
   dateCardMonth: { fontSize: 11, fontWeight: '600' },
   notesInput: { borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12, fontSize: 14, borderWidth: 1, minHeight: 80, textAlignVertical: 'top' },
-  submitBtn: { borderRadius: 14, paddingVertical: 15, alignItems: 'center', marginTop: 16, marginBottom: 20 },
+  timeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  timeChip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, borderWidth: 1 },
+  timeChipText: { fontSize: 13, fontWeight: '600' },
+  anyAvailableBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 14, paddingVertical: 12, paddingHorizontal: 16, borderWidth: 1.5, marginBottom: 12 },
+  anyAvailableText: { fontSize: 14, fontWeight: '600', flex: 1 },
+  submitBtn: { borderRadius: 14, paddingVertical: 15, alignItems: 'center', marginTop: 20, marginBottom: 20 },
   submitText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
 });

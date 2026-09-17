@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { getRequestUser, resolveUserScope, forbidden } from '@/lib/api-auth';
 
 export async function GET(req: NextRequest) {
   try {
+    const user = await getRequestUser(req);
+    if (!user) return forbidden();
     const { searchParams } = new URL(req.url);
-    const profileId = searchParams.get('profile_id') || '';
+    const claimed = searchParams.get('profile_id');
+    const profileId = resolveUserScope(user, claimed);
+    if (!profileId) return forbidden();
 
     let q = supabaseAdmin
       .from('screenings')
@@ -36,17 +41,18 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const user = await getRequestUser(req);
+    if (!user) return forbidden();
     const body = await req.json();
     const { patientId, type, result, riskLevel, notes } = body;
 
-    if (!patientId) {
-      return NextResponse.json({ message: 'patientId required' }, { status: 400 });
-    }
+    const scopedId = resolveUserScope(user, patientId);
+    if (!scopedId) return forbidden();
 
     const { data, error } = await supabaseAdmin
       .from('screenings')
       .insert({
-        profile_id: patientId,
+        profile_id: scopedId,
         verdict: result || 'Pending',
         risk_tier: riskLevel || 'low',
         symptoms: notes || '',
@@ -56,7 +62,7 @@ export async function POST(req: NextRequest) {
 
     if (error) throw error;
 
-    await supabaseAdmin.rpc('increment_screenings', { uid: patientId });
+    await supabaseAdmin.rpc('increment_screenings', { uid: scopedId });
 
     return NextResponse.json({ screening: data }, { status: 201 });
   } catch (error) {

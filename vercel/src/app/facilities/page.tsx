@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { getCountyNames } from '@/lib/kenya';
 
 interface Facility {
   id: string;
@@ -67,7 +68,7 @@ export default function FacilitiesPage() {
     } catch {}
   }
 
-  const counties = ['Nairobi', 'Mombasa', 'Kisumu', 'Nakuru', 'Kiambu', 'Uasin Gishu', 'Kilifi', 'Machakos', 'Meru', 'Kakamega'];
+  const counties = getCountyNames();
   const types = [
     { value: '', label: 'All Types' },
     { value: 'hospital', label: 'Hospital' },

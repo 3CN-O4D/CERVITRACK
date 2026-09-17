@@ -1,5 +1,6 @@
 'use client';
 
+import { apiFetch } from '@/lib/api-fetch';
 import { useState, useEffect, useMemo } from 'react';
 
 interface Appointment {
@@ -35,7 +36,7 @@ export default function AdminAppointmentsPage() {
 
   const fetchAppointments = async () => {
     try {
-      const res = await fetch('/api/admin/appointments');
+      const res = await apiFetch('/api/admin/appointments');
       if (!res.ok) throw new Error('Failed to load appointments');
       const json = await res.json();
       setAppointments(Array.isArray(json) ? json : json.appointments || []);

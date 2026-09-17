@@ -1,5 +1,6 @@
 'use client';
 
+import { apiFetch } from '@/lib/api-fetch';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
@@ -80,7 +81,7 @@ export default function AdminDashboard() {
   async function fetchDashboard() {
     setLoading(true);
     try {
-      const res = await fetch('/api/admin/dashboard');
+      const res = await apiFetch('/api/admin/dashboard');
       if (res.ok) setData(await res.json());
     } catch { /* ignore */ }
     finally { setLoading(false); }
@@ -97,7 +98,7 @@ export default function AdminDashboard() {
     } catch { /* ignore */ }
 
     try {
-      const res = await fetch('/api/sample-kits/stats');
+      const res = await apiFetch('/api/sample-kits/stats');
       if (res.ok) setKitStats(await res.json());
     } catch { /* ignore */ }
   }
@@ -109,7 +110,7 @@ export default function AdminDashboard() {
     setScanError('');
     setScannedKit(null);
     try {
-      const res = await fetch(`/api/sample-kits/scan/${code}`);
+      const res = await apiFetch(`/api/sample-kits/scan/${code}`);
       if (res.ok) { setScannedKit(await res.json()); setTab('tracking'); }
       else if (res.status === 404) setScanError('Kit not found');
       else setScanError('Scan failed');

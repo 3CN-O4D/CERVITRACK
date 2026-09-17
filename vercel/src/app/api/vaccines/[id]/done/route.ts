@@ -1,11 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { getRequestUser, ownsPatientRow, forbidden } from '@/lib/api-auth';
 
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
+    const user = await getRequestUser(request);
+    if (!user) return forbidden();
+    const { data: existing } = await supabaseAdmin
+      .from('vaccines')
+      .select('user_id')
+      .eq('id', params.id)
+      .maybeSingle();
+    if (!ownsPatientRow(user, existing?.user_id)) return forbidden();
+
     const { data: vaccine, error } = await supabaseAdmin
       .from('vaccines')
       .update({ status: 'done' })

@@ -5,8 +5,11 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  TextInput,
+  Modal,
   Alert,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Notifications from 'expo-notifications';
@@ -60,6 +63,10 @@ export default function RemindersScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'scheduled' | 'past'>('scheduled');
+  const [showCustomModal, setShowCustomModal] = useState(false);
+  const [customTitle, setCustomTitle] = useState('');
+  const [customDate, setCustomDate] = useState('');
+  const [customTime, setCustomTime] = useState('');
 
   const s = styles(colors);
 
@@ -161,6 +168,59 @@ export default function RemindersScreen({ navigation }: any) {
     );
   };
 
+  const handleSetCustomReminder = async () => {
+    if (!customTitle.trim() || !customDate.trim()) {
+      Alert.alert('Required', 'Please enter a title and date for the reminder.');
+      return;
+    }
+    const [y, m, d] = customDate.split('-');
+    const [hh, mm] = customTime ? customTime.split(':') : ['09', '00'];
+    const reminderDate = new Date(parseInt(y), parseInt(m) - 1, parseInt(d), parseInt(hh), parseInt(mm));
+    if (reminderDate.getTime() <= Date.now()) {
+      Alert.alert('Invalid Date', 'Please pick a future date and time.');
+      return;
+    }
+    try {
+      // Schedule on reminders channel
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: customTitle.trim(),
+          body: `Reminder: ${customTitle.trim()}`,
+          sound: 'default',
+          priority: Notifications.AndroidNotificationPriority.HIGH,
+          ...(Platform.OS === 'android' ? { channelId: 'reminders' } : {}),
+        },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DATE,
+          date: reminderDate,
+        } as any,
+      });
+      // Also schedule an alarm 20 min before
+      const alarmDate = new Date(reminderDate.getTime() - 20 * 60 * 1000);
+      if (alarmDate.getTime() > Date.now()) {
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: `⏰ ${customTitle.trim()} in 20 min`,
+            body: `Your reminder "${customTitle.trim()}" is due in 20 minutes.`,
+            sound: 'default',
+            priority: Notifications.AndroidNotificationPriority.MAX,
+            ...(Platform.OS === 'android' ? { channelId: 'alarms' } : {}),
+          },
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.DATE,
+            date: alarmDate,
+          } as any,
+        });
+      }
+      setShowCustomModal(false);
+      setCustomTitle('');
+      setCustomDate('');
+      setCustomTime('');
+      addNotification({ title: 'Reminder Set', message: `"${customTitle.trim()}" has been scheduled.`, type: 'reminder' });
+      await loadReminders();
+    } catch { Alert.alert('Error', 'Failed to set reminder. Please try again.'); }
+  };
+
   const cancelAllReminders = async () => {
     Alert.alert(
       'Cancel All Reminders',
@@ -224,6 +284,11 @@ export default function RemindersScreen({ navigation }: any) {
       <Text style={[s.subtitle, { color: colors.textSecondary }]}>
         {scheduledReminders.length} active reminder{scheduledReminders.length !== 1 ? 's' : ''}
       </Text>
+
+      <TouchableOpacity style={[s.setReminderBtn, { backgroundColor: colors.primary }]} onPress={() => setShowCustomModal(true)}>
+        <Ionicons name="alarm-outline" size={18} color="#FFF" />
+        <Text style={s.setReminderText}>Set Reminder</Text>
+      </TouchableOpacity>
 
       {/* Tab Bar */}
       <View style={s.tabRow}>
@@ -316,6 +381,55 @@ export default function RemindersScreen({ navigation }: any) {
       )}
 
       <View style={{ height: 40 }} />
+
+      {/* Custom Reminder Modal */}
+      <Modal visible={showCustomModal} transparent animationType="slide">
+        <View style={s.modalOverlay}>
+          <View style={[s.modalContent, { backgroundColor: colors.card }]}>
+            <View style={s.modalHeader}>
+              <Text style={[s.modalTitle, { color: colors.text }]}>Set Reminder</Text>
+              <TouchableOpacity onPress={() => setShowCustomModal(false)}>
+                <Ionicons name="close" size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[s.fieldLabel, { color: colors.text }]}>Title</Text>
+            <TextInput
+              style={[s.modalInput, { borderColor: colors.border, color: colors.text, backgroundColor: colors.inputBg }]}
+              value={customTitle}
+              onChangeText={setCustomTitle}
+              placeholder="e.g. Take medication"
+              placeholderTextColor={colors.textSecondary}
+            />
+
+            <Text style={[s.fieldLabel, { color: colors.text }]}>Date (YYYY-MM-DD)</Text>
+            <TextInput
+              style={[s.modalInput, { borderColor: colors.border, color: colors.text, backgroundColor: colors.inputBg }]}
+              value={customDate}
+              onChangeText={setCustomDate}
+              placeholder="e.g. 2026-08-15"
+              placeholderTextColor={colors.textSecondary}
+            />
+
+            <Text style={[s.fieldLabel, { color: colors.text }]}>Time (HH:MM, optional — defaults to 09:00)</Text>
+            <TextInput
+              style={[s.modalInput, { borderColor: colors.border, color: colors.text, backgroundColor: colors.inputBg }]}
+              value={customTime}
+              onChangeText={setCustomTime}
+              placeholder="e.g. 14:30"
+              placeholderTextColor={colors.textSecondary}
+            />
+
+            <TouchableOpacity
+              style={[s.confirmBtn, { backgroundColor: colors.primary }]}
+              onPress={handleSetCustomReminder}
+            >
+              <Ionicons name="checkmark-circle" size={18} color="#FFF" />
+              <Text style={s.confirmBtnText}>Set Reminder (with alarm)</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -352,4 +466,14 @@ const styles = (colors: any) => StyleSheet.create({
   emptyState: { alignItems: 'center', paddingTop: 60 },
   emptyTitle: { fontSize: 16, fontWeight: '700', marginTop: 16 },
   emptySub: { fontSize: 13, marginTop: 4, textAlign: 'center' },
+  setReminderBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14, paddingVertical: 12, marginBottom: 16 },
+  setReminderText: { color: '#FFF', fontSize: 15, fontWeight: '700' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 24 },
+  modalContent: { borderRadius: 20, padding: 24 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  modalTitle: { fontSize: 20, fontWeight: '800' },
+  fieldLabel: { fontSize: 13, fontWeight: '700', marginBottom: 6, marginTop: 14 },
+  modalInput: { borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, borderWidth: 1, marginBottom: 4 },
+  confirmBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14, paddingVertical: 14, marginTop: 20 },
+  confirmBtnText: { color: '#FFF', fontSize: 15, fontWeight: '700' },
 });

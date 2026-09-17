@@ -1,5 +1,6 @@
 'use client';
 
+import { apiFetch } from '@/lib/api-fetch';
 import { useState, useEffect, useCallback } from 'react';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 
@@ -64,7 +65,7 @@ export default function KitInventoryPage() {
 
   const loadStats = useCallback(async () => {
     try {
-      const res = await fetch('/api/sample-kits/stats');
+      const res = await apiFetch('/api/sample-kits/stats');
       const data = await res.json();
       setStats(data);
     } catch (e) {
@@ -83,7 +84,7 @@ export default function KitInventoryPage() {
       params.set('page', String(page));
       params.set('limit', '50');
 
-      const res = await fetch(`/api/sample-kits?${params.toString()}`);
+      const res = await apiFetch(`/api/sample-kits?${params.toString()}`);
       const data = await res.json();
       setLedger(data.data || []);
       setTotalPages(data.totalPages || 1);
@@ -104,7 +105,7 @@ export default function KitInventoryPage() {
     try {
       if (registerMode === 'single') {
         if (!registerBarcode.trim()) return;
-        const res = await fetch('/api/sample-kits', {
+        const res = await apiFetch('/api/sample-kits', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -123,7 +124,7 @@ export default function KitInventoryPage() {
       } else {
         const barcodes = bulkBarcodes.split(/[\n,]+/).map((b: string) => b.trim()).filter(Boolean);
         if (barcodes.length === 0) return;
-        const res = await fetch('/api/sample-kits/bulk-register', {
+        const res = await apiFetch('/api/sample-kits/bulk-register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

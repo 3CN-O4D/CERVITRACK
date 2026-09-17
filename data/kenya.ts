@@ -405,13 +405,6 @@ export const COUNTIES: County[] = [
       { name: 'Tana South', wards: [{ name: 'Ngao' }, { name: 'Kipini East' }, { name: 'Kipini West' }, { name: 'Sala' }] },
     ],
   },
-  {
-    name: 'Lamu', code: 5,
-    subCounties: [
-      { name: 'Lamu East', wards: [{ name: 'Lamu Town' }, { name: 'Sheli' }, { name: 'Mkomani' }, { name: 'Hindi' }] },
-      { name: 'Lamu West', wards: [{ name: 'Mpeketoni' }, { name: 'Witu' }, { name: 'Hongwe' }, { name: 'Basuba' }] },
-    ],
-  },
 ];
 
 export function getCountyNames(): string[] {

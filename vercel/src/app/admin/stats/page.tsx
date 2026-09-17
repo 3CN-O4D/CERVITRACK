@@ -1,5 +1,6 @@
 'use client';
 
+import { apiFetch } from '@/lib/api-fetch';
 import { useState, useEffect } from 'react';
 
 interface StatsData {
@@ -48,7 +49,7 @@ export default function AdminStatsPage() {
 
   const fetchStats = async () => {
     try {
-      const res = await fetch('/api/admin/stats');
+      const res = await apiFetch('/api/admin/stats');
       if (!res.ok) throw new Error('Failed to load stats');
       const json = await res.json();
       setData(json);

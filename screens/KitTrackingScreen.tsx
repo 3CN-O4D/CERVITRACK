@@ -12,9 +12,8 @@ import {
   Animated,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { CameraView, useCameraPermissions } from 'expo-camera';
-import * as Haptics from 'expo-haptics';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { CameraView, useCameraPermissions, scanFromURLAsync } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { scanKit, registerKit, pairKit, collectKit, linkKit, searchPatients, type Kit, type KitEvent } from '../services/api';
@@ -45,6 +44,7 @@ export default function KitTrackingScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
   const [mode, setMode] = useState<'camera' | 'manual'>('camera');
+  const [torchEnabled, setTorchEnabled] = useState(false);
   const [barcode, setBarcode] = useState('');
   const [scanning, setScanning] = useState(false);
   const [kit, setKit] = useState<Kit | null>(null);
@@ -138,6 +138,37 @@ export default function KitTrackingScreen() {
     isScanning.current = false;
   }, []);
 
+  const pickFromGallery = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Allow gallery access to scan barcodes from images.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.8,
+      });
+      if (result.canceled || !result.assets?.[0]) return;
+      setScanning(true);
+      try {
+        const scanned = await scanFromURLAsync(result.assets[0].uri, ['qr', 'ean13', 'ean8', 'code128', 'code39', 'upc_a', 'pdf417', 'datamatrix']);
+        if (scanned && scanned.length > 0 && scanned[0].data) {
+          setBarcode(scanned[0].data);
+          await lookupKit(scanned[0].data);
+        } else {
+          Alert.alert('No barcode found', 'Could not detect a barcode in this image. Try a clearer photo or enter the barcode manually.');
+        }
+      } catch {
+        Alert.alert('Error', 'Failed to read barcode from image. Try entering it manually.');
+      } finally {
+        setScanning(false);
+      }
+    } catch {
+      Alert.alert('Error', 'Failed to open gallery.');
+    }
+  };
+
   const lookupKit = async (code: string) => {
     if (!code.trim()) return;
     setScanning(true);
@@ -194,7 +225,9 @@ export default function KitTrackingScreen() {
         pairedBy: user?.id || 'self',
         pairedByName: user?.name || 'Patient (Self)',
       });
-      if (result) {
+      if (result && 'error' in result) {
+        setError(result.error);
+      } else if (result) {
         setKit(result);
         setAction(null);
         setSuccess('Kit paired to your account');
@@ -268,7 +301,9 @@ export default function KitTrackingScreen() {
         linkedBy: user?.id || 'system',
         linkedByName: user?.name || 'Clinician',
       });
-      if (result?.kit) {
+      if (result && 'error' in result) {
+        setError(result.error);
+      } else if (result?.kit) {
         setKit(result.kit);
         setAction(null);
         setSelectedPatient(null);
@@ -329,17 +364,27 @@ export default function KitTrackingScreen() {
             ref={cameraRef}
             style={s.camera}
             facing="back"
-            barcodeScannerSettings={{ barcodeTypes: ['qr', 'ean13', 'ean8', 'code128', 'code39', 'upc_a', 'upc_e', 'pdf417', 'aztec', 'datamatrix', 'codabar', 'itf14'] }}
+            enableTorch={torchEnabled}
+            barcodeScannerSettings={{ barcodeTypes: ['qr', 'ean13', 'ean8', 'code128', 'code39', 'upc_a', 'upc_e', 'pdf417', 'aztec', 'datamatrix', 'codabar'] }}
             onBarcodeScanned={scanning ? undefined : handleBarCodeScanned}
-          />
-          <Animated.View style={[s.scanFlash, { opacity: scanFlash }]} pointerEvents="none" />
-          <View style={s.scanOverlay} pointerEvents="none">
-            <View style={s.scanFrame}>
-              <View style={[s.corner, s.cornerTL]} />
-              <View style={[s.corner, s.cornerTR]} />
-              <View style={[s.corner, s.cornerBL]} />
-              <View style={[s.corner, s.cornerBR]} />
-              <Animated.View style={[s.scanLine2, { backgroundColor: colors.primary, transform: [{ translateY: scanLineY }] }]} />
+          >
+            <View style={s.scanOverlay}>
+              <View style={s.scannerControls}>
+                <TouchableOpacity style={s.torchBtn} onPress={() => setTorchEnabled(!torchEnabled)}>
+                  <Ionicons name={torchEnabled ? 'flashlight' : 'flashlight-outline'} size={20} color="#FFF" />
+                </TouchableOpacity>
+                <TouchableOpacity style={s.galleryBtn} onPress={pickFromGallery}>
+                  <Ionicons name="image-outline" size={20} color="#FFF" />
+                </TouchableOpacity>
+              </View>
+              <View style={s.scanFrame}>
+                <View style={[s.corner, s.cornerTL]} />
+                <View style={[s.corner, s.cornerTR]} />
+                <View style={[s.corner, s.cornerBL]} />
+                <View style={[s.corner, s.cornerBR]} />
+                <Animated.View style={[s.scanLine2, { backgroundColor: colors.primary, transform: [{ translateY: scanLineY }] }]} />
+              </View>
+              <Text style={s.scanText}>Point camera at kit barcode</Text>
             </View>
             <Text style={s.scanText}>Point camera at kit barcode</Text>
           </View>
@@ -722,6 +767,9 @@ const styles = (colors: any) => StyleSheet.create({
   cornerBR: { bottom: 0, right: 0, borderBottomWidth: 3, borderRightWidth: 3 },
   scanLine2: { position: 'absolute', left: 0, right: 0, height: 2, opacity: 0.8 },
   scanText: { color: '#FFF', fontSize: 13, fontWeight: '600', marginTop: 16, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 4 },
+  scannerControls: { position: 'absolute', top: 12, left: 12, right: 12, flexDirection: 'row', justifyContent: 'space-between', zIndex: 10 },
+  torchBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
+  galleryBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
 
   inputSection: { paddingHorizontal: 20, marginBottom: 8 },
   modeToggle: { alignItems: 'center', marginBottom: 10 },

@@ -1,11 +1,27 @@
 import * as SQLite from 'expo-sqlite';
 import { Platform } from 'react-native';
+import { chatEncryptSync, chatDecryptSync } from './crypto';
 
 let db: SQLite.SQLiteDatabase | null = null;
+let webNoDb = false;
 
-export function getDb(): SQLite.SQLiteDatabase {
+function noopDb(): any {
+  return new Proxy({}, {
+    get: () => noopDb,
+    apply: () => undefined,
+  });
+}
+
+export function getDb(): SQLite.SQLiteDatabase | any {
+  if (Platform.OS === 'web') return noopDb();
+  if (webNoDb) return noopDb();
   if (!db) {
-    db = SQLite.openDatabaseSync('cervitrack.db');
+    try {
+      db = SQLite.openDatabaseSync('cervitrack.db');
+    } catch {
+      webNoDb = true;
+      return noopDb();
+    }
   }
   return db;
 }
@@ -32,7 +48,8 @@ const SCHEMA = `
     consent_medical INTEGER DEFAULT 0,
     consent_at TEXT,
     created_at TEXT,
-    updated_at TEXT
+    updated_at TEXT,
+    sync_status TEXT DEFAULT 'synced'
   );
 
   CREATE TABLE IF NOT EXISTS screenings (
@@ -158,6 +175,10 @@ const SCHEMA = `
     local_uri TEXT,
     duration TEXT,
     read INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'sent',
+    edited INTEGER DEFAULT 0,
+    deleted INTEGER DEFAULT 0,
+    hidden INTEGER DEFAULT 0,
     created_at TEXT,
     updated_at TEXT,
     sync_status TEXT DEFAULT 'pending'
@@ -181,6 +202,17 @@ const SCHEMA = `
     patient_name TEXT,
     result TEXT,
     notes TEXT,
+    created_at TEXT,
+    updated_at TEXT,
+    sync_status TEXT DEFAULT 'pending'
+  );
+
+  CREATE TABLE IF NOT EXISTS test_results (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    remote_id TEXT,
+    user_id TEXT,
+    result TEXT,
+    date TEXT,
     created_at TEXT,
     updated_at TEXT,
     sync_status TEXT DEFAULT 'pending'
@@ -272,27 +304,32 @@ const SCHEMA = `
 `;
 
 export function initLocalDb() {
-  const database = getDb();
-  database.execSync(SCHEMA);
+  try {
+    const database = getDb();
+    if (!database) return;
+    database.execSync(SCHEMA);
+    migrateLocalDb(database);
+  } catch { /* local DB not available (e.g. web) */ }
+}
+
+function migrateLocalDb(database: any) {
+  try {
+    const cols = database.getAllSync('PRAGMA table_info(users)') as Array<{ name: string }>;
+    if (!cols.some((c) => c.name === 'sync_status')) {
+      database.runSync("ALTER TABLE users ADD COLUMN sync_status TEXT DEFAULT 'synced'");
+    }
+  } catch { /* column already present */ }
 }
 
 // ─── Helpers ──────────────────────────────────────────────────
 
-function now() {
+export function now() {
   return new Date().toISOString();
 }
 
-function addToQueue(tableName: string, rowId: string, operation: string, payload?: any) {
-  try {
-    const database = getDb();
-    database.runSync(
-      `INSERT INTO sync_queue (table_name, row_id, operation, payload, created_at) VALUES (?, ?, ?, ?, ?)`,
-      tableName, rowId, operation, payload ? JSON.stringify(payload) : null, now()
-    );
-  } catch { /* queue insert failed silently */ }
-}
+function addToQueue(tableName: string, rowId: string, operation: string, payload?: any) {}
 
-function markSynced(tableName: string, localId: number | string) {
+export function markSynced(tableName: string, localId: number | string) {
   try {
     const database = getDb();
     database.runSync(
@@ -307,14 +344,46 @@ function markSynced(tableName: string, localId: number | string) {
 export function saveUser(user: any) {
   const database = getDb();
   database.runSync(
-    `INSERT OR REPLACE INTO users (id, name, email, phone, password, role, photo, birth_date, last_healed_date, county, sub_county, ward, patient_id, risk_index, consent_terms, consent_medical, consent_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    user.id, user.name || '', user.email || '', user.phone || '', user.password || '',
+    `INSERT OR REPLACE INTO users (id, name, email, phone, password, role, photo, birth_date, last_healed_date, county, sub_county, ward, patient_id, risk_index, consent_terms, consent_medical, consent_at, created_at, updated_at, sync_status)
+     VALUES (?, ?, ?, ?, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    user.id, user.name || '', user.email || '', user.phone || '',
     user.role || 'patient', user.photo || '', user.birth_date || '', user.last_healed_date || '',
     user.county || '', user.sub_county || '', user.ward || '', user.patient_id || '',
     user.risk_index || 'low', user.consent_terms ? 1 : 0, user.consent_medical ? 1 : 0,
-    user.consent_at || '', user.created_at || now(), now()
+    user.consent_at || '', user.created_at || now(), now(),
+    user.sync_status || 'synced'
   );
+}
+
+export function updateUserLocally(userId: string, updates: any) {
+  const database = getDb();
+  const sets: string[] = [];
+  const vals: any[] = [];
+  if (updates.name !== undefined) { sets.push('name = ?'); vals.push(updates.name); }
+  if (updates.phone !== undefined) { sets.push('phone = ?'); vals.push(updates.phone); }
+  if (updates.email !== undefined) { sets.push('email = ?'); vals.push(updates.email); }
+  if (updates.birth_date !== undefined) { sets.push('birth_date = ?'); vals.push(updates.birth_date); }
+  if (updates.last_healed_date !== undefined) { sets.push('last_healed_date = ?'); vals.push(updates.last_healed_date); }
+  if (updates.photo !== undefined) { sets.push('photo = ?'); vals.push(updates.photo); }
+  if (updates.county !== undefined) { sets.push('county = ?'); vals.push(updates.county); }
+  if (updates.sub_county !== undefined) { sets.push('sub_county = ?'); vals.push(updates.sub_county); }
+  if (updates.ward !== undefined) { sets.push('ward = ?'); vals.push(updates.ward); }
+  if (sets.length === 0) return;
+  sets.push('updated_at = ?', 'sync_status = ?');
+  vals.push(now(), 'pending', userId);
+  database.runSync(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`, ...vals);
+}
+
+export function markUserSynced(userId: string) {
+  const database = getDb();
+  database.runSync("UPDATE users SET sync_status = 'synced' WHERE id = ?", userId);
+}
+
+export function getUnsyncedUsers(): any[] {
+  try {
+    const database = getDb();
+    return database.getAllSync("SELECT * FROM users WHERE sync_status = 'pending'");
+  } catch { return []; }
 }
 
 export function getUser(userId: string): any | null {
@@ -459,6 +528,12 @@ export function markAllNotificationsRead(userId: string) {
   addToQueue('notifications', userId, 'update_all', { user_id: userId, read: true });
 }
 
+export function deleteNotification(id: number) {
+  const database = getDb();
+  database.runSync('DELETE FROM notifications WHERE id = ?', id);
+  addToQueue('notifications', String(id), 'delete', { id });
+}
+
 // ─── Articles ─────────────────────────────────────────────────
 
 export function saveArticle(article: any) {
@@ -532,7 +607,7 @@ export function saveConversation(c: any, syncStatus: string = 'synced') {
     `INSERT INTO conversations (remote_id, user_id, contact_id, contact_name, contact_role, online, last_message, last_time, updated_at, sync_status)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     c.remote_id || null, c.user_id || '', c.contact_id ?? null, c.contact_name || '',
-    c.contact_role || '', c.online ? 1 : 0, c.last_message || '', c.last_time || '',
+    c.contact_role || '', c.online ? 1 : 0, chatEncryptSync(c.last_message || ''), c.last_time || '',
     now(), syncStatus
   );
   return result.lastInsertRowId;
@@ -541,17 +616,20 @@ export function saveConversation(c: any, syncStatus: string = 'synced') {
 export function getConversations(userId: string): any[] {
   try {
     const database = getDb();
-    return database.getAllSync(
+    const rows = database.getAllSync(
       'SELECT * FROM conversations WHERE user_id = ? ORDER BY last_time DESC',
       userId
-    );
+    ) as any[];
+    return rows.map((r: any) => ({ ...r, last_message: chatDecryptSync(r.last_message || '') }));
   } catch { return []; }
 }
 
 export function getConversationByRemoteId(remoteId: string): any | null {
   try {
     const database = getDb();
-    return database.getFirstSync('SELECT * FROM conversations WHERE remote_id = ?', remoteId) ?? null;
+    const row = database.getFirstSync('SELECT * FROM conversations WHERE remote_id = ?', remoteId);
+    if (!row) return null;
+    return { ...row, last_message: chatDecryptSync((row as any).last_message || '') };
   } catch { return null; }
 }
 
@@ -559,7 +637,7 @@ export function updateConversationLastMessage(conversationId: number, lastMessag
   const database = getDb();
   database.runSync(
     'UPDATE conversations SET last_message = ?, last_time = ? WHERE id = ?',
-    lastMessage, now(), conversationId
+    chatEncryptSync(lastMessage), now(), conversationId
   );
 }
 
@@ -568,24 +646,93 @@ export function updateConversationLastMessage(conversationId: number, lastMessag
 export function saveMessage(m: any, syncStatus: string = 'synced') {
   const database = getDb();
   const result = database.runSync(
-    `INSERT INTO messages (remote_id, conversation_id, conversation_remote_id, sender_id, sender_type, message_type, content, file_url, local_uri, duration, read, created_at, updated_at, sync_status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO messages (remote_id, conversation_id, conversation_remote_id, sender_id, sender_type, message_type, content, file_url, local_uri, duration, read, status, edited, deleted, hidden, created_at, updated_at, sync_status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     m.remote_id || null, m.conversation_id ?? null, m.conversation_remote_id || null,
     m.sender_id || '', m.sender_type || 'user', m.message_type || 'text',
-    m.content || '', m.file_url || '', m.local_uri || '', m.duration || '', m.read ? 1 : 0,
+    chatEncryptSync(m.content || ''), chatEncryptSync(m.file_url || ''), m.local_uri || '', m.duration || '', m.read ? 1 : 0,
+    m.status || 'sent', m.edited ? 1 : 0, m.deleted ? 1 : 0, m.hidden ? 1 : 0,
     m.created_at || now(), now(), syncStatus
   );
   return result.lastInsertRowId;
 }
 
+export function upsertLocalMessage(m: any, syncStatus: string = 'synced') {
+  const database = getDb();
+  if (m.remote_id) {
+    const existing = database.getFirstSync('SELECT id FROM messages WHERE remote_id = ?', String(m.remote_id)) as any;
+    if (existing) {
+      database.runSync(
+        `UPDATE messages SET sender_type = ?, message_type = ?, content = ?, file_url = ?, local_uri = ?, duration = ?, read = ?, status = ?, edited = ?, deleted = ?, hidden = ?, updated_at = ?, sync_status = ? WHERE id = ?`,
+        m.sender_type || 'user', m.message_type || 'text',
+        chatEncryptSync(m.content || ''), chatEncryptSync(m.file_url || ''), m.local_uri || '', m.duration || '',
+        m.read ? 1 : 0, m.status || 'sent', m.edited ? 1 : 0, m.deleted ? 1 : 0, m.hidden ? 1 : 0,
+        now(), syncStatus, existing.id
+      );
+      return existing.id;
+    }
+  }
+  return saveMessage(m, syncStatus);
+}
+
+export function updateMessageRemoteId(localId: number, remoteId: string, status: string = 'sent') {
+  const database = getDb();
+  database.runSync(
+    "UPDATE messages SET remote_id = ?, status = ?, sync_status = 'synced', updated_at = ? WHERE id = ?",
+    remoteId, status, now(), localId
+  );
+}
+
+export function markMessageEdited(localId: number, content: string) {
+  const database = getDb();
+  database.runSync(
+    "UPDATE messages SET content = ?, edited = 1, sync_status = 'pending_edit', updated_at = ? WHERE id = ?",
+    chatEncryptSync(content), now(), localId
+  );
+}
+
+export function markMessageDeletedForMe(localId: number) {
+  const database = getDb();
+  const row = database.getFirstSync(
+    'SELECT remote_id FROM messages WHERE id = ?', localId
+  ) as any;
+  const syncStatus = row?.remote_id ? 'pending_delete_me' : 'deleted';
+  database.runSync(
+    "UPDATE messages SET hidden = 1, updated_at = ?, sync_status = ? WHERE id = ?",
+    now(), syncStatus, localId
+  );
+}
+
+export function markMessageDeletedForEveryone(localId: number) {
+  const database = getDb();
+  database.runSync(
+    "UPDATE messages SET deleted = 1, content = '', sync_status = 'pending_delete_all', updated_at = ? WHERE id = ?",
+    now(), localId
+  );
+}
+
 export function getMessages(conversationId: number): any[] {
   try {
     const database = getDb();
-    return database.getAllSync(
-      'SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC',
+    const rows = database.getAllSync(
+      'SELECT * FROM messages WHERE conversation_id = ? AND deleted = 0 AND hidden = 0 ORDER BY created_at ASC',
       conversationId
-    );
+    ) as any[];
+    return rows.map((r: any) => ({ ...r, content: chatDecryptSync(r.content || ''), file_url: chatDecryptSync(r.file_url || '') }));
   } catch { return []; }
+}
+
+export function getMessageByRemoteId(remoteId: string): any | null {
+  try {
+    const database = getDb();
+    const row = database.getFirstSync('SELECT * FROM messages WHERE remote_id = ?', remoteId);
+    if (!row) return null;
+    return {
+      ...row,
+      content: chatDecryptSync((row as any).content || ''),
+      file_url: chatDecryptSync((row as any).file_url || ''),
+    };
+  } catch { return null; }
 }
 
 export function getUnsyncedMessages(): any[] {
@@ -635,6 +782,28 @@ export function getLabResults(userId: string): any[] {
     const database = getDb();
     return database.getAllSync(
       'SELECT * FROM lab_results WHERE user_id = ? ORDER BY created_at DESC',
+      userId
+    );
+  } catch { return []; }
+}
+
+// ─── Test Results ─────────────────────────────────────────────
+
+export function saveTestResult(r: any, syncStatus: string = 'synced') {
+  const database = getDb();
+  database.runSync(
+    `INSERT INTO test_results (remote_id, user_id, result, date, created_at, updated_at, sync_status)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    r.remote_id || null, r.user_id || '', r.result || '', r.date || '',
+    r.created_at || now(), now(), syncStatus
+  );
+}
+
+export function getTestResults(userId: string): any[] {
+  try {
+    const database = getDb();
+    return database.getAllSync(
+      'SELECT * FROM test_results WHERE user_id = ? ORDER BY created_at DESC',
       userId
     );
   } catch { return []; }
@@ -727,7 +896,6 @@ export function saveFeedback(f: any, syncStatus: string = 'synced') {
     f.remote_id || null, f.user_id || '', f.category || '', f.message || '',
     f.contact || '', f.created_at || now(), now(), syncStatus
   );
-  addToQueue('feedback', String(Date.now()), 'insert', f);
 }
 
 // ─── Sync Queue ───────────────────────────────────────────────
@@ -744,8 +912,15 @@ export function getSyncQueue(): any[] {
 export function getSyncQueueCount(): number {
   try {
     const database = getDb();
-    const result = database.getFirstSync('SELECT COUNT(*) as count FROM sync_queue') as any;
-    return result?.count ?? 0;
+    const tables = ['screenings', 'vaccines', 'appointments', 'notifications', 'messages', 'conversations', 'lab_results', 'test_results', 'kit_requests', 'sample_kits', 'feedback', 'users'];
+    let total = 0;
+    for (const t of tables) {
+      const result = database.getFirstSync(
+        `SELECT COUNT(*) as count FROM ${t} WHERE sync_status = 'pending'`
+      ) as any;
+      total += result?.count ?? 0;
+    }
+    return total;
   } catch { return 0; }
 }
 
@@ -787,7 +962,7 @@ export function setSyncMeta(key: string, value: string) {
 export function getPendingCounts(): Record<string, number> {
   try {
     const database = getDb();
-    const tables = ['screenings', 'vaccines', 'appointments', 'notifications', 'messages', 'conversations', 'lab_results', 'kit_requests', 'sample_kits', 'feedback'];
+    const tables = ['screenings', 'vaccines', 'appointments', 'notifications', 'messages', 'conversations', 'lab_results', 'test_results', 'kit_requests', 'sample_kits', 'feedback', 'users'];
     const counts: Record<string, number> = {};
     for (const t of tables) {
       const result = database.getFirstSync(
@@ -795,7 +970,6 @@ export function getPendingCounts(): Record<string, number> {
       ) as any;
       counts[t] = result?.count ?? 0;
     }
-    counts['sync_queue'] = getSyncQueueCount();
     return counts;
   } catch { return {}; }
 }
@@ -804,7 +978,7 @@ export function getPendingCounts(): Record<string, number> {
 
 export function clearAllData() {
   const database = getDb();
-  const tables = ['screenings', 'vaccines', 'appointments', 'notifications', 'messages', 'conversations', 'lab_results', 'kit_requests', 'sample_kits', 'feedback', 'sync_queue'];
+  const tables = ['users', 'screenings', 'vaccines', 'appointments', 'notifications', 'messages', 'conversations', 'lab_results', 'test_results', 'kit_requests', 'sample_kits', 'feedback', 'sync_queue'];
   for (const t of tables) {
     try { database.runSync(`DELETE FROM ${t}`); } catch {}
   }
@@ -830,6 +1004,9 @@ export default {
   saveUser,
   getUser,
   getCurrentUser,
+  updateUserLocally,
+  markUserSynced,
+  getUnsyncedUsers,
   saveScreening,
   getScreenings,
   saveVaccine,
@@ -855,11 +1032,19 @@ export default {
   updateConversationLastMessage,
   saveMessage,
   getMessages,
+  getMessageByRemoteId,
+  upsertLocalMessage,
+  updateMessageRemoteId,
+  markMessageEdited,
+  markMessageDeletedForMe,
+  markMessageDeletedForEveryone,
   getUnsyncedMessages,
   saveChatContacts,
   getChatContacts,
   saveLabResult,
   getLabResults,
+  saveTestResult,
+  getTestResults,
   saveKitRequest,
   getKitRequests,
   updateKitRequest,

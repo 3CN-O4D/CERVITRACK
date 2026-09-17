@@ -1,5 +1,6 @@
 'use client';
 
+import { apiFetch } from '@/lib/api-fetch';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -69,7 +70,7 @@ export default function ProviderPatientDetailPage() {
 
   const fetchPatient = async () => {
     try {
-      const res = await fetch(`/api/providers/patient/${patientId}`);
+      const res = await apiFetch(`/api/providers/patient/${patientId}`);
       if (!res.ok) throw new Error('Failed to load patient');
       const json = await res.json();
       setPatient(json);
@@ -84,7 +85,7 @@ export default function ProviderPatientDetailPage() {
     e.preventDefault();
     if (!notifTitle || !notifMessage) return;
     try {
-      await fetch('/api/providers/notification/send', {
+      await apiFetch('/api/providers/notification/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: patientId, title: notifTitle, message: notifMessage }),
@@ -102,7 +103,7 @@ export default function ProviderPatientDetailPage() {
     e.preventDefault();
     if (!msgContent) return;
     try {
-      await fetch('/api/providers/messages/send', {
+      await apiFetch('/api/providers/messages/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: patientId, content: msgContent }),
@@ -119,7 +120,7 @@ export default function ProviderPatientDetailPage() {
     e.preventDefault();
     if (!scheduleDate || !scheduleAction) return;
     try {
-      await fetch(`/api/providers/patient/${patientId}/schedule`, {
+      await apiFetch(`/api/providers/patient/${patientId}/schedule`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ date: scheduleDate, action: scheduleAction }),

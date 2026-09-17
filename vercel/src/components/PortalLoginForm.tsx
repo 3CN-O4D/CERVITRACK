@@ -6,6 +6,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { supabase } from '@/lib/supabase-browser';
 import { PortalConfig, getPortalForRole, PortalRole } from '@/lib/portalConfig';
+import { getCountyNames } from '@/lib/kenya';
 
 export default function PortalLoginForm({ portal }: { portal: PortalConfig }) {
   const router = useRouter();
@@ -51,6 +52,12 @@ export default function PortalLoginForm({ portal }: { portal: PortalConfig }) {
     setLoading(true);
 
     if (mode === 'register') {
+      if (!portal.allowRegister) {
+        setError('Staff accounts are created by an administrator. Sign in with a staff account.');
+        setMode('login');
+        setLoading(false);
+        return;
+      }
       if (!email || !password) { setError('Email and password are required.'); setLoading(false); return; }
       try {
         const res = await fetch('/api/auth/register', {
@@ -167,13 +174,14 @@ export default function PortalLoginForm({ portal }: { portal: PortalConfig }) {
                     onChange={(e) => setPhone(e.target.value)}
                     className="w-full border border-gray-300 rounded-lg p-3 text-sm"
                   />
-                  <input
-                    type="text"
-                    placeholder="County"
+                  <select
                     value={county}
                     onChange={(e) => setCounty(e.target.value)}
                     className="w-full border border-gray-300 rounded-lg p-3 text-sm"
-                  />
+                  >
+                    <option value="">Select county...</option>
+                    {getCountyNames().map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
                 </>
               )}
               <input
@@ -211,13 +219,15 @@ export default function PortalLoginForm({ portal }: { portal: PortalConfig }) {
             </form>
 
             <p className="text-center mt-5 text-sm text-gray-600">
-              {mode === 'login' ? "Don't have an account?" : 'Already have an account?'}{' '}
-              <button
-                onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
-                className={`font-medium hover:underline ${portal.primary}`}
-              >
-                {mode === 'login' ? 'Register' : 'Sign in'}
-              </button>
+              {mode === 'login' ? (portal.allowRegister ? "Don't have an account?" : 'Staff accounts are created by an administrator.') : 'Already have an account?'}{' '}
+              {portal.allowRegister && (
+                <button
+                  onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
+                  className={`font-medium hover:underline ${portal.primary}`}
+                >
+                  {mode === 'login' ? 'Register' : 'Sign in'}
+                </button>
+              )}
             </p>
 
             <div className="mt-6 pt-4 border-t border-gray-200 text-center">
