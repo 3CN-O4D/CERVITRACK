@@ -81,6 +81,50 @@ export const STEPS: SamplingStep[] = [
     expected: 'After sealing, the tube should not leak when held upside down.',
     normal: 'Minor condensation inside the bag is normal.',
   },
+  {
+    number: 7,
+    title: 'Store Your Sample Correctly',
+    instruction:
+      'Keep the sealed kit in its biohazard bag at room temperature (about 15-25°C), out of direct sunlight and away from heat. Do not open the bag, refrigerate, or freeze it.',
+    doList: ['Keep the kit at room temperature', 'Store it upright in a clean, dry place', 'Leave it inside the sealed biohazard bag'],
+    dontList: ['Do not refrigerate or freeze the sample', 'Do not leave it in a hot car, near a cooker, or in direct sun', 'Do not reopen the bag or the tube'],
+    why: 'The collection liquid preserves the cells. Extreme heat or cold damages the sample and can cause an invalid laboratory result.',
+    expected: 'The kit should look the same as when you sealed it.',
+    normal: 'A little condensation inside the bag is normal.',
+  },
+  {
+    number: 8,
+    title: 'Transport and Drop Off',
+    instruction:
+      'Return the sealed kit to your nearest pickup station as soon as possible, and within 25 days of collection. Carry it upright and hand it directly to a health worker or authorised courier.',
+    doList: ['Submit within 25 days of collecting the sample', 'Carry the kit upright in the biohazard bag', 'Hand it to a health worker or authorised courier'],
+    dontList: ['Do not leave the kit in a hot vehicle or direct sunlight on the way', 'Do not post it in an ordinary letterbox', 'Do not delay past the 25-day window'],
+    why: 'Fast, cool transport keeps the sample valid so the laboratory can produce a reliable result.',
+    expected: 'You will be asked for your barcode or patient code at drop-off.',
+    normal: 'Short journeys of under a day at normal temperatures are fine.',
+  },
+  {
+    number: 9,
+    title: 'Avoid These Common Mistakes',
+    instruction:
+      'Most invalid results come from a few avoidable mistakes. Check this list before you submit your kit.',
+    doList: ['Double-check the label matches your patient code', 'Make sure the cap is tight and the bag is sealed', 'Keep the kit cool and submit it on time'],
+    dontList: ['Do not touch or reuse the swab tip', 'Do not collect during your period — wait 3-5 days after it ends', 'Do not open the tube or bag again after sealing'],
+    why: 'Contamination, mislabelling, leaks and delays are the main reasons a sample cannot be tested.',
+    expected: 'Take an extra minute to review these — it protects your result.',
+    normal: 'If something went wrong, contact your facility; you may need a new kit.',
+  },
+  {
+    number: 10,
+    title: 'What Happens Next',
+    instruction:
+      'Your sample is sent to a laboratory where it is tested for high-risk HPV using a molecular test. Results are released to your account, usually within 2-4 weeks.',
+    doList: ['Track your kit in the app after drop-off', 'Watch for a notification when results are ready', 'Contact your clinician if you have questions'],
+    dontList: ['Do not expect results instantly — laboratory testing takes time', 'Do not start any treatment without discussing the result with a clinician'],
+    why: 'Knowing the journey helps you understand when and where to expect your result.',
+    expected: 'Your kit status moves through: Submitted → Received in laboratory → Results ready.',
+    normal: 'Some samples need to be retaken for technical reasons; this does not necessarily mean something is wrong.',
+  },
 ];
 
 export const CHECKLIST_ITEMS = [
@@ -92,6 +136,8 @@ export const CHECKLIST_ITEMS = [
   { key: 'labeled', label: 'The tube is labelled with my patient code' },
   { key: 'hazard_bag', label: 'The tube is inside the biohazard bag' },
   { key: 'bag_sealed', label: 'The biohazard bag is sealed properly' },
+  { key: 'stored', label: 'I will keep the sealed kit at room temperature, away from heat' },
+  { key: 'timely', label: 'I will submit the kit within 25 days of collection' },
   { key: 'waste', label: 'I disposed of packaging safely and washed my hands again' },
 ];
 
@@ -111,6 +157,10 @@ export const FAQS = [
   {
     q: 'Can I do self-sampling during my period?',
     a: 'It is best to avoid self-sampling during menstruation. Wait until at least 3-5 days after your period has ended.',
+  },
+  {
+    q: 'How should I store my sample before drop-off?',
+    a: 'Keep it sealed in the biohazard bag at room temperature (about 15-25°C), out of direct sunlight and away from heat. Do not refrigerate or freeze it, and submit it within 25 days.',
   },
   {
     q: 'How accurate is self-sampling?',
