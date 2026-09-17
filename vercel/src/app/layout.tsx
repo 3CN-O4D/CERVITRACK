@@ -6,6 +6,13 @@ export const metadata: Metadata = {
   title: 'CerviTrack — Cervical Health for Kenyan Women',
   description: 'Track screenings, vaccines, appointments, and get AI-powered cervical health guidance.',
   manifest: '/manifest.json',
+  icons: {
+    icon: [
+      { url: '/favicon.png', type: 'image/png', sizes: '48x48' },
+      { url: '/favicon.ico', sizes: 'any' },
+    ],
+    apple: '/icons/icon-192.png',
+  },
 };
 
 export const viewport: Viewport = {

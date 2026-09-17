@@ -45,12 +45,13 @@ export async function getKit(barcode: string) {
   };
 }
 
-export async function listKits(query: { facilityId?: string; status?: string; patientId?: string; page?: number; limit?: number }) {
-  const { facilityId, status, patientId, page = 1, limit = 20 } = query;
+export async function listKits(query: { facilityId?: string; status?: string; patientId?: string; search?: string; page?: number; limit?: number }) {
+  const { facilityId, status, patientId, search, page = 1, limit = 20 } = query;
   let q = supabaseAdmin.from('sample_kits').select('*', { count: 'exact' });
   if (facilityId) q = q.eq('facility_id', facilityId);
   if (status) q = q.eq('status', status);
   if (patientId) q = q.eq('patient_id', patientId);
+  if (search) q = q.or(`barcode.ilike.%${search}%,patient_name.ilike.%${search}%`);
   q = q.order('created_at', { ascending: false });
 
   const start = (page - 1) * limit;

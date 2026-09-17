@@ -24,15 +24,20 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
         if (!mounted || !readerRef.current) return;
         readerRef.current.id = elementId;
 
-        const scanner = new Html5Qrcode(elementId);
+        const scanner = new Html5Qrcode(elementId, { verbose: false, experimentalFeatures: { useBarCodeDetectorIfSupported: true } });
         scannerRef.current = scanner;
 
         await scanner.start(
           { facingMode: 'environment' },
           {
             fps: 10,
-            qrbox: { width: 250, height: 150 },
+            qrbox: (viewWidth: number, viewHeight: number) => {
+              const width = Math.min(Math.floor(viewWidth * 0.9), 320);
+              const height = Math.min(Math.floor(viewHeight * 0.5), 160);
+              return { width, height };
+            },
             aspectRatio: 1.0,
+            disableFlip: false,
           },
           (decodedText: string) => {
             if (mounted) {

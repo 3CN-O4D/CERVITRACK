@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase-browser';
 import { useRouter } from 'next/navigation';
+import { safePhotoSrc } from '@/lib/photo';
 
 interface UserProfile {
   name: string | null;
@@ -79,9 +80,9 @@ export default function PatientDashboard() {
     <div className="space-y-6">
       <div className="flex items-center gap-4 rounded-lg border bg-white p-4 shadow-sm">
         <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-primary">
-          {user.photo ? (
+          {safePhotoSrc(user.photo) ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={user.photo} alt={user.name || 'Profile'} className="h-full w-full object-cover" />
+            <img src={safePhotoSrc(user.photo) as string} alt={user.name || 'Profile'} className="h-full w-full object-cover" />
           ) : (
             <span className="text-xl font-extrabold text-white">{(user.name || 'U').trim()[0]?.toUpperCase()}</span>
           )}

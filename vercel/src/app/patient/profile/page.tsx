@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase-browser';
 import { getCountyNames, getSubCounties, getWards } from '@/lib/kenya';
+import { safePhotoSrc } from '@/lib/photo';
 
 interface UserProfile {
   name: string | null;
@@ -137,9 +138,9 @@ export default function PatientProfile() {
 
       <div className="flex items-center gap-4 rounded-lg border bg-white p-4">
         <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full bg-primary">
-          {form.photo ? (
+          {safePhotoSrc(form.photo) ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={form.photo} alt="Profile" className="h-full w-full object-cover" />
+            <img src={safePhotoSrc(form.photo) as string} alt="Profile" className="h-full w-full object-cover" />
           ) : (
             <span className="text-2xl font-extrabold text-white">{(form.name || 'U').trim()[0]?.toUpperCase()}</span>
           )}

@@ -4,6 +4,7 @@ import { apiFetch } from '@/lib/api-fetch';
 import { useState, useCallback } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase-browser';
+import CodeInput from '@/components/CodeInput';
 
 type KitStatus = 'UNREGISTERED' | 'REGISTERED' | 'PAIRED' | 'COLLECTED' | 'IN_TRANSIT' | 'IN_LAB' | 'PROCESSED';
 
@@ -51,8 +52,8 @@ export default function KitPage() {
   const [myKits, setMyKits] = useState<Kit[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const handleScan = useCallback(async () => {
-    const barcode = manualBarcode.trim();
+  const handleScan = useCallback(async (codeArg?: string) => {
+    const barcode = (codeArg ?? manualBarcode).trim();
     if (!barcode) return;
 
     setLoading(true);
@@ -168,23 +169,17 @@ export default function KitPage() {
         {/* Scanner */}
         <section className="bg-gray-900 rounded-xl p-6 border border-gray-800">
           <h2 className="text-lg font-semibold mb-4">Scan Kit Barcode</h2>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={manualBarcode}
-              onChange={(e) => setManualBarcode(e.target.value)}
-              placeholder="Enter or scan barcode..."
-              className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-sky-500"
-              onKeyDown={(e) => e.key === 'Enter' && handleScan()}
-            />
-            <button
-              onClick={handleScan}
-              disabled={!manualBarcode.trim() || loading}
-              className="bg-sky-600 hover:bg-sky-500 disabled:bg-gray-700 px-6 py-3 rounded-lg font-medium transition-colors"
-            >
-              {loading ? '...' : 'Scan'}
-            </button>
-          </div>
+          <CodeInput
+            value={manualBarcode}
+            onChange={setManualBarcode}
+            onSubmit={handleScan}
+            submitLabel={loading ? '...' : 'Scan'}
+            placeholder="Enter or scan barcode..."
+            disabled={loading}
+            inputClassName="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-sky-500"
+            scanButtonClassName="bg-sky-900/60 hover:bg-sky-800 border border-sky-700 text-sky-300 px-4 py-3 rounded-lg transition-colors disabled:opacity-50"
+            buttonClassName="bg-sky-600 hover:bg-sky-500 disabled:bg-gray-700 px-6 py-3 rounded-lg font-medium transition-colors text-white"
+          />
           <p className="text-gray-500 text-xs mt-2">Point your camera or enter barcode manually</p>
         </section>
 

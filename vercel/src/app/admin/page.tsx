@@ -3,6 +3,7 @@
 import { apiFetch } from '@/lib/api-fetch';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import CodeInput from '@/components/CodeInput';
 
 interface DashboardData {
   total_users: number;
@@ -103,8 +104,8 @@ export default function AdminDashboard() {
     } catch { /* ignore */ }
   }
 
-  async function scanKit() {
-    const code = barcode.trim();
+  async function scanKit(codeArg?: string) {
+    const code = (codeArg ?? barcode).trim();
     if (!code) return;
     setScanLoading(true);
     setScanError('');
@@ -270,16 +271,16 @@ export default function AdminDashboard() {
           <div className="space-y-6">
             <div className="bg-white rounded-xl border border-gray-200 p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Track Kit by Barcode</h2>
-              <div className="flex gap-2">
-                <input type="text" value={barcode} onChange={(e) => setBarcode(e.target.value)}
-                  placeholder="Enter or scan kit barcode..."
-                  className="flex-1 border border-gray-200 rounded-lg px-4 py-3 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-sky-500"
-                  onKeyDown={(e) => e.key === 'Enter' && scanKit()} />
-                <button onClick={scanKit} disabled={!barcode.trim() || scanLoading}
-                  className="bg-sky-600 hover:bg-sky-700 disabled:bg-gray-300 text-white px-6 py-3 rounded-lg font-medium transition-colors">
-                  {scanLoading ? 'Scanning...' : 'Track'}
-                </button>
-              </div>
+              <CodeInput
+                value={barcode}
+                onChange={setBarcode}
+                onSubmit={scanKit}
+                submitLabel={scanLoading ? 'Scanning…' : 'Track'}
+                placeholder="Enter or scan kit barcode…"
+                disabled={scanLoading}
+                autoFocus
+                buttonClassName="bg-sky-600 hover:bg-sky-700 disabled:bg-gray-300 text-white px-6 py-3 rounded-lg font-medium transition-colors disabled:opacity-60"
+              />
             </div>
 
             {scanError && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">{scanError}</div>}

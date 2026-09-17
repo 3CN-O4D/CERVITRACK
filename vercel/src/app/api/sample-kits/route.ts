@@ -7,6 +7,7 @@ export async function GET(req: NextRequest) {
     facilityId: searchParams.get('facilityId') || undefined,
     status: searchParams.get('status') || undefined,
     patientId: searchParams.get('patientId') || undefined,
+    search: searchParams.get('search') || undefined,
     page: parseInt(searchParams.get('page') || '1'),
     limit: parseInt(searchParams.get('limit') || '20'),
   });

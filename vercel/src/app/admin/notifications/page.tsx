@@ -1,6 +1,7 @@
 'use client';
 
 import { apiFetch } from '@/lib/api-fetch';
+import { safePhotoSrc } from '@/lib/photo';
 import { useState } from 'react';
 import UserSearch from '../../../components/UserSearch';
 
@@ -61,8 +62,8 @@ export default function AdminNotificationsPage() {
               <UserSearch onSelect={(u) => setSelectedUser(u)} placeholder="Search for a user by name or email…" />
               {selectedUser && (
                 <div className="mt-2 flex items-center gap-2 bg-sky-50 border border-sky-200 rounded-lg px-3 py-2">
-                  {selectedUser.photo ? (
-                    <img src={selectedUser.photo} alt="" className="w-6 h-6 rounded-full object-cover" />
+                  {safePhotoSrc(selectedUser.photo) ? (
+                    <img src={safePhotoSrc(selectedUser.photo) as string} alt="" className="w-6 h-6 rounded-full object-cover" />
                   ) : (
                     <div className="w-6 h-6 rounded-full bg-sky-600 flex items-center justify-center text-white text-[10px] font-bold">
                       {selectedUser.name.split(' ').map(n => n[0]).join('').slice(0, 2)}

@@ -2,7 +2,7 @@
 
 import { apiFetch } from '@/lib/api-fetch';
 import { useState, useEffect, useCallback } from 'react';
-import { supabaseAdmin } from '@/lib/supabase-admin';
+import CodeInput from '@/components/CodeInput';
 
 interface KitStats {
   total: number;
@@ -59,6 +59,7 @@ export default function KitInventoryPage() {
   const [registerMode, setRegisterMode] = useState<'single' | 'bulk'>('single');
   const [registerBarcode, setRegisterBarcode] = useState('');
   const [bulkBarcodes, setBulkBarcodes] = useState('');
+  const [scanBuffer, setScanBuffer] = useState('');
   const [registerFacility, setRegisterFacility] = useState('');
   const [registering, setRegistering] = useState(false);
   const [registerResult, setRegisterResult] = useState<any>(null);
@@ -214,13 +215,15 @@ export default function KitInventoryPage() {
         <div className="p-4 border-b border-gray-200 flex items-center gap-4">
           <h3 className="text-sm font-bold text-gray-500 uppercase">Kit Ledger</h3>
           <div className="flex-1" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Search barcode or patient..."
-            className="px-3 py-2 border border-gray-200 rounded-lg text-sm w-64 focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
-          />
+          <div className="w-72">
+            <CodeInput
+              value={search}
+              onChange={(v) => { setSearch(v); setPage(1); }}
+              placeholder="Search barcode or patient…"
+              inputClassName="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500"
+              scanButtonClassName="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sky-700 hover:bg-sky-100"
+            />
+          </div>
           <select
             value={filterStatus}
             onChange={(e) => { setFilterStatus(e.target.value); setPage(1); }}
@@ -357,14 +360,14 @@ export default function KitInventoryPage() {
 
             {registerMode === 'single' ? (
               <div className="mb-4">
-                <label className="block text-xs font-semibold text-gray-500 mb-1">Kit Barcode</label>
-                <input
-                  type="text"
+                <CodeInput
                   value={registerBarcode}
-                  onChange={(e) => setRegisterBarcode(e.target.value)}
-                  placeholder="Scan or type barcode..."
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500"
+                  onChange={setRegisterBarcode}
+                  label="Kit Barcode"
+                  placeholder="Scan or type barcode…"
                   autoFocus
+                  inputClassName="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                  scanButtonClassName="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sky-700 hover:bg-sky-100"
                 />
               </div>
             ) : (
@@ -377,6 +380,20 @@ export default function KitInventoryPage() {
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500"
                   rows={5}
                 />
+                <div className="mt-2">
+                  <CodeInput
+                    value={scanBuffer}
+                    onChange={setScanBuffer}
+                    onSubmit={(code) => {
+                      setBulkBarcodes((prev) => (prev.trim() ? `${prev.trim()}\n${code}` : code));
+                      setScanBuffer('');
+                    }}
+                    submitLabel="Add"
+                    placeholder="Scan a barcode to add…"
+                    inputClassName="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                    scanButtonClassName="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sky-700 hover:bg-sky-100"
+                  />
+                </div>
                 <p className="text-xs text-gray-400 mt-1">
                   {bulkBarcodes.split(/[\n,]+/).filter((b: string) => b.trim()).length} barcodes entered
                 </p>

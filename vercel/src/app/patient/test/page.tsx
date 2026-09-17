@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase-browser';
 import { apiFetch } from '@/lib/api-fetch';
+import CodeInput from '@/components/CodeInput';
 
 const ANALYSIS_HTML = `
 <html><body><canvas id="c"></canvas><script>
@@ -156,14 +157,6 @@ export default function PatientTest() {
     }
   }, []);
 
-  const handleBarcode = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const code = barcode.trim();
-    if (!code) return;
-    setBarcode(code);
-    await fetchKit(code);
-  };
-
   const takeTest = useCallback(async (imageBase64: string) => {
     setFormResult('pending');
     setMsg('Analyzing…');
@@ -210,25 +203,18 @@ export default function PatientTest() {
       <h1 className="text-2xl font-bold">Self-Test</h1>
 
       {step === 'enter-barcode' && (
-        <form onSubmit={handleBarcode} className="mb-4">
-          <div className="space-y-3">
-            <label className="block text-sm font-medium">Kit barcode</label>
-            <input
-              type="text"
-              value={barcode}
-              onChange={(e) => setBarcode(e.target.value)}
-              className="w-full rounded border p-2 focus:outline-none focus:ring-2 focus:ring-primary"
-              placeholder="Enter or scan kit barcode"
-              required
-            />
-            <button
-              type="submit"
-              className="w-full rounded bg-primary px-4 py-2 text-white font-medium text-sm hover:bg-primary/90 transition-colors"
-            >
-              Look Up Kit
-            </button>
-          </div>
-        </form>
+        <div className="mb-4">
+          <CodeInput
+            value={barcode}
+            onChange={setBarcode}
+            onSubmit={(code) => { if (!code) return; setBarcode(code); fetchKit(code); }}
+            submitLabel="Look Up Kit"
+            label="Kit barcode"
+            placeholder="Scan or type kit barcode"
+            inputClassName="flex-1 rounded border p-2 font-mono focus:outline-none focus:ring-2 focus:ring-primary"
+            buttonClassName="rounded bg-primary px-4 py-2 text-white font-medium text-sm hover:bg-primary/90 transition-colors"
+          />
+        </div>
       )}
 
       {step === 'kit-status' && (
@@ -303,9 +289,8 @@ export default function PatientTest() {
                 reader.readAsDataURL(file);
               }}
               className="w-full rounded border p-2 bg-gray-50 cursor-pointer hover:bg-gray-100"
-            >
-              <p className="text-sm text-gray-500 mt-1">Upload strip photo</p>
-            </input>
+            />
+            <p className="text-sm text-gray-500 mt-1">Upload strip photo</p>
           </div>
           {analysisResult !== 'invalid' && (
             <div className="mt-4 p-3 rounded" style={{ background: analysisResult === 'positive' ? '#fee2e2' : analysisResult === 'negative' ? '#d1fae5' : '#e2e8f0' }}>

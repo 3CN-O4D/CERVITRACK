@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { safePhotoSrc } from '@/lib/photo';
 
 type Filter = 'all' | 'at-risk' | 'healthy';
 type SortKey = 'name' | 'email' | 'county' | 'role' | 'risk_index' | 'created_at' | 'latest_risk_tier';
@@ -157,8 +158,8 @@ export default function AdminUsersPage() {
                 <tr key={u.id} className="border-b border-gray-50 hover:bg-gray-50">
                   <td className="px-6 py-3">
                     <div className="flex items-center gap-3">
-                      {u.photo ? (
-                        <img src={u.photo} alt="" className="w-8 h-8 rounded-full object-cover" />
+                      {safePhotoSrc(u.photo) ? (
+                        <img src={safePhotoSrc(u.photo) as string} alt="" className="w-8 h-8 rounded-full object-cover" />
                       ) : (
                         <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0" style={{ backgroundColor: avatarColor(u.id) }}>
                           {initials(u.name)}
