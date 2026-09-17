@@ -15,14 +15,12 @@ import {
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
-import { WebView } from 'react-native-webview';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { scanKit, registerKit, pairKit, collectKit, createKitRequest } from '../services/api';
 
-const { width } = Dimensions.get('window');
-const VIDEO_EMBED = 'https://www.youtube.com/embed/njsHSnDGcDk?autoplay=0&rel=0&modestbranding=1';
+const VIDEO_URL = 'https://youtu.be/njsHSnDGcDk';
 
 type SamplingStep =
   | 'order'

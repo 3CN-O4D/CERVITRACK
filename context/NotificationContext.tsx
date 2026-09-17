@@ -22,8 +22,6 @@ export interface AppNotification {
   createdAt: string;
 }
 
-export type Notification = AppNotification;
-
 interface NotificationContextType {
   notifications: AppNotification[];
   unreadCount: number;
@@ -31,7 +29,6 @@ interface NotificationContextType {
   markRead: (id: string) => void;
   deleteNotification: (id: string) => void;
   markAllRead: () => void;
-  deleteNotification: (id: string) => void;
 }
 
 const NotificationContext = createContext<NotificationContextType | null>(null);

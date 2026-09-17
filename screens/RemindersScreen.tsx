@@ -13,7 +13,6 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Notifications from 'expo-notifications';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
@@ -55,7 +54,6 @@ function timeUntil(date: Date): string {
 
 export default function RemindersScreen({ navigation }: any) {
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { addNotification } = useNotifications();
   const [reminders, setReminders] = useState<ScheduledReminder[]>([]);
@@ -267,7 +265,7 @@ export default function RemindersScreen({ navigation }: any) {
 
   return (
     <ScrollView
-      style={[s.container, { paddingTop: insets.top + 20 }]}
+      style={s.container}
       showsVerticalScrollIndicator={false}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
     >
@@ -435,7 +433,7 @@ export default function RemindersScreen({ navigation }: any) {
 }
 
 const styles = (colors: any) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: 20 },
+  container: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: 20, paddingTop: 50 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
   headerTitle: { fontSize: 22, fontWeight: '800', flex: 1, textAlign: 'center' },
   cancelAllBtn: { padding: 4 },

@@ -14,11 +14,9 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { WebView } from 'react-native-webview';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { getItem, setItem } from '../services/storage';
@@ -89,7 +87,6 @@ window.addEventListener('message', function(e) {
 
 export default function ScanScreen() {
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const [torch, setTorch] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
@@ -101,7 +98,6 @@ export default function ScanScreen() {
   const [processing, setProcessing] = useState(false);
   const [testLogs, setTestLogs] = useState<TestLog[]>([]);
   const [showLogs, setShowLogs] = useState(false);
-  const [torchOn, setTorchOn] = useState(false);
   const scanAnim = useRef(new Animated.Value(0)).current;
   const analysisCallback = useRef<((r: TestResult) => void) | null>(null);
   const [kitBarcode, setKitBarcode] = useState('');
@@ -353,16 +349,6 @@ await addTestResult({ user_id: user?.id || '', result: log.result, date: log.dat
     }
   };
 
-  const pickFromGallery = async () => {
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
-      if (!result.canceled && result.assets?.[0]) {
-        setCapturedUri(result.assets[0].uri);
-        setStep('preview');
-      }
-    } catch { Alert.alert('Error', 'Could not open gallery'); }
-  };
-
   const resetScanner = () => {
     setStep('camera');
     setCapturedUri('');
@@ -389,7 +375,7 @@ await addTestResult({ user_id: user?.id || '', result: log.result, date: log.dat
   }
 
   return (
-    <View style={[s.container, { backgroundColor: colors.bg, paddingTop: insets.top + 20 }]}>
+    <View style={[s.container, { backgroundColor: colors.bg }]}>
       {/* Hidden WebView for image analysis */}
       <WebView
         ref={webViewRef}
@@ -523,15 +509,7 @@ await addTestResult({ user_id: user?.id || '', result: log.result, date: log.dat
                   <Animated.View style={[s.scanLine, { backgroundColor: colors.primary, transform: [{ translateY: scanLineY }] }]} />
                 </View>
               </View>
-            </View>
-            <View style={s.cameraControls}>
-              <TouchableOpacity style={s.torchBtn} onPress={() => setTorchOn(!torchOn)}>
-                <Ionicons name={torchOn ? 'flashlight' : 'flashlight-outline'} size={20} color="#FFF" />
-              </TouchableOpacity>
-              <TouchableOpacity style={s.galleryBtn} onPress={pickFromGallery}>
-                <Ionicons name="images-outline" size={20} color="#FFF" />
-              </TouchableOpacity>
-            </View>
+            </CameraView>
           </View>
           <TouchableOpacity style={[s.captureBtn, { backgroundColor: colors.primary }]} onPress={captureImage}>
             <Ionicons name="camera" size={22} color="#FFF" />
@@ -622,7 +600,7 @@ await addTestResult({ user_id: user?.id || '', result: log.result, date: log.dat
 }
 
 const styles = (colors: any) => StyleSheet.create({
-  container: { flex: 1, paddingHorizontal: 16 },
+  container: { flex: 1, paddingHorizontal: 16, paddingTop: 50 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
   headerTitle: { fontSize: 22, fontWeight: '800' },
@@ -655,9 +633,6 @@ const styles = (colors: any) => StyleSheet.create({
   guideLabel_left: { position: 'absolute', left: 8, top: 8 },
   guideLabel_right: { position: 'absolute', right: 8, bottom: 8 },
   scanLine: { position: 'absolute', left: 0, right: 0, height: 2, opacity: 0.7 },
-  cameraControls: { position: 'absolute', top: 12, right: 12, flexDirection: 'column', gap: 10 },
-  torchBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-  galleryBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
   captureBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 16, borderRadius: 16 },
   captureText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
   noPermText: { fontSize: 18, fontWeight: '700', marginTop: 16, textAlign: 'center' },

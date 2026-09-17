@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { getLabResults } from '../services/api';
@@ -15,7 +14,6 @@ const statusColor = (result: string, colors: any) => {
 
 export default function LabResultsScreen() {
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,7 +42,7 @@ export default function LabResultsScreen() {
   const s = styles(colors);
 
   return (
-    <ScrollView style={[s.scroll, { paddingTop: insets.top + 20 }]} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}>
+    <ScrollView style={s.scroll} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}>
       <View style={s.header}>
         <MaterialCommunityIcons name="flask" size={26} color={colors.primary} />
         <Text style={s.headerTitle}>Lab Results</Text>
@@ -82,7 +80,7 @@ export default function LabResultsScreen() {
 }
 
 const styles = (colors: any) => StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: 20, paddingBottom: 30 },
+  scroll: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: 20, paddingTop: 50, paddingBottom: 30 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 24 },
   headerTitle: { fontSize: 22, fontWeight: '800', color: colors.text },
   empty: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },

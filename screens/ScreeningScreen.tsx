@@ -19,7 +19,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useNotifications } from '../context/NotificationContext';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
-import { submitScreening, fetchData } from '../services/api';
+import { submitScreening } from '../services/api';
 import { getItem, setItem } from '../services/storage';
 import { saveScreening as saveScreeningLocal } from '../services/localDb';
 
@@ -600,26 +600,13 @@ export default function ScreeningScreen() {
   const [currentQ, setCurrentQ] = useState(0);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [questions, setQuestions] = useState<QuestionConfig[]>([]);
 
   const slideAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
-  useEffect(() => {
-    (async () => {
-      const data = await fetchData('questions');
-      if (data && Array.isArray(data)) {
-        setQuestions(data.map((q: any) => ({
-          ...q,
-          condition: q.condition ? new Function('a', `return ${q.condition}`) : () => true,
-        })));
-      }
-    })();
-  }, []);
-
   const visibleQuestions = useMemo(
-    () => questions.filter((q) => q.condition(answers)),
-    [answers, questions],
+    () => ALL_QUESTIONS.filter((q) => q.condition(answers)),
+    [answers],
   );
 
   const currentQDef = visibleQuestions[currentQ];

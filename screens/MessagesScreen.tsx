@@ -21,6 +21,7 @@ import { getItemEnc, setItemEnc } from '../services/storage';
 import { supabase } from '../lib/supabase/client';
 import { uploadToCloudinary } from '../lib/cloudinary';
 import * as ImagePicker from 'expo-image-picker';
+// Voice recording disabled — remove expo-av dep temporarily
 import { saveImageLocally, uploadMediaToCloudinary } from '../services/mediaStore';
 import {
   getChatContacts,
@@ -131,7 +132,6 @@ function sameDay(a: number, b: number) {
 export default function MessagesScreen({ navigation }: any) {
   const { colors } = useTheme();
   const { user } = useAuth();
-  const insets = useSafeAreaInsets();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [search, setSearch] = useState('');
   const [loaded, setLoaded] = useState(false);
@@ -245,7 +245,7 @@ export default function MessagesScreen({ navigation }: any) {
   );
 
   return (
-    <View style={[s.container, { backgroundColor: colors.bg, paddingTop: insets.top }]}>
+    <View style={[s.container, { backgroundColor: colors.bg }]}>
       <View style={s.mlistHeader}>
         <Text style={[s.mlistTitle, { color: colors.text }]}>Messages</Text>
       </View>
@@ -282,7 +282,6 @@ export default function MessagesScreen({ navigation }: any) {
 export function ChatDetail({ navigation, route }: any) {
   const { colors } = useTheme();
   const { user } = useAuth();
-  const insets = useSafeAreaInsets();
   const { contact } = route.params as { contact: Contact };
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
@@ -759,7 +758,7 @@ export function ChatDetail({ navigation, route }: any) {
 /* ─── Styles ─── */
 
 const s = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, paddingTop: 50 },
   mlistHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -844,6 +843,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 12,
     borderBottomWidth: 1,
+    paddingTop: 50,
   },
   backBtn: { padding: 4, marginRight: 8 },
   chatAvatar: {

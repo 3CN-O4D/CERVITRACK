@@ -1,20 +1,10 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useNotifications } from '../context/NotificationContext';
 import type { AppNotification } from '../context/NotificationContext';
 type Notification = AppNotification;
-
-const NOTIF_ROUTES: Record<string, string> = {
-  screening: 'Screening',
-  vaccine: 'Vaccine',
-  appointment: 'AppointmentBooking',
-  reminder: 'Reminders',
-  alert: 'MyHealth',
-  lab_result: 'LabResults',
-};
 
 const typeIcon = (type: Notification['type']) => {
   switch (type) {
@@ -27,20 +17,13 @@ const typeIcon = (type: Notification['type']) => {
   }
 };
 
-export default function NotificationScreen({ navigation }: any) {
+export default function NotificationScreen() {
   const { colors } = useTheme();
   const { notifications, markRead, markAllRead, deleteNotification } = useNotifications();
   const s = styles(colors);
 
-  const confirmDelete = (id: string) => {
-    Alert.alert('Delete notification', 'Are you sure?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => deleteNotification(id) },
-    ]);
-  };
-
   return (
-    <ScrollView style={[s.scroll, { paddingTop: insets.top + 20 }]} showsVerticalScrollIndicator={false}>
+    <ScrollView style={s.scroll} showsVerticalScrollIndicator={false}>
       <View style={s.header}>
         <Ionicons name="notifications-outline" size={26} color={colors.primary} />
         <Text style={s.headerTitle}>Notifications</Text>
@@ -77,23 +60,6 @@ export default function NotificationScreen({ navigation }: any) {
                 </Text>
               </View>
               {!n.read && <View style={s.unreadDot} />}
-              <TouchableOpacity style={s.moreBtn} onPress={() => setShowMenu(showMenu === n.id ? null : n.id)}>
-                <Ionicons name="ellipsis-vertical" size={16} color={colors.textSecondary} />
-              </TouchableOpacity>
-              {showMenu === n.id && (
-                <View style={[s.contextMenu, { backgroundColor: colors.card }]}>
-                  {!n.read && (
-                    <TouchableOpacity style={s.menuItem} onPress={() => { markRead(n.id); setShowMenu(null); }}>
-                      <Ionicons name="checkmark" size={16} color={colors.text} />
-                      <Text style={s.menuText}>Mark read</Text>
-                    </TouchableOpacity>
-                  )}
-                  <TouchableOpacity style={s.menuItem} onPress={() => { confirmDelete(n.id); setShowMenu(null); }}>
-                    <Ionicons name="trash-outline" size={16} color={colors.danger} />
-                    <Text style={[s.menuText, { color: colors.danger }]}>Delete</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
             </TouchableOpacity>
           );
         })
@@ -103,14 +69,14 @@ export default function NotificationScreen({ navigation }: any) {
 }
 
 const styles = (colors: any) => StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: 20, paddingBottom: 30 },
+  scroll: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: 20, paddingTop: 50, paddingBottom: 30 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 24 },
   headerTitle: { fontSize: 22, fontWeight: '800', color: colors.text, flex: 1 },
   markAllBtn: { paddingHorizontal: 12, paddingVertical: 6, backgroundColor: colors.primary + '15', borderRadius: 8 },
   markAllText: { fontSize: 12, fontWeight: '700', color: colors.primary },
   empty: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
   emptyText: { fontSize: 14, color: colors.textSecondary, marginTop: 12 },
-  notifCard: { flexDirection: 'row', backgroundColor: colors.card, borderRadius: 16, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', position: 'relative' },
+  notifCard: { flexDirection: 'row', backgroundColor: colors.card, borderRadius: 16, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center' },
   unreadCard: { borderLeftWidth: 3, borderLeftColor: colors.primary },
   iconWrap: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
   notifTextWrap: { flex: 1 },
@@ -118,8 +84,4 @@ const styles = (colors: any) => StyleSheet.create({
   notifMessage: { fontSize: 12, fontWeight: '500', color: colors.textSecondary, marginTop: 2 },
   notifTime: { fontSize: 10, fontWeight: '600', color: colors.textSecondary, marginTop: 4 },
   unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary, marginLeft: 8 },
-  moreBtn: { padding: 6, marginLeft: 4 },
-  contextMenu: { position: 'absolute', right: 14, top: 44, borderRadius: 12, padding: 6, borderWidth: 1, borderColor: colors.border, zIndex: 999, elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8 },
-  menuItem: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 14 },
-  menuText: { fontSize: 13, fontWeight: '600', color: colors.text },
 });

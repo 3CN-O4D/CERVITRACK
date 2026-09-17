@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, AppState, AppStateStatus, Platform, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, AppState, AppStateStatus, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as Notifications from 'expo-notifications';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useNotifications } from '../context/NotificationContext';
@@ -202,6 +201,7 @@ function MainTabs() {
   const { colors, isDark } = useTheme();
   const { unreadCount } = useNotifications();
   const insets = useSafeAreaInsets();
+  const bottomNavBarHeight = Platform.OS === 'android' ? Math.max(insets.bottom, 16) : insets.bottom;
 
   return (
     <Tab.Navigator
@@ -213,9 +213,9 @@ function MainTabs() {
           backgroundColor: colors.tabBar,
           borderTopColor: colors.border,
           borderTopWidth: 1,
-          paddingBottom: Math.max(insets.bottom, 6),
+          paddingBottom: bottomNavBarHeight,
           paddingTop: 6,
-          height: Math.max(60, 50 + insets.bottom),
+          height: 60 + bottomNavBarHeight,
         },
         headerStyle: { backgroundColor: colors.bg },
         headerTintColor: colors.text,
@@ -283,7 +283,6 @@ export default function AppNavigator() {
   const [locked, setLocked] = useState(false);
   const [biometricReady, setBiometricReady] = useState(false);
   const appState = useRef(AppState.currentState);
-  const navigationRef = useRef<any>(null);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -312,33 +311,11 @@ export default function AppNavigator() {
     return () => sub.remove();
   }, [isAuthenticated, biometricReady]);
 
-  // Notification deep link: handle notification tap from OS tray
-  useEffect(() => {
-    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response.notification.request.content.data;
-      if (!data?.type || !navigationRef.current) return;
-      const routeMap: Record<string, string> = {
-        screening: 'RiskAssessment',
-        vaccine: 'Vaccines',
-        appointment: 'AppointmentBooking',
-        reminder: 'Reminders',
-        alert: 'MyHealth',
-        lab_result: 'LabResults',
-      };
-      const route = routeMap[data.type as string];
-      if (route) {
-        navigationRef.current.navigate(route);
-      }
-    });
-    return () => sub.remove();
-  }, []);
-
   if (loading) {
     return (
-      <SafeAreaView style={[styles.loading, { backgroundColor: colors.bg }]}>
-        <Text style={{ color: colors.text, fontSize: 18, fontWeight: '600' }}>CERVITRACK</Text>
-        <Text style={{ color: colors.textSecondary, marginTop: 8 }}>Loading...</Text>
-      </SafeAreaView>
+      <View style={[styles.loading, { backgroundColor: colors.bg }]}>
+        <Text style={{ color: colors.text }}>Loading...</Text>
+      </View>
     );
   }
 
@@ -351,7 +328,7 @@ export default function AppNavigator() {
   }
 
   return (
-    <NavigationContainer ref={navigationRef}>
+    <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {isAuthenticated ? (
           <Stack.Screen name="MainTabs" component={MainTabs} />
