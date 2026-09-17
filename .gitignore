@@ -53,3 +53,6 @@ backend/uploads
 
 # Database files
 *.db
+
+# Tooling stubs
+.wasm-stub.js

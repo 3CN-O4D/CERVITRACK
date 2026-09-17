@@ -6,6 +6,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { supabase } from '@/lib/supabase-browser';
 import { PortalConfig, getPortalForRole, PortalRole } from '@/lib/portalConfig';
+import { getCountyNames } from '@/lib/kenya';
 
 export default function PortalLoginForm({ portal }: { portal: PortalConfig }) {
   const router = useRouter();
@@ -167,13 +168,14 @@ export default function PortalLoginForm({ portal }: { portal: PortalConfig }) {
                     onChange={(e) => setPhone(e.target.value)}
                     className="w-full border border-gray-300 rounded-lg p-3 text-sm"
                   />
-                  <input
-                    type="text"
-                    placeholder="County"
+                  <select
                     value={county}
                     onChange={(e) => setCounty(e.target.value)}
                     className="w-full border border-gray-300 rounded-lg p-3 text-sm"
-                  />
+                  >
+                    <option value="">Select county...</option>
+                    {getCountyNames().map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
                 </>
               )}
               <input

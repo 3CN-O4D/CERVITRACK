@@ -185,43 +185,75 @@ async function pushNotifications(session: Session) {
 
 async function pushMessages(session: Session) {
   const { getDb } = await import('./localDb');
+  const { chatDecryptSync, chatEncryptSync } = await import('./crypto');
   const db = getDb();
   const pending = db.getAllSync(
-    "SELECT * FROM messages WHERE sync_status = 'pending'"
+    "SELECT * FROM messages WHERE sync_status IN ('pending', 'pending_edit', 'pending_delete_me', 'pending_delete_all') AND sync_status <> 'deleted'"
   ) as any[];
   for (const row of pending) {
     try {
-      if (row.remote_id) continue; // already synced
-      const convId = row.conversation_remote_id || (() => {
-        const conv = db.getFirstSync('SELECT remote_id FROM conversations WHERE id = ?', row.conversation_id) as any;
-        return conv?.remote_id;
-      })();
-      if (!convId) continue;
+      if (!row.remote_id) {
+        const convId = row.conversation_remote_id || (() => {
+          const conv = db.getFirstSync('SELECT remote_id FROM conversations WHERE id = ?', row.conversation_id) as any;
+          return conv?.remote_id;
+        })();
+        if (!convId) continue;
 
-      const insertPayload: any = {
-        conversation_id: convId,
-        sender_id: row.sender_id,
-        sender_type: row.sender_type,
-        message_type: row.message_type,
-        content: row.content,
-      };
-      if (row.file_url) insertPayload.file_url = row.file_url;
-      if (row.duration) insertPayload.duration = row.duration;
+        const insertPayload: any = {
+          conversation_id: convId,
+          sender_id: row.sender_id,
+          sender_type: row.sender_type === 'user' ? 'patient' : (row.sender_type || 'patient'),
+          message_type: row.message_type,
+          content: chatDecryptSync(row.content || ''),
+          status: 'sent',
+        };
+        if (row.file_url) insertPayload.file_url = chatDecryptSync(row.file_url);
+        if (row.duration) insertPayload.duration = row.duration;
 
-      const { data, error } = await supabase
-        .from('messages')
-        .insert(insertPayload)
-        .select('id')
-        .single();
-      if (!error && data) {
-        db.runSync('UPDATE messages SET remote_id = ?, sync_status = ? WHERE id = ?', String(data.id), 'synced', row.id);
+        const { data, error } = await supabase
+          .from('chat_messages')
+          .insert(insertPayload)
+          .select('id')
+          .single();
+        if (!error && data) {
+          db.runSync('UPDATE messages SET remote_id = ?, status = ?, sync_status = ? WHERE id = ?', String(data.id), 'sent', 'synced', row.id);
+        } else { throw new Error(error?.message || 'insert failed'); }
+      } else {
+        let updatePayload: any = {};
+        if (row.sync_status === 'pending_edit') {
+          updatePayload = { content: chatDecryptSync(row.content || ''), edited_at: new Date().toISOString() };
+        } else if (row.sync_status === 'pending_delete_all') {
+          updatePayload = { content: '', deleted_at: new Date().toISOString() };
+        }
+        if (row.sync_status === 'pending_edit' || row.sync_status === 'pending_delete_all') {
+          const { error } = await supabase
+            .from('chat_messages')
+            .update(updatePayload)
+            .eq('id', row.remote_id);
+          if (error) throw error;
+          db.runSync("UPDATE messages SET sync_status = 'synced' WHERE id = ?", row.id);
+        } else if (row.sync_status === 'pending_delete_me') {
+          const { data, error } = await supabase
+            .rpc('hide_message_for_me', { p_message_id: row.remote_id })
+            .maybeSingle();
+          if (error) throw error;
+          db.runSync("UPDATE messages SET sync_status = 'synced' WHERE id = ?", row.id);
+        }
       }
     } catch { incrementRetry(row.id); }
+  }
+
+  const dead = db.getAllSync(
+    "SELECT * FROM messages WHERE sync_status = 'deleted'"
+  ) as any[];
+  for (const row of dead) {
+    try { db.runSync('DELETE FROM messages WHERE id = ?', row.id); } catch {}
   }
 }
 
 async function pushConversations(session: Session) {
   const { getDb } = await import('./localDb');
+  const { chatDecryptSync } = await import('./crypto');
   const db = getDb();
   const pending = db.getAllSync(
     "SELECT * FROM conversations WHERE sync_status = 'pending'"
@@ -230,15 +262,16 @@ async function pushConversations(session: Session) {
     try {
       if (row.remote_id) continue;
       const { data, error } = await supabase
-        .from('conversations')
+        .from('chat_conversations')
         .insert({
           user_id: row.user_id,
           contact_id: row.contact_id,
           contact_name: row.contact_name,
           contact_role: row.contact_role,
           online: !!row.online,
-          last_message: row.last_message,
+          last_message: chatDecryptSync(row.last_message || ''),
           last_time: row.last_time,
+          unread: 0,
         })
         .select('id')
         .single();
@@ -572,13 +605,14 @@ async function pullFacilities() {
 
 async function pullConversations(userId: string) {
   const { data, error } = await supabase
-    .from('conversations')
+    .from('chat_conversations')
     .select('*')
     .eq('user_id', userId)
     .order('last_time', { ascending: false });
   if (error || !data) return;
 
   const { getDb } = await import('./localDb');
+  const { chatEncryptSync } = await import('./crypto');
   const db = getDb();
   for (const row of data) {
     const existing = db.getFirstSync('SELECT id FROM conversations WHERE remote_id = ?', String(row.id)) as any;
@@ -586,7 +620,7 @@ async function pullConversations(userId: string) {
       db.runSync(
         `UPDATE conversations SET contact_name = ?, contact_role = ?, online = ?, last_message = ?, last_time = ?, sync_status = 'synced' WHERE remote_id = ?`,
         row.contact_name ?? '', row.contact_role ?? '', row.online ? 1 : 0,
-        row.last_message ?? '', row.last_time ?? '', String(row.id)
+        chatEncryptSync(row.last_message ?? ''), row.last_time ?? '', String(row.id)
       );
     } else {
       saveConversation({ ...row, remote_id: String(row.id) }, 'synced');
@@ -597,6 +631,7 @@ async function pullConversations(userId: string) {
 async function pullMessages(userId: string) {
   // Pull messages for all conversations
   const { getDb } = await import('./localDb');
+  const { chatEncryptSync } = await import('./crypto');
   const db = getDb();
   const conversations = db.getAllSync(
     'SELECT * FROM conversations WHERE user_id = ?', userId
@@ -605,13 +640,15 @@ async function pullMessages(userId: string) {
   for (const conv of conversations) {
     if (!conv.remote_id) continue;
     const { data, error } = await supabase
-      .from('messages')
+      .from('chat_messages')
       .select('*')
       .eq('conversation_id', conv.remote_id)
       .order('created_at', { ascending: true });
     if (error || !data) continue;
 
     for (const row of data) {
+      if (row.deleted_at) continue;
+      if (Array.isArray(row.hidden_for) && row.hidden_for.includes(userId)) continue;
       const existing = db.getFirstSync('SELECT id FROM messages WHERE remote_id = ?', String(row.id)) as any;
       if (!existing) {
         saveMessage({
@@ -619,7 +656,14 @@ async function pullMessages(userId: string) {
           remote_id: String(row.id),
           conversation_id: conv.id,
           conversation_remote_id: conv.remote_id,
+          status: row.status || 'sent',
+          edited: !!row.edited_at,
         }, 'synced');
+      } else {
+        db.runSync(
+          "UPDATE messages SET content = ?, status = ?, edited = ?, read = ?, file_url = ?, updated_at = ? WHERE remote_id = ?",
+          chatEncryptSync(row.content ?? ''), row.status || 'sent', row.edited_at ? 1 : 0, row.read ? 1 : 0, chatEncryptSync(row.file_url ?? ''), new Date().toISOString(), String(row.id)
+        );
       }
     }
   }
@@ -853,15 +897,18 @@ export function subscribeToMessages(conversationId: number, remoteId: string, cb
     .on('postgres_changes', {
       event: 'INSERT',
       schema: 'public',
-      table: 'messages',
+      table: 'chat_messages',
       filter: `conversation_id=eq.${remoteId}`,
     }, (payload) => {
       const msg = payload.new as any;
+      if (msg.deleted_at) return;
       saveMessage({
         ...msg,
         remote_id: String(msg.id),
         conversation_id: conversationId,
         conversation_remote_id: remoteId,
+        status: msg.status || 'sent',
+        edited: !!msg.edited_at,
       }, 'synced');
       cb(msg);
     })

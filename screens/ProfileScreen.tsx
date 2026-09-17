@@ -19,6 +19,8 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { uploadToCloudinary } from '../lib/cloudinary';
+import SearchableDropdown from '../components/SearchableDropdown';
+import { getCountyNames, getSubCounties, getWards } from '../data/kenya';
 
 export default function ProfileScreen({ navigation }: any) {
   const { colors } = useTheme();
@@ -306,32 +308,32 @@ return (
 
         <Text style={[s.sectionTitle, { marginTop: 16 }]}>{t('profile.location') || 'Location'}</Text>
 
-        <Text style={s.fieldLabel}>{t('profile.county') || 'County'}</Text>
-        <TextInput
-          style={s.input}
-          value={county}
-          onChangeText={setCounty}
-          placeholder="e.g. Nairobi"
-          placeholderTextColor={colors.textSecondary}
+        <SearchableDropdown
+          label={t('profile.county') || 'County'}
+          items={getCountyNames()}
+          selected={county}
+          onSelect={(v) => { setCounty(v); setSubCounty(''); setWard(''); }}
+          placeholder="Select your county"
         />
 
-        <Text style={s.fieldLabel}>{t('profile.subCounty') || 'Sub-County'}</Text>
-        <TextInput
-          style={s.input}
-          value={subCounty}
-          onChangeText={setSubCounty}
-          placeholder="e.g. Westlands"
-          placeholderTextColor={colors.textSecondary}
-        />
-
-        <Text style={s.fieldLabel}>{t('profile.ward') || 'Ward'}</Text>
-        <TextInput
-          style={s.input}
-          value={ward}
-          onChangeText={setWard}
-          placeholder="e.g. Parklands"
-          placeholderTextColor={colors.textSecondary}
-        />
+        {county ? (
+          <SearchableDropdown
+            label={t('profile.subCounty') || 'Sub-County'}
+            items={getSubCounties(county)}
+            selected={subCounty}
+            onSelect={(v) => { setSubCounty(v); setWard(''); }}
+            placeholder="Select sub-county"
+          />
+        ) : null}
+        {county && subCounty ? (
+          <SearchableDropdown
+            label={t('profile.ward') || 'Ward'}
+            items={getWards(county, subCounty)}
+            selected={ward}
+            onSelect={setWard}
+            placeholder="Select ward"
+          />
+        ) : null}
 
         <TouchableOpacity
           style={[s.saveBtn, saving && s.saveBtnDisabled]}

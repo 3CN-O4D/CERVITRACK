@@ -153,7 +153,8 @@ export async function getOrCreateConversation(userId: string | number, contactId
 }
 
 export async function getMessages(conversationId: number) {
-  return api.getMessages(conversationId);
+  const uid = (await requireUser())?.id;
+  return api.getMessages(conversationId, uid);
 }
 
 export async function saveMessage(m: any) {
@@ -191,6 +192,8 @@ export async function setLastSync(tableName: string) {
 
 // ─── Legacy initDatabase entry point ──────────────────────────
 export async function initDatabase() {
+  const { initChatCrypto } = await import('./crypto');
+  await initChatCrypto();
   localDb.initLocalDb();
 }
 

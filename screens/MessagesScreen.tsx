@@ -17,7 +17,7 @@ import {
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
-import { getItem, setItem } from '../services/storage';
+import { getItemEnc, setItemEnc } from '../services/storage';
 import { supabase } from '../lib/supabase/client';
 import { uploadToCloudinary } from '../lib/cloudinary';
 import * as ImagePicker from 'expo-image-picker';
@@ -30,10 +30,13 @@ import {
   getMessages,
   sendMessage as apiSendMessage,
   sendImageMessage as apiSendImageMessage,
-
-  onMessagesInsert,
+  onConversationChanges,
+  editMessage as apiEditMessage,
+  deleteMessageForEveryone as apiDeleteMessageForEveryone,
+  deleteMessageForMe as apiDeleteMessageForMe,
+  markConversationReadClient,
 } from '../services/api';
-import { saveMessage as saveMessageLocal } from '../services/localDb';
+import { saveMessage as saveMessageLocal, getMessageByRemoteId, upsertLocalMessage } from '../services/localDb';
 
 const { width } = Dimensions.get('window');
 
@@ -52,6 +55,8 @@ interface Contact {
 
 interface Message {
   id: string;
+  localId?: number;
+  remoteId?: string;
   type: 'text' | 'image' | 'audio';
   content: string;
   fileUrl?: string;
@@ -59,6 +64,8 @@ interface Message {
   sent: boolean;
   time: string;
   status: 'sent' | 'delivered' | 'read';
+  edited?: boolean;
+  deleted?: boolean;
   createdAt: number;
 }
 
@@ -104,6 +111,22 @@ function StatusIcon({ status }: { status: 'sent' | 'delivered' | 'read' }) {
   return <Ionicons name="checkmark-done" size={14} color="#6C5CE7" />;
 }
 
+function formatDayLabel(ts: number) {
+  const d = new Date(ts);
+  const today = new Date();
+  const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diffDays = Math.round((startOfDay(today) - startOfDay(d)) / 86400000);
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+function sameDay(a: number, b: number) {
+  const x = new Date(a);
+  const y = new Date(b);
+  return x.getFullYear() === y.getFullYear() && x.getMonth() === y.getMonth() && x.getDate() === y.getDate();
+}
+
 /* ─── MessagesList ─── */
 
 export default function MessagesScreen({ navigation }: any) {
@@ -133,7 +156,7 @@ export default function MessagesScreen({ navigation }: any) {
             initials: c.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase(),
           }));
           setContacts(mapped);
-          await setItem(`${CONTACTS_KEY}_${user?.id || 'default'}`, JSON.stringify(mapped));
+          await setItemEnc(`${CONTACTS_KEY}_${user?.id || 'default'}`, JSON.stringify(mapped));
           setLoaded(true);
           return;
         }
@@ -156,7 +179,7 @@ export default function MessagesScreen({ navigation }: any) {
             initials: c.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase(),
           }));
           setContacts(mapped);
-          await setItem(`${CONTACTS_KEY}_${user?.id || 'default'}`, JSON.stringify(mapped));
+          await setItemEnc(`${CONTACTS_KEY}_${user?.id || 'default'}`, JSON.stringify(mapped));
           setLoaded(true);
           return;
         }
@@ -164,7 +187,7 @@ export default function MessagesScreen({ navigation }: any) {
 
       // Fallback to local storage
       const uid = user?.id || 'default';
-      const raw = await getItem(`${CONTACTS_KEY}_${uid}`);
+      const raw = await getItemEnc(`${CONTACTS_KEY}_${uid}`);
       if (raw) {
         setContacts(JSON.parse(raw));
       }
@@ -176,7 +199,7 @@ export default function MessagesScreen({ navigation }: any) {
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', async () => {
       const uid = user?.id || 'default';
-      const raw = await getItem(`${CONTACTS_KEY}_${uid}`);
+      const raw = await getItemEnc(`${CONTACTS_KEY}_${uid}`);
       if (raw) setContacts(JSON.parse(raw));
     });
     return unsubscribe;
@@ -270,6 +293,24 @@ export function ChatDetail({ navigation, route }: any) {
   const msgStorageKey = `@cervitrack_msgs_${uid}_${contact.id}`;
   const contactsKey = `${CONTACTS_KEY}_${uid}`;
   const [conversationId, setConversationId] = useState<number | null>(null);
+  const [conversationRemoteId, setConversationRemoteId] = useState<string>('');
+  const [editing, setEditing] = useState<{ id: number; text: string } | null>(null);
+
+  const mapRow = (m: any): Message => ({
+    id: String(m.id),
+    localId: m.id,
+    remoteId: m.remote_id ? String(m.remote_id) : undefined,
+    type: m.message_type || 'text',
+    content: m.content || '',
+    fileUrl: m.file_url || '',
+    localUri: m.local_uri || '',
+    sent: m.sender_id === user?.id,
+    time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    status: (['delivered', 'read'].includes(m.status) ? m.status : 'sent') as Message['status'],
+    edited: !!m.edited,
+    deleted: m.deleted === 0 ? undefined : !!m.deleted,
+    createdAt: new Date(m.created_at).getTime(),
+  });
 
   // Create or get conversation from Supabase
   useEffect(() => {
@@ -308,21 +349,12 @@ export function ChatDetail({ navigation, route }: any) {
           );
           if (conv) {
             setConversationId(conv.id);
-            const dbMessages = await getMessages(conv.id);
+            if (conv.remote_id) setConversationRemoteId(String(conv.remote_id));
+            const dbMessages = await getMessages(conv.id, user.id);
             if (dbMessages && dbMessages.length > 0) {
-              const mapped: Message[] = dbMessages.map((m: any) => ({
-                id: String(m.id),
-                type: m.message_type || 'text',
-                content: m.content || '',
-                fileUrl: m.file_url || '',
-                localUri: m.local_uri || '',
-                sent: m.sender_id === user.id,
-                time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                status: 'read' as const,
-                createdAt: new Date(m.created_at).getTime(),
-              }));
-              setMessages(mapped);
+              setMessages(dbMessages.map(mapRow));
               setLoaded(true);
+              if (conv.remote_id) markConversationReadClient(String(conv.remote_id));
               return;
             }
           }
@@ -330,7 +362,7 @@ export function ChatDetail({ navigation, route }: any) {
       }
 
       // Fallback to local storage
-      const raw = await getItem(msgStorageKey);
+      const raw = await getItemEnc(msgStorageKey);
       if (raw) {
         try { setMessages(JSON.parse(raw)); } catch {}
       }
@@ -338,49 +370,78 @@ export function ChatDetail({ navigation, route }: any) {
     })();
   }, [msgStorageKey, user?.id, contact.id]);
 
-  // Realtime subscription for incoming messages
+  // Realtime subscription for incoming messages + status/edit/delete updates
   useEffect(() => {
     if (!conversationId || !user?.id) return;
-    const sub = onMessagesInsert(conversationId, (msg: any) => {
-      if (msg.sender_id === user.id) return; // skip own messages (already added)
-      const incoming: Message = {
-        id: String(msg.id),
-        type: msg.message_type || 'text',
-        content: msg.content || '',
-        sent: false,
-        time: new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        status: 'read',
-        createdAt: new Date(msg.created_at).getTime(),
-      };
-      setMessages((prev) => [...prev, incoming]);
-      // Persist incoming messages to local SQLite
-      try {
-        saveMessageLocal({
-          remote_id: String(msg.id),
+    const sub = onConversationChanges(conversationId, (msg: any, event) => {
+      if (event === 'INSERT') {
+        if (msg.sender_id === user.id) return; // skip own messages (already added)
+        if (Array.isArray(msg.hidden_for) && msg.hidden_for.includes(user.id)) return;
+        const incoming: Message = {
+          id: String(msg.id),
+          remoteId: String(msg.id),
+          type: msg.message_type || 'text',
           content: msg.content || '',
-          message_type: msg.message_type || 'text',
-          sender_id: msg.sender_id || '',
-          sender_type: msg.sender_type || 'expert',
-          conversation_id: conversationId,
-          conversation_remote_id: msg.conversation_id,
-          file_url: msg.file_url || '',
-          created_at: msg.created_at,
-          read: 0,
-        }, 'synced');
-      } catch { /* local save best-effort */ }
+          fileUrl: msg.file_url || '',
+          sent: false,
+          time: new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          status: 'read',
+          createdAt: new Date(msg.created_at).getTime(),
+        };
+        setMessages((prev) => {
+          if (prev.some((p) => p.id === incoming.id)) return prev;
+          return [...prev, incoming];
+        });
+        try {
+          if (msg.sender_type === 'staff' && conversationRemoteId) {
+            markConversationReadClient(conversationRemoteId);
+          }
+        } catch { /* ignore */ }
+      } else {
+        const dbMsg = getMessageByRemoteId(String(msg.id));
+        setMessages((prev) => prev.map((p) => {
+          if (p.remoteId !== String(msg.id)) return p;
+          if (msg.deleted_at) {
+            return { ...p, deleted: true, content: '' };
+          }
+          if (msg.sender_id === user.id) {
+            return {
+              ...p,
+              status: (['delivered', 'read'].includes(msg.status) ? msg.status : 'sent') as Message['status'],
+              edited: !!msg.edited_at && p.edited,
+            };
+          }
+          return { ...p, content: msg.content || p.content, edited: !!msg.edited_at, status: 'read' };
+        }));
+        if (dbMsg) {
+          try {
+            upsertLocalMessage({
+              ...dbMsg,
+              content: msg.content ?? dbMsg.content,
+              status: msg.status || dbMsg.status || 'sent',
+              edited: msg.edited_at ? 1 : (dbMsg.edited || 0),
+              deleted: msg.deleted_at ? 1 : (dbMsg.deleted || 0),
+              read: 1,
+              hidden: dbMsg.hidden || 0,
+              remote_id: String(msg.id),
+              sync_status: 'synced',
+            }, 'synced');
+          } catch { /* best-effort */ }
+        }
+      }
     });
     return () => { sub.unsubscribe(); };
-  }, [conversationId, user?.id]);
+  }, [conversationId, user?.id, conversationRemoteId]);
 
   // Save messages to local storage whenever they change
   useEffect(() => {
     if (messages.length > 0) {
-      setItem(msgStorageKey, JSON.stringify(messages));
+      setItemEnc(msgStorageKey, JSON.stringify(messages));
     }
   }, [messages, msgStorageKey]);
 
   const updateContactLastMessage = useCallback(async (text: string) => {
-    const raw = await getItem(contactsKey);
+    const raw = await getItemEnc(contactsKey);
     if (!raw) return;
     const list: Contact[] = JSON.parse(raw);
     const idx = list.findIndex((c) => c.id === contact.id);
@@ -391,7 +452,7 @@ export function ChatDetail({ navigation, route }: any) {
         lastTime: 'Just now',
         unread: 0,
       };
-      await setItem(contactsKey, JSON.stringify(list));
+      await setItemEnc(contactsKey, JSON.stringify(list));
     }
   }, [contactsKey, contact.id]);
 
@@ -416,17 +477,71 @@ export function ChatDetail({ navigation, route }: any) {
     // Send to Supabase if we have a conversation
     if (conversationId && user?.id) {
       try {
-        await apiSendMessage(text, conversationId, user.id, 'user');
+        const sent = await apiSendMessage(text, conversationId, user.id, 'user');
+        if (sent?.id) {
+          setMessages((prev) => prev.map((m) => m.id === newMsg.id
+            ? { ...m, id: `remote_${sent.id}`, remoteId: String(sent.id) }
+            : m));
+        }
       } catch { /* sent locally, will sync later */ }
     }
+  };
 
-    // Simulate delivery/read status
-    setTimeout(() => {
-      setMessages((prev) => prev.map((m) => m.id === newMsg.id ? { ...m, status: 'delivered' as const } : m));
-    }, 1500);
-    setTimeout(() => {
-      setMessages((prev) => prev.map((m) => m.id === newMsg.id ? { ...m, status: 'read' as const } : m));
-    }, 3000);
+  const handleConfirmEdit = async () => {
+    if (!editing) return;
+    const text = inputText.trim();
+    if (!text) return;
+    const editingId = editing.id;
+    setEditing(null);
+    if (user?.id) {
+      try {
+        await apiEditMessage(editingId, text, user.id);
+      } catch { /* best-effort */ }
+    }
+    setMessages((prev) => prev.map((m) => m.localId === editingId ? { ...m, content: text, edited: true } : m));
+    setInputText('');
+    updateContactLastMessage(text);
+  };
+
+  const handleMessageAction = (item: Message) => {
+    const options: any[] = [];
+    if (!item.deleted) {
+      if (item.sent && item.localId !== undefined) {
+        options.push(
+          { text: 'Edit', onPress: () => { setEditing({ id: item.localId!, text: item.content }); setInputText(item.content); } },
+          { text: 'Delete for everyone', style: 'destructive', onPress: () => confirmDelete(item, 'everyone') },
+        );
+      }
+      if (item.localId !== undefined) {
+        options.push({ text: 'Delete for me', style: 'destructive', onPress: () => confirmDelete(item, 'me') });
+      }
+    }
+    options.push({ text: 'Cancel', style: 'cancel' });
+    Alert.alert('Message', undefined, options);
+  };
+
+  const confirmDelete = (item: Message, mode: 'me' | 'everyone') => {
+    const msg = mode === 'everyone' ? 'This deletes the message for everyone. This cannot be undone.' : 'Remove this message from your device.';
+    Alert.alert(
+      mode === 'everyone' ? 'Delete for everyone?' : 'Delete for me?',
+      msg,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete', style: 'destructive', onPress: async () => {
+            if (item.localId === undefined) return;
+            try {
+              if (mode === 'everyone') {
+                if (user?.id) await apiDeleteMessageForEveryone(item.localId, user.id);
+              } else {
+                await apiDeleteMessageForMe(item.localId);
+              }
+            } catch { /* best-effort */ }
+            setMessages((prev) => prev.filter((m) => m.id !== item.id));
+          },
+        },
+      ],
+    );
   };
 
   const handlePickImage = async () => {
@@ -483,9 +598,12 @@ export function ChatDetail({ navigation, route }: any) {
     Alert.alert('Coming Soon', 'Audio playback will be available in the next update.');
   };
 
-  const renderMessage = ({ item }: { item: Message }) => (
-    <View style={[s.msgRow, item.sent ? s.msgSent : s.msgReceived]}>
-      {item.type === 'text' && (
+  const renderMessage = ({ item, index }: { item: Message; index: number }) => {
+    const prev = index > 0 ? messages[index - 1] : null;
+    const showDay = !prev || !sameDay(prev.createdAt, item.createdAt);
+
+    const bubble =
+      item.type === 'text' ? (
         <View
           style={[
             s.msgBubble,
@@ -494,10 +612,15 @@ export function ChatDetail({ navigation, route }: any) {
               : { backgroundColor: colors.card, borderBottomLeftRadius: 4, borderWidth: 1, borderColor: colors.border },
           ]}
         >
-          <Text style={[s.msgText, { color: item.sent ? '#FFF' : colors.text }]}>{item.content}</Text>
+          {item.deleted ? (
+            <Text style={[s.msgDeleted, { color: item.sent ? '#FFF' : colors.textSecondary }]}>
+              {item.sent ? 'You deleted this message' : 'Message deleted'}
+            </Text>
+          ) : (
+            <Text style={[s.msgText, { color: item.sent ? '#FFF' : colors.text }]}>{item.content}</Text>
+          )}
         </View>
-      )}
-      {item.type === 'image' && (
+      ) : item.type === 'image' ? (
         <View style={[s.imageBubble, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
           {item.localUri || item.fileUrl ? (
             <Image source={{ uri: item.localUri || item.fileUrl }} style={s.chatImage} resizeMode="cover" />
@@ -508,8 +631,7 @@ export function ChatDetail({ navigation, route }: any) {
             </>
           )}
         </View>
-      )}
-      {item.type === 'audio' && (
+      ) : (
         <View style={[s.audioBubble, { backgroundColor: item.sent ? colors.primary + '20' : colors.inputBg }]}>
           <TouchableOpacity
             style={[s.playBtn, { backgroundColor: colors.primary }]}
@@ -526,13 +648,32 @@ export function ChatDetail({ navigation, route }: any) {
           </View>
           <Text style={[s.audioDuration, { color: colors.textSecondary }]}>{item.content}</Text>
         </View>
-      )}
-      <View style={s.msgMeta}>
-        <Text style={[s.msgTime, { color: colors.textSecondary }]}>{item.time}</Text>
-        {item.sent && <StatusIcon status={item.status} />}
+      );
+
+    return (
+      <View>
+        {showDay && (
+          <View style={s.dayPill}>
+            <Text style={s.dayPillText}>{formatDayLabel(item.createdAt)}</Text>
+          </View>
+        )}
+        <View style={[s.msgRow, item.sent ? s.msgSent : s.msgReceived]}>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            delayLongPress={350}
+            onLongPress={() => handleMessageAction(item)}
+          >
+            {bubble}
+            <View style={s.msgMeta}>
+              <Text style={[s.msgTime, { color: colors.textSecondary }]}>{item.time}</Text>
+              {item.edited && !item.deleted && <Text style={[s.msgEdited, { color: colors.textSecondary }]}>edited</Text>}
+              {item.sent && !item.deleted && <StatusIcon status={item.status} />}
+            </View>
+          </TouchableOpacity>
+        </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   return (
       <KeyboardAvoidingView
@@ -576,10 +717,21 @@ export function ChatDetail({ navigation, route }: any) {
         }
       />
 
+      {editing && (
+        <View style={[s.editBanner, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
+          <Text style={[s.editBannerText, { color: colors.text }]} numberOfLines={1}>Editing message</Text>
+          <TouchableOpacity onPress={() => { setEditing(null); setInputText(''); }}>
+            <Ionicons name="close" size={18} color={colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
+      )}
+
       <View style={[s.inputBar, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
-        <TouchableOpacity style={s.attachBtn} onPress={handlePickImage}>
-          <Ionicons name="attach" size={22} color={colors.textSecondary} />
-        </TouchableOpacity>
+        {!editing && (
+          <TouchableOpacity style={s.attachBtn} onPress={handlePickImage}>
+            <Ionicons name="attach" size={22} color={colors.textSecondary} />
+          </TouchableOpacity>
+        )}
         <View style={[s.inputWrap, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
           <TextInput
             style={[s.chatInput, { color: colors.text }]}
@@ -592,10 +744,10 @@ export function ChatDetail({ navigation, route }: any) {
         </View>
         {!!inputText.trim() && (
           <TouchableOpacity
-            style={[s.sendBtn, { backgroundColor: colors.primary }]}
-            onPress={handleSend}
+            style={[s.sendBtn, { backgroundColor: editing ? '#F97316' : colors.primary }]}
+            onPress={editing ? handleConfirmEdit : handleSend}
           >
-            <Ionicons name="send" size={18} color="#FFF" />
+            <Ionicons name={editing ? "checkmark" : "send"} size={18} color="#FFF" />
           </TouchableOpacity>
         )}
       </View>
@@ -615,6 +767,15 @@ const s = StyleSheet.create({
     marginBottom: 16,
   },
   mlistTitle: { fontSize: 26, fontWeight: '800' },
+  dayPill: {
+    alignSelf: 'center',
+    backgroundColor: '#6C5CE7',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    marginVertical: 12,
+  },
+  dayPillText: { color: '#FFF', fontSize: 11, fontWeight: '700' },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -703,6 +864,7 @@ const s = StyleSheet.create({
   msgReceived: { alignSelf: 'flex-start', alignItems: 'flex-start' },
   msgBubble: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 18 },
   msgText: { fontSize: 15, fontWeight: '500', lineHeight: 20 },
+  msgDeleted: { fontSize: 15, fontStyle: 'italic', fontWeight: '500', lineHeight: 20 },
   imageBubble: {
     width: 200, height: 220,
     borderRadius: 16,
@@ -727,6 +889,16 @@ const s = StyleSheet.create({
   audioDuration: { fontSize: 11, fontWeight: '600' },
   msgMeta: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4, paddingHorizontal: 4 },
   msgTime: { fontSize: 10, fontWeight: '500' },
+  msgEdited: { fontSize: 10, fontWeight: '500', fontStyle: 'italic' },
+  editBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+  },
+  editBannerText: { fontSize: 13, fontWeight: '600', flex: 1, marginRight: 8 },
   inputBar: {
     flexDirection: 'row',
     alignItems: 'center',

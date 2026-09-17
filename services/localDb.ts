@@ -1,5 +1,6 @@
 import * as SQLite from 'expo-sqlite';
 import { Platform } from 'react-native';
+import { chatEncryptSync, chatDecryptSync } from './crypto';
 
 let db: SQLite.SQLiteDatabase | null = null;
 let webNoDb = false;
@@ -174,6 +175,10 @@ const SCHEMA = `
     local_uri TEXT,
     duration TEXT,
     read INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'sent',
+    edited INTEGER DEFAULT 0,
+    deleted INTEGER DEFAULT 0,
+    hidden INTEGER DEFAULT 0,
     created_at TEXT,
     updated_at TEXT,
     sync_status TEXT DEFAULT 'pending'
@@ -602,7 +607,7 @@ export function saveConversation(c: any, syncStatus: string = 'synced') {
     `INSERT INTO conversations (remote_id, user_id, contact_id, contact_name, contact_role, online, last_message, last_time, updated_at, sync_status)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     c.remote_id || null, c.user_id || '', c.contact_id ?? null, c.contact_name || '',
-    c.contact_role || '', c.online ? 1 : 0, c.last_message || '', c.last_time || '',
+    c.contact_role || '', c.online ? 1 : 0, chatEncryptSync(c.last_message || ''), c.last_time || '',
     now(), syncStatus
   );
   return result.lastInsertRowId;
@@ -611,17 +616,20 @@ export function saveConversation(c: any, syncStatus: string = 'synced') {
 export function getConversations(userId: string): any[] {
   try {
     const database = getDb();
-    return database.getAllSync(
+    const rows = database.getAllSync(
       'SELECT * FROM conversations WHERE user_id = ? ORDER BY last_time DESC',
       userId
-    );
+    ) as any[];
+    return rows.map((r: any) => ({ ...r, last_message: chatDecryptSync(r.last_message || '') }));
   } catch { return []; }
 }
 
 export function getConversationByRemoteId(remoteId: string): any | null {
   try {
     const database = getDb();
-    return database.getFirstSync('SELECT * FROM conversations WHERE remote_id = ?', remoteId) ?? null;
+    const row = database.getFirstSync('SELECT * FROM conversations WHERE remote_id = ?', remoteId);
+    if (!row) return null;
+    return { ...row, last_message: chatDecryptSync((row as any).last_message || '') };
   } catch { return null; }
 }
 
@@ -629,7 +637,7 @@ export function updateConversationLastMessage(conversationId: number, lastMessag
   const database = getDb();
   database.runSync(
     'UPDATE conversations SET last_message = ?, last_time = ? WHERE id = ?',
-    lastMessage, now(), conversationId
+    chatEncryptSync(lastMessage), now(), conversationId
   );
 }
 
@@ -638,24 +646,93 @@ export function updateConversationLastMessage(conversationId: number, lastMessag
 export function saveMessage(m: any, syncStatus: string = 'synced') {
   const database = getDb();
   const result = database.runSync(
-    `INSERT INTO messages (remote_id, conversation_id, conversation_remote_id, sender_id, sender_type, message_type, content, file_url, local_uri, duration, read, created_at, updated_at, sync_status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO messages (remote_id, conversation_id, conversation_remote_id, sender_id, sender_type, message_type, content, file_url, local_uri, duration, read, status, edited, deleted, hidden, created_at, updated_at, sync_status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     m.remote_id || null, m.conversation_id ?? null, m.conversation_remote_id || null,
     m.sender_id || '', m.sender_type || 'user', m.message_type || 'text',
-    m.content || '', m.file_url || '', m.local_uri || '', m.duration || '', m.read ? 1 : 0,
+    chatEncryptSync(m.content || ''), chatEncryptSync(m.file_url || ''), m.local_uri || '', m.duration || '', m.read ? 1 : 0,
+    m.status || 'sent', m.edited ? 1 : 0, m.deleted ? 1 : 0, m.hidden ? 1 : 0,
     m.created_at || now(), now(), syncStatus
   );
   return result.lastInsertRowId;
 }
 
+export function upsertLocalMessage(m: any, syncStatus: string = 'synced') {
+  const database = getDb();
+  if (m.remote_id) {
+    const existing = database.getFirstSync('SELECT id FROM messages WHERE remote_id = ?', String(m.remote_id)) as any;
+    if (existing) {
+      database.runSync(
+        `UPDATE messages SET sender_type = ?, message_type = ?, content = ?, file_url = ?, local_uri = ?, duration = ?, read = ?, status = ?, edited = ?, deleted = ?, hidden = ?, updated_at = ?, sync_status = ? WHERE id = ?`,
+        m.sender_type || 'user', m.message_type || 'text',
+        chatEncryptSync(m.content || ''), chatEncryptSync(m.file_url || ''), m.local_uri || '', m.duration || '',
+        m.read ? 1 : 0, m.status || 'sent', m.edited ? 1 : 0, m.deleted ? 1 : 0, m.hidden ? 1 : 0,
+        now(), syncStatus, existing.id
+      );
+      return existing.id;
+    }
+  }
+  return saveMessage(m, syncStatus);
+}
+
+export function updateMessageRemoteId(localId: number, remoteId: string, status: string = 'sent') {
+  const database = getDb();
+  database.runSync(
+    "UPDATE messages SET remote_id = ?, status = ?, sync_status = 'synced', updated_at = ? WHERE id = ?",
+    remoteId, status, now(), localId
+  );
+}
+
+export function markMessageEdited(localId: number, content: string) {
+  const database = getDb();
+  database.runSync(
+    "UPDATE messages SET content = ?, edited = 1, sync_status = 'pending_edit', updated_at = ? WHERE id = ?",
+    chatEncryptSync(content), now(), localId
+  );
+}
+
+export function markMessageDeletedForMe(localId: number) {
+  const database = getDb();
+  const row = database.getFirstSync(
+    'SELECT remote_id FROM messages WHERE id = ?', localId
+  ) as any;
+  const syncStatus = row?.remote_id ? 'pending_delete_me' : 'deleted';
+  database.runSync(
+    "UPDATE messages SET hidden = 1, updated_at = ?, sync_status = ? WHERE id = ?",
+    now(), syncStatus, localId
+  );
+}
+
+export function markMessageDeletedForEveryone(localId: number) {
+  const database = getDb();
+  database.runSync(
+    "UPDATE messages SET deleted = 1, content = '', sync_status = 'pending_delete_all', updated_at = ? WHERE id = ?",
+    now(), localId
+  );
+}
+
 export function getMessages(conversationId: number): any[] {
   try {
     const database = getDb();
-    return database.getAllSync(
-      'SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC',
+    const rows = database.getAllSync(
+      'SELECT * FROM messages WHERE conversation_id = ? AND deleted = 0 AND hidden = 0 ORDER BY created_at ASC',
       conversationId
-    );
+    ) as any[];
+    return rows.map((r: any) => ({ ...r, content: chatDecryptSync(r.content || ''), file_url: chatDecryptSync(r.file_url || '') }));
   } catch { return []; }
+}
+
+export function getMessageByRemoteId(remoteId: string): any | null {
+  try {
+    const database = getDb();
+    const row = database.getFirstSync('SELECT * FROM messages WHERE remote_id = ?', remoteId);
+    if (!row) return null;
+    return {
+      ...row,
+      content: chatDecryptSync((row as any).content || ''),
+      file_url: chatDecryptSync((row as any).file_url || ''),
+    };
+  } catch { return null; }
 }
 
 export function getUnsyncedMessages(): any[] {
@@ -955,6 +1032,12 @@ export default {
   updateConversationLastMessage,
   saveMessage,
   getMessages,
+  getMessageByRemoteId,
+  upsertLocalMessage,
+  updateMessageRemoteId,
+  markMessageEdited,
+  markMessageDeletedForMe,
+  markMessageDeletedForEveryone,
   getUnsyncedMessages,
   saveChatContacts,
   getChatContacts,

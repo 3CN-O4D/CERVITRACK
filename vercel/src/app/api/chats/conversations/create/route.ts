@@ -1,14 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { getRequestUser, resolveUserScope, forbidden } from '@/lib/api-auth';
 
 export async function POST(request: NextRequest) {
   try {
+    const user = await getRequestUser(request);
+    if (!user) return forbidden();
     const { user_id, contact_id, contact_name, contact_role, online } = await request.json();
+
+    const scopedId = resolveUserScope(user, user_id);
+    if (!scopedId) return forbidden();
 
     const { data: existing, error: existErr } = await supabaseAdmin
       .from('chat_conversations')
       .select('*')
-      .eq('user_id', user_id)
+      .eq('user_id', scopedId)
       .eq('contact_id', contact_id)
       .maybeSingle();
 
@@ -18,7 +24,7 @@ export async function POST(request: NextRequest) {
     const { data, error } = await supabaseAdmin
       .from('chat_conversations')
       .insert({
-        user_id,
+        user_id: scopedId,
         contact_id,
         contact_name,
         contact_role,

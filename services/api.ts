@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase/client';
 import * as localDb from './localDb';
+import { chatEncryptSync, chatDecryptSync } from './crypto';
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -509,7 +510,7 @@ export async function getConversations(userId: string) {
   const local = localDb.getConversations(userId);
   try {
     const { data, error } = await supabase
-      .from('conversations')
+      .from('chat_conversations')
       .select('*')
       .eq('user_id', userId)
       .order('last_time', { ascending: false });
@@ -531,7 +532,7 @@ export async function getOrCreateConversation(userId: string, contactId: number,
   // Try network
   try {
     const { data: remoteExisting } = await supabase
-      .from('conversations')
+      .from('chat_conversations')
       .select('*')
       .eq('user_id', userId)
       .eq('contact_id', contactId)
@@ -541,7 +542,7 @@ export async function getOrCreateConversation(userId: string, contactId: number,
       return remoteExisting;
     }
     const { data, error } = await supabase
-      .from('conversations')
+      .from('chat_conversations')
       .insert({ user_id: userId, contact_id: contactId, contact_name: contactName, contact_role: contactRole, online })
       .select()
       .single();
@@ -560,7 +561,7 @@ export async function getOrCreateConversation(userId: string, contactId: number,
 
 // ─── Messages ─────────────────────────────────────────────────
 
-export async function getMessages(conversationId: number) {
+export async function getMessages(conversationId: number, uid?: string) {
   const local = localDb.getMessages(conversationId);
   try {
     // Find remote_id for this conversation
@@ -568,20 +569,30 @@ export async function getMessages(conversationId: number) {
     const db = getDb();
     const conv = db.getFirstSync('SELECT remote_id FROM conversations WHERE id = ?', conversationId) as any;
     if (!conv?.remote_id) return local;
+    const effectiveUid = uid || null;
 
     const { data, error } = await supabase
-      .from('messages')
+      .from('chat_messages')
       .select('*')
       .eq('conversation_id', conv.remote_id)
       .order('created_at', { ascending: true });
     if (error) throw error;
     if (data && data.length > 0) {
       for (const m of data) {
-        if (!local.find(l => l.remote_id === String(m.id))) {
+        if (m.deleted_at) continue;
+        if (effectiveUid && Array.isArray(m.hidden_for) && m.hidden_for.includes(effectiveUid)) continue;
+        const existing = db.getFirstSync('SELECT id FROM messages WHERE remote_id = ?', String(m.id)) as any;
+        if (!existing) {
           localDb.saveMessage({
             ...m, remote_id: String(m.id),
             conversation_id: conversationId, conversation_remote_id: conv.remote_id,
+            status: m.status || 'sent', edited: !!m.edited_at, deleted: !!m.deleted_at,
           }, 'synced');
+        } else {
+          db.runSync(
+            "UPDATE messages SET status = ?, edited = ?, content = ?, file_url = ?, read = ?, updated_at = ? WHERE remote_id = ?",
+            m.status || 'sent', m.edited_at ? 1 : 0, chatEncryptSync(m.content || ''), chatEncryptSync(m.file_url || ''), m.read ? 1 : 0, new Date().toISOString(), String(m.id)
+          );
         }
       }
       return localDb.getMessages(conversationId);
@@ -590,12 +601,16 @@ export async function getMessages(conversationId: number) {
   } catch { return local; }
 }
 
+export function normalizeSenderType(type?: string) {
+  return type === 'user' || !type ? 'patient' : type;
+}
+
 export async function sendMessage(contentOrOpts: string | { message?: string; content?: string; conversationId?: number; senderId?: string; senderType?: string; expertId?: number }, conversationId?: number, senderId?: string, senderType: string = 'user') {
   const opts = typeof contentOrOpts === 'object' ? contentOrOpts : null;
   const messageContent = opts?.message ?? opts?.content ?? (typeof contentOrOpts === 'string' ? contentOrOpts : '');
   const convId = opts?.conversationId ?? conversationId;
   const sId = opts?.senderId ?? senderId;
-  const sType = opts?.senderType ?? senderType;
+  const sType = normalizeSenderType(opts?.senderType ?? senderType);
 
   if (!convId || !sId) return null;
 
@@ -616,15 +631,15 @@ export async function sendMessage(contentOrOpts: string | { message?: string; co
     if (!conv?.remote_id) throw new Error('No remote conversation');
 
     const { data, error } = await supabase
-      .from('messages')
+      .from('chat_messages')
       .insert({
         conversation_id: conv.remote_id, sender_id: sId, sender_type: sType,
-        message_type: 'text', content: messageContent,
+        message_type: 'text', content: messageContent, status: 'sent',
       })
       .select()
       .single();
     if (error) throw error;
-    db.runSync('UPDATE messages SET remote_id = ?, sync_status = ? WHERE id = ?', String(data.id), 'synced', localId);
+    localDb.updateMessageRemoteId(localId, String(data.id), 'sent');
     return data;
   } catch {
     return { id: localId, conversation_id: convId, sender_id: sId, sender_type: sType, message_type: 'text', content: messageContent, created_at: new Date().toISOString() };
@@ -632,8 +647,9 @@ export async function sendMessage(contentOrOpts: string | { message?: string; co
 }
 
 export async function sendImageMessage(content: string, conversationId: number, senderId: string, fileUrl: string, senderType: string = 'user') {
+  const sType = normalizeSenderType(senderType);
   const localId = localDb.saveMessage({
-    conversation_id: conversationId, sender_id: senderId, sender_type: senderType,
+    conversation_id: conversationId, sender_id: senderId, sender_type: sType,
     message_type: 'image', content, file_url: fileUrl, sync_status: 'pending',
   }, 'pending');
 
@@ -644,12 +660,12 @@ export async function sendImageMessage(content: string, conversationId: number, 
     if (!conv?.remote_id) throw new Error('No remote conversation');
 
     const { data, error } = await supabase
-      .from('messages')
-      .insert({ conversation_id: conv.remote_id, sender_id: senderId, sender_type: senderType, message_type: 'image', content, file_url: fileUrl })
+      .from('chat_messages')
+      .insert({ conversation_id: conv.remote_id, sender_id: senderId, sender_type: sType, message_type: 'image', content, file_url: fileUrl, status: 'sent' })
       .select()
       .single();
     if (error) throw error;
-    db.runSync('UPDATE messages SET remote_id = ?, sync_status = ? WHERE id = ?', String(data.id), 'synced', localId);
+    localDb.updateMessageRemoteId(localId, String(data.id), 'sent');
     return data;
   } catch {
     return { id: localId, conversation_id: conversationId, sender_id: senderId, message_type: 'image', content, file_url: fileUrl, created_at: new Date().toISOString() };
@@ -657,8 +673,9 @@ export async function sendImageMessage(content: string, conversationId: number, 
 }
 
 export async function sendAudioMessage(conversationId: number, senderId: string, fileUrl: string, duration?: string, senderType: string = 'user') {
+  const sType = normalizeSenderType(senderType);
   const localId = localDb.saveMessage({
-    conversation_id: conversationId, sender_id: senderId, sender_type: senderType,
+    conversation_id: conversationId, sender_id: senderId, sender_type: sType,
     message_type: 'audio', file_url: fileUrl, duration: duration || '', sync_status: 'pending',
   }, 'pending');
 
@@ -669,16 +686,84 @@ export async function sendAudioMessage(conversationId: number, senderId: string,
     if (!conv?.remote_id) throw new Error('No remote conversation');
 
     const { data, error } = await supabase
-      .from('messages')
-      .insert({ conversation_id: conv.remote_id, sender_id: senderId, sender_type: senderType, message_type: 'audio', file_url: fileUrl, duration })
+      .from('chat_messages')
+      .insert({ conversation_id: conv.remote_id, sender_id: senderId, sender_type: sType, message_type: 'audio', file_url: fileUrl, duration, status: 'sent' })
       .select()
       .single();
     if (error) throw error;
-    db.runSync('UPDATE messages SET remote_id = ?, sync_status = ? WHERE id = ?', String(data.id), 'synced', localId);
+    localDb.updateMessageRemoteId(localId, String(data.id), 'sent');
     return data;
   } catch {
     return { id: localId, conversation_id: conversationId, sender_id: senderId, message_type: 'audio', file_url: fileUrl, duration, created_at: new Date().toISOString() };
   }
+}
+
+export async function editMessage(localId: number, content: string, uid: string) {
+  if (!content.trim()) return null;
+  const { getDb } = await import('./localDb');
+  const db = getDb();
+  const row = db.getFirstSync('SELECT * FROM messages WHERE id = ?', localId) as any;
+  if (!row || row.sender_id !== uid) return null;
+  localDb.markMessageEdited(localId, content.trim());
+
+  if (!row.remote_id) return { id: localId };
+  try {
+    const { data, error } = await supabase
+      .from('chat_messages')
+      .update({ content: content.trim(), edited_at: new Date().toISOString() })
+      .eq('id', row.remote_id)
+      .select()
+      .single();
+    if (error) throw error;
+    db.runSync("UPDATE messages SET sync_status = 'synced' WHERE id = ?", localId);
+    return data;
+  } catch {
+    return { id: localId };
+  }
+}
+
+export async function deleteMessageForEveryone(localId: number, uid: string) {
+  const { getDb } = await import('./localDb');
+  const db = getDb();
+  const row = db.getFirstSync('SELECT * FROM messages WHERE id = ?', localId) as any;
+  if (!row || row.sender_id !== uid) return null;
+  localDb.markMessageDeletedForEveryone(localId);
+
+  if (!row.remote_id) return { id: localId };
+  try {
+    const { data, error } = await supabase
+      .from('chat_messages')
+      .update({ content: '', deleted_at: new Date().toISOString() })
+      .eq('id', row.remote_id)
+      .select()
+      .single();
+    if (error) throw error;
+    db.runSync("UPDATE messages SET sync_status = 'synced' WHERE id = ?", localId);
+    return data;
+  } catch {
+    return { id: localId };
+  }
+}
+
+export async function deleteMessageForMe(localId: number) {
+  const { getDb } = await import('./localDb');
+  const db = getDb();
+  const row = db.getFirstSync('SELECT * FROM messages WHERE id = ?', localId) as any;
+  if (!row) return null;
+  localDb.markMessageDeletedForMe(localId);
+
+  if (!row.remote_id) return { hidden: true };
+  try {
+    const { data, error } = await supabase
+      .rpc('hide_message_for_me', { p_message_id: row.remote_id })
+      .maybeSingle();
+    if (!error && data) {
+      db.runSync("UPDATE messages SET sync_status = 'synced' WHERE id = ?", localId);
+      return { hidden: true };
+    }
+  } catch { /* local-only hide */ }
+  db.runSync("UPDATE messages SET sync_status = 'synced' WHERE id = ?", localId);
+  return { hidden: true };
 }
 
 // ─── User Stats ───────────────────────────────────────────────
@@ -1077,11 +1162,30 @@ export async function getSamplingGuide() {
 export function onMessagesInsert(conversationId: number, callback: (msg: any) => void) {
   const channel = supabase
     .channel(`messages:${conversationId}`)
-    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` }, (payload) => {
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `conversation_id=eq.${conversationId}` }, (payload) => {
       callback(payload.new);
     })
     .subscribe();
   return { unsubscribe: () => supabase.removeChannel(channel) };
+}
+
+export function onConversationChanges(conversationId: number, onChange: (msg: any, event: 'INSERT' | 'UPDATE') => void) {
+  const channel = supabase
+    .channel(`chat:${conversationId}`)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `conversation_id=eq.${conversationId}` }, (payload) => {
+      onChange(payload.new, 'INSERT');
+    })
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chat_messages', filter: `conversation_id=eq.${conversationId}` }, (payload) => {
+      onChange(payload.new, 'UPDATE');
+    })
+    .subscribe();
+  return { unsubscribe: () => supabase.removeChannel(channel) };
+}
+
+export async function markConversationReadClient(conversationRemoteId: string) {
+  try {
+    await supabase.rpc('mark_chat_messages_read', { p_conversation_id: conversationRemoteId });
+  } catch { /* best-effort */ }
 }
 
 // Re-export sync helpers

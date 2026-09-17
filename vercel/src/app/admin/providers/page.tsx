@@ -1,6 +1,7 @@
 'use client';
 
 import { apiFetch } from '@/lib/api-fetch';
+import { getCountyNames } from '@/lib/kenya';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
@@ -33,10 +34,7 @@ const SPECIALTIES = [
   { value: 'other', label: 'Other' },
 ];
 
-const COUNTIES = [
-  'Nairobi', 'Mombasa', 'Kisumu', 'Nakuru', 'Uasin Gishu', 'Nyeri', 'Meru',
-  'Machakos', 'Garissa', 'Kakamega', 'Busia', 'Trans-Nzoia', 'Kiambu', 'Embu',
-];
+const COUNTIES = getCountyNames();
 
 export default function AdminProvidersPage() {
   const [providers, setProviders] = useState<Provider[]>([]);

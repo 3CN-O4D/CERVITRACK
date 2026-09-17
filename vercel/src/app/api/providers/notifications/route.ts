@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { requireRole, forbidden } from '@/lib/api-auth';
+
+const STAFF_ROLES = [
+  'clinician', 'officer', 'county_officer', 'lab_staff', 'admin', 'super_admin', 'staff',
+];
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const provider_id = searchParams.get('provider_id');
-
-    if (!provider_id) {
-      return NextResponse.json({ error: 'provider_id required' }, { status: 400 });
-    }
+    const staff = await requireRole(request, STAFF_ROLES);
+    if (!staff) return forbidden();
+    const provider_id = staff.userId;
 
     const notifications: any[] = [];
 
@@ -56,21 +58,31 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const { data: unreadConvos } = await supabaseAdmin
-      .from('chat_conversations')
-      .select('id, contact_name, last_message, unread')
-      .gt('unread', 0)
-      .limit(5);
+    const { data: granted } = await supabaseAdmin
+      .from('consent_grants')
+      .select('patient_id')
+      .eq('staff_id', provider_id)
+      .eq('status', 'granted');
+    const patientScope = (granted || []).map((g) => g.patient_id);
 
-    for (const convo of unreadConvos || []) {
-      notifications.push({
-        id: `msg_${convo.id}`,
-        type: 'new_message',
-        title: 'New Message',
-        message: `${convo.contact_name}: ${convo.last_message}`,
-        read: false,
-        action_url: '/clinician',
-      });
+    if (patientScope.length > 0) {
+      const { data: unreadConvos } = await supabaseAdmin
+        .from('chat_conversations')
+        .select('id, contact_name, last_message, unread')
+        .in('user_id', patientScope)
+        .gt('unread', 0)
+        .limit(5);
+
+      for (const convo of unreadConvos || []) {
+        notifications.push({
+          id: `msg_${convo.id}`,
+          type: 'new_message',
+          title: 'New Message',
+          message: `${convo.contact_name}: ${convo.last_message}`,
+          read: false,
+          action_url: '/clinician',
+        });
+      }
     }
 
     notifications.sort((a, b) => (a.date || '').localeCompare(b.date || ''));

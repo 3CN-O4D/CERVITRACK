@@ -53,6 +53,39 @@ export async function requireRole(
   return roles.includes(user.role) ? user : null;
 }
 
+// Patients may only ever operate on their own records. Staff pass the target
+// user id explicitly (unchanged behaviour). Returns null when a patient
+// attempts to act on another user's data.
+export function resolveUserScope(user: RequestUser, claimed: string | null | undefined): string | null {
+  const c = (claimed ?? '').trim();
+  if (user.role === 'patient') {
+    if (c && c !== user.userId) return null;
+    return user.userId;
+  }
+  return c || user.userId;
+}
+
+// True when a 'patient' role's target row belongs to them. Staff are always allowed.
+export function ownsPatientRow(user: RequestUser, rowUserId: string | null | undefined): boolean {
+  if (user.role !== 'patient') return true;
+  return !!rowUserId && rowUserId === user.userId;
+}
+
+// True when a staff member has an active consent grant from the given patient.
+// Chat routes must not let a staff member read or write a patient's messages
+// without a grant.
+export async function hasConsentGrant(patientId: string | null | undefined, staffId: string): Promise<boolean> {
+  if (!patientId) return false;
+  const { data, error } = await getSupabaseAdmin()
+    .from('consent_grants')
+    .select('id')
+    .eq('patient_id', patientId)
+    .eq('staff_id', staffId)
+    .eq('status', 'granted')
+    .maybeSingle();
+  return !error && !!data;
+}
+
 export function unauthorized(): NextResponse {
   return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
 }

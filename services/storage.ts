@@ -18,6 +18,8 @@ try {
   };
 }
 
+import { chatEncrypt, chatDecrypt } from './crypto';
+
 export const getItem = async (key: string): Promise<string | null> => {
   try {
     return await AsyncStorage.getItem(key);
@@ -31,6 +33,25 @@ export const setItem = async (key: string, value: string): Promise<void> => {
     await AsyncStorage.setItem(key, value);
   } catch {
     // silent
+  }
+};
+
+export const setItemEnc = async (key: string, value: string): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(key, await chatEncrypt(value));
+  } catch {
+    // silent
+  }
+};
+
+export const getItemEnc = async (key: string): Promise<string | null> => {
+  try {
+    const raw = await AsyncStorage.getItem(key);
+    if (!raw) return null;
+    const dec = await chatDecrypt(raw);
+    return dec === raw && !raw.includes(':') ? null : dec;
+  } catch {
+    return null;
   }
 };
 

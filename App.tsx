@@ -10,6 +10,7 @@ import { LanguageProvider } from './context/LanguageContext';
 import { SyncProvider } from './context/SyncContext';
 import AppNavigator from './navigation/AppNavigator';
 import { initLocalDb } from './services/localDb';
+import { initChatCrypto } from './services/crypto';
 import { setupNotificationChannels, requestNotificationPermission } from './services/notifications';
 
 Notifications.setNotificationHandler({
@@ -59,7 +60,10 @@ function AppContent() {
 
 export default function App() {
   useEffect(() => {
-    initLocalDb();
+    (async () => {
+      await initChatCrypto();
+      initLocalDb();
+    })();
   }, []);
 
   return (
