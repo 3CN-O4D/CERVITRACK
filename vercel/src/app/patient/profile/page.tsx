@@ -15,12 +15,13 @@ interface UserProfile {
   county: string | null;
   sub_county: string | null;
   ward: string | null;
+  photo: string | null;
 }
 
 export default function PatientProfile() {
   const router = useRouter();
-  const [user, setUser] = useState<UserProfile>({ name: null, email: null, phone: null, birth_date: null, last_healed_date: null, county: null, sub_county: null, ward: null });
-  const [form, setForm] = useState<UserProfile>({ name: null, email: null, phone: null, birth_date: null, last_healed_date: null, county: null, sub_county: null, ward: null });
+  const [user, setUser] = useState<UserProfile>({ name: null, email: null, phone: null, birth_date: null, last_healed_date: null, county: null, sub_county: null, ward: null, photo: null });
+  const [form, setForm] = useState<UserProfile>({ name: null, email: null, phone: null, birth_date: null, last_healed_date: null, county: null, sub_county: null, ward: null, photo: null });
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
@@ -35,13 +36,13 @@ export default function PatientProfile() {
       try {
         const { data: profile, error } = await supabase
           .from('users')
-          .select('name, email, phone, birth_date, last_healed_date, county, sub_county, ward')
+          .select('name, email, phone, birth_date, last_healed_date, county, sub_county, ward, photo')
           .eq('id', session.user.id)
           .single();
 
         if (error) throw error;
-        setUser(profile || { name: null, email: null, phone: null, birth_date: null, last_healed_date: null, county: null, sub_county: null, ward: null });
-        setForm({ ...profile, county: profile?.county, sub_county: profile?.sub_county, ward: profile?.ward });
+        setUser(profile || { name: null, email: null, phone: null, birth_date: null, last_healed_date: null, county: null, sub_county: null, ward: null, photo: null });
+        setForm({ ...profile, county: profile?.county, sub_county: profile?.sub_county, ward: profile?.ward, photo: profile?.photo });
       } catch (e: any) {
         setError(e.message || 'Failed to load profile');
       }
@@ -52,6 +53,43 @@ export default function PatientProfile() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setForm((f) => ({ ...f, [name]: value === '' ? null : value }));
+  };
+
+  const resizeImage = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          const side = 256;
+          const scale = Math.min(1, side / Math.max(img.width, img.height));
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.max(1, Math.round(img.width * scale));
+          canvas.height = Math.max(1, Math.round(img.height * scale));
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return reject(new Error('Canvas unsupported'));
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL('image/jpeg', 0.8));
+        };
+        img.onerror = () => reject(new Error('Failed to read image'));
+        img.src = reader.result as string;
+      };
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsDataURL(file);
+    });
+
+  const handlePhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { setError('Please choose an image file'); return; }
+    if (file.size > 8 * 1024 * 1024) { setError('Image must be under 8MB'); return; }
+    try {
+      const dataUrl = await resizeImage(file);
+      setForm((f) => ({ ...f, photo: dataUrl }));
+      setError('');
+    } catch (err: any) {
+      setError(err.message || 'Failed to process image');
+    }
   };
 
   const saveProfile = async () => {
@@ -72,6 +110,7 @@ export default function PatientProfile() {
           county: form.county,
           sub_county: form.sub_county,
           ward: form.ward,
+          photo: form.photo,
         })
         .eq('id', session.user.id);
 
@@ -80,7 +119,7 @@ export default function PatientProfile() {
       // refresh user data
       const { data: updated } = await supabase
         .from('users')
-        .select('name, email, phone, birth_date, last_healed_date, county, sub_county, ward')
+        .select('name, email, phone, birth_date, last_healed_date, county, sub_county, ward, photo')
         .eq('id', session.user.id)
         .single();
       setUser(updated || form);
@@ -95,6 +134,27 @@ export default function PatientProfile() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Profile</h1>
+
+      <div className="flex items-center gap-4 rounded-lg border bg-white p-4">
+        <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full bg-primary">
+          {form.photo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={form.photo} alt="Profile" className="h-full w-full object-cover" />
+          ) : (
+            <span className="text-2xl font-extrabold text-white">{(form.name || 'U').trim()[0]?.toUpperCase()}</span>
+          )}
+        </div>
+        <div className="flex flex-col gap-1">
+          <span className="text-sm font-medium text-gray-700">Profile Photo</span>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handlePhoto}
+            className="text-sm text-gray-600 file:mr-3 file:rounded file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-primary/90"
+          />
+          <span className="text-xs text-gray-500">Photo is stored with your profile and shown on your dashboard.</span>
+        </div>
+      </div>
 
       {error && (
         <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded">

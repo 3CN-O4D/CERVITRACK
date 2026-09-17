@@ -11,6 +11,7 @@ interface UserProfile {
   county: string | null;
   sub_county: string | null;
   ward: string | null;
+  photo: string | null;
   created_at: string;
 }
 
@@ -23,7 +24,7 @@ interface DashboardCard {
 
 export default function PatientDashboard() {
   const router = useRouter();
-  const [user, setUser] = useState<UserProfile>({ name: null, email: null, county: null, sub_county: null, ward: null, created_at: '' });
+  const [user, setUser] = useState<UserProfile>({ name: null, email: null, county: null, sub_county: null, ward: null, photo: null, created_at: '' });
   const [screenings, setScreenings] = useState<number>(0);
   const [vaccines, setVaccines] = useState<number>(0);
   const [loading, setLoading] = useState(true);
@@ -38,12 +39,12 @@ export default function PatientDashboard() {
 
       const { data: profile, error } = await supabase
         .from('users')
-        .select('name, email, county, sub_county, ward, created_at')
+        .select('name, email, county, sub_county, ward, photo, created_at')
         .eq('id', session.user.id)
         .single();
 
       if (error) throw error;
-      setUser(profile || { name: null, email: null, county: null, sub_county: null, ward: null, created_at: '' });
+      setUser(profile || { name: null, email: null, county: null, sub_county: null, ward: null, photo: null, created_at: '' });
 
       const { count: sCount, error: sErr } = await supabase
         .from('screenings')
@@ -76,6 +77,21 @@ export default function PatientDashboard() {
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center gap-4 rounded-lg border bg-white p-4 shadow-sm">
+        <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-primary">
+          {user.photo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={user.photo} alt={user.name || 'Profile'} className="h-full w-full object-cover" />
+          ) : (
+            <span className="text-xl font-extrabold text-white">{(user.name || 'U').trim()[0]?.toUpperCase()}</span>
+          )}
+        </div>
+        <div>
+          <div className="text-lg font-bold">Hello, {(user.name || 'there').split(' ')[0]}</div>
+          <div className="text-sm text-gray-500">Welcome back to your health dashboard</div>
+        </div>
+      </div>
+
       <h1 className="text-3xl font-bold">Dashboard</h1>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
