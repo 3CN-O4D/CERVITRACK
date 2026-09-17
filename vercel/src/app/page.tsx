@@ -1,5 +1,7 @@
 import Link from 'next/link';
 
+const APK_URL = 'https://github.com/3CN-O4D/CERVITRACK/releases/download/android-v1.0.0/cervitrack-release.apk';
+
 export const metadata = {
   title: 'CerviTrack — National Cervical Cancer Screening Registry',
   description: 'Kenya\'s unified cervical cancer screening platform. Track screenings, vaccines, and clinical outcomes across all 47 counties.',
@@ -88,7 +90,7 @@ const faqs = [
   { q: 'Is the CerviTrack app free?', a: 'Yes. The CerviTrack Patient APK is completely free for all women in Kenya. Hospital and facility portals (Lab PWA, Clinician Workspace, Admin Panel) are available as paid subscriptions for healthcare institutions.' },
   { q: 'Is my health data private?', a: 'Absolutely. Your health data is encrypted at rest and in transit. We comply with Kenya\'s Data Protection Act (2019) and never share data without your explicit consent.' },
   { q: 'Do I need internet to use the app?', a: 'The Patient APK and Lab PWA both work offline. Your data is stored securely on-device and syncs automatically when you reconnect to the internet.' },
-  { q: 'What phones are supported?', a: 'The Patient APK works on any Android phone running Android 6.0 or later (~15 MB). The web panels work in any modern browser.' },
+  { q: 'What phones are supported?', a: 'The Patient APK works on any Android phone running Android 6.0 or later (~113 MB). The web panels work in any modern browser.' },
   { q: 'How does offline lab sync work?', a: 'When offline, lab results are queued in IndexedDB. When connectivity returns, the PWA triggers a batch sync to the central server in one transaction. Conflicts are resolved server-side.' },
   { q: 'Which clinical protocols are supported?', a: 'CerviTrack supports VIA, Pap smear, HPV DNA testing, colposcopy, LEEP, and cryotherapy — all following Kenya MOH clinical guidelines.' },
   { q: 'How does DHIS2 reporting work?', a: 'Facility administrators can export monthly aggregate reports in DHIS2-compatible format. National-level summaries auto-generate from facility data.' },
@@ -161,7 +163,7 @@ export default function HomePage() {
             </p>
             <div className="mt-8 flex flex-wrap gap-4">
               <a
-                href="/CerviTrack.apk"
+                href={APK_URL}
                 download
                 className="bg-sky-700 text-white px-8 py-4 rounded-xl font-semibold hover:bg-sky-800 flex items-center gap-3 text-lg shadow-lg shadow-sky-200"
               >
@@ -178,7 +180,7 @@ export default function HomePage() {
             <p className="mt-4 text-xs text-gray-400 flex items-center gap-4">
               <span>Android 6.0+</span>
               <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
-              <span>~15 MB</span>
+              <span>~113 MB</span>
               <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
               <span>Works offline</span>
               <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
@@ -307,7 +309,7 @@ export default function HomePage() {
           </p>
           <div className="flex flex-wrap justify-center gap-4">
             <a
-              href="/CerviTrack.apk"
+              href={APK_URL}
               download
               className="bg-white text-emerald-700 px-8 py-4 rounded-xl font-semibold hover:bg-emerald-50 flex items-center gap-3 text-lg shadow-lg"
             >
@@ -321,7 +323,7 @@ export default function HomePage() {
               Sign Up on Web
             </Link>
           </div>
-          <p className="mt-4 text-emerald-200 text-sm">Android 6.0+ &middot; ~15 MB &middot; Works offline</p>
+          <p className="mt-4 text-emerald-200 text-sm">Android 6.0+ &middot; ~113 MB &middot; Works offline</p>
         </div>
       </section>
 
@@ -425,7 +427,7 @@ export default function HomePage() {
               <h4 className="font-semibold text-sky-900 mb-3 text-sm">Get Started</h4>
               <ul className="space-y-2 text-sm text-gray-500">
                 <li><Link href="/auth" className="hover:text-sky-700">Patient Sign In</Link></li>
-                <li><a href="/CerviTrack.apk" download className="hover:text-sky-700">Patient APK</a></li>
+                <li><a href={APK_URL} download className="hover:text-sky-700">Patient APK</a></li>
                 <li><a href="/login/lab" className="hover:text-sky-700">Lab Technician PWA</a></li>
                 <li><a href="/login/clinician" className="hover:text-sky-700">Clinician Workspace</a></li>
                 <li><a href="/login/county-admin" className="hover:text-sky-700">County Admin</a></li>
