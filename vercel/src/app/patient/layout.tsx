@@ -66,8 +66,8 @@ export default function PatientLayout({
     { label: 'Dashboard', href: '/patient', disabled: userRole !== 'patient' },
     { label: 'Self-Assessment', href: '/patient/screening', disabled: userRole !== 'patient' },
     { label: 'My Results', href: '/patient/results', disabled: userRole !== 'patient' },
-    { label: 'Self-Test', href: '/patient/test', disabled: userRole !== 'patient' },
     { label: 'Self-Sampling', href: '/patient/self-sampling', disabled: userRole !== 'patient' },
+    { label: 'Sample & Submit', href: '/patient/test', disabled: userRole !== 'patient' },
     { label: 'Kit Tracker', href: '/patient/kits', disabled: userRole !== 'patient' },
     { label: 'Vaccinations', href: '/patient/vaccines', disabled: userRole !== 'patient' },
     { label: 'Appointments', href: '/patient/appointments', disabled: userRole !== 'patient' },
@@ -80,7 +80,7 @@ export default function PatientLayout({
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow border-y border-gray-200">
+      <nav className="bg-white shadow border-y border-gray-200 print:hidden">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link

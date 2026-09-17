@@ -5,97 +5,17 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase-browser';
 import { apiFetch } from '@/lib/api-fetch';
 import BarcodeScanner from '@/components/BarcodeScanner';
-
-const VIABILITY_DAYS = 25;
-const VIDEO_URL = 'https://www.youtube.com/embed/njsHSnDGcDk?autoplay=0&modestbranding=1&rel=0';
+import StepDiagram from '@/components/StepDiagram';
+import {
+  CHECKLIST_ITEMS,
+  FAQS,
+  STEPS,
+  VIABILITY_DAYS,
+  VIDEO_URL,
+  type SamplingStep,
+} from '@/lib/self-sampling';
 
 type Stage = 'order' | 'scan' | 'register' | 'link' | 'learn' | 'checklist' | 'confirm' | 'complete';
-
-interface Step {
-  number: number;
-  title: string;
-  instruction: string;
-  doList: string[];
-  dontList: string[];
-  why: string;
-  expected: string;
-  normal: string;
-}
-
-const STEPS: Step[] = [
-  {
-    number: 1,
-    title: 'Wash Your Hands',
-    instruction: 'Wash your hands thoroughly with soap and warm water for at least 20 seconds, then dry them with a clean towel.',
-    doList: ['Wash before and after handling the kit', 'Dry hands with a clean, single-use towel'],
-    dontList: ['Do not use hand sanitiser in place of washing', 'Do not touch the swab tip after washing'],
-    why: 'Clean hands stop germs and dirt contaminating the sample, which could cause an inconclusive result.',
-    expected: 'It takes about 20 seconds — roughly the time to sing "Happy Birthday" twice.',
-    normal: 'Slightly soapy or wet hands are fine; just make sure they are dry before touching the kit.',
-  },
-  {
-    number: 2,
-    title: 'Open the Kit',
-    instruction: 'Open the kit carefully without touching the swab tip. Remove the collection tube and swab and place them on a clean, dry surface.',
-    doList: ['Place all components on a clean, dry surface', 'Hold the swab by the handle end only'],
-    dontList: ['Do not touch the swab tip or the inside of the tube', 'Do not let the swab rest on any surface'],
-    why: 'The swab tip and tube interior must stay sterile — touching them introduces contamination.',
-    expected: 'You should see a swab, a collection tube with cap, a label, and a biohazard bag.',
-    normal: 'A faint plastic smell when opening is harmless.',
-  },
-  {
-    number: 3,
-    title: 'Insert the Swab',
-    instruction: 'Stand with feet apart and knees slightly bent. Gently insert the swab into the vagina about 2-3 inches (5-7 cm), angling slightly toward your lower back.',
-    doList: ['Relax your muscles and breathe deeply', 'Angle the swab gently toward your lower back'],
-    dontList: ['Do not force the swab', 'Do not insert into the urethra or rectum'],
-    why: 'Correct depth and angle allow the swab to reach the cells where HPV is detected.',
-    expected: 'Mild pressure or a tickling sensation is normal.',
-    normal: 'Light spotting is uncommon but not dangerous; it should stop on its own.',
-  },
-  {
-    number: 4,
-    title: 'Rotate the Swab',
-    instruction: 'Rotate the swab gently in a circular motion for 15-30 seconds, ensuring it contacts the vaginal walls.',
-    doList: ['Count to 20 slowly while rotating', 'Keep the motion gentle and steady'],
-    dontList: ['Do not scrub hard or move the swab in and out repeatedly'],
-    why: 'Rotating collects enough cells for an accurate test.',
-    expected: 'You may feel slight friction as the swab turns.',
-    normal: 'No pain is expected; stop if you feel sharp pain and contact your clinician.',
-  },
-  {
-    number: 5,
-    title: 'Place in the Collection Tube',
-    instruction: 'Withdraw the swab without touching anything else. Place the swab tip-first into the tube, then snap or cut the handle at the marked line so the tube can be sealed.',
-    doList: ['Hold the tube steady on a flat surface', 'Make sure the swab tip is fully inside the tube'],
-    dontList: ['Do not touch the swab tip on the tube rim', 'Do not spill the transport liquid'],
-    why: 'The tube protects and preserves the sample until it reaches the lab.',
-    expected: 'The swab should sit fully inside with the break line at the tube opening.',
-    normal: 'A small amount of liquid on the tube threads is fine; wipe with the provided tissue.',
-  },
-  {
-    number: 6,
-    title: 'Seal and Label',
-    instruction: 'Tightly close the cap, write your patient code on the label, attach the label to the tube, then place the tube in the biohazard bag and seal it.',
-    doList: ['Double-check your patient code is correct and legible', 'Seal the biohazard bag fully'],
-    dontList: ['Do not write over the patient code', 'Do not leave the bag open or overfilled'],
-    why: 'Correct labelling links the sample to you; sealing protects handlers and the sample.',
-    expected: 'After sealing, the tube should not leak when held upside down.',
-    normal: 'Minor condensation inside the bag is normal.',
-  },
-];
-
-const CHECKLIST_ITEMS = [
-  { key: 'hands', label: 'I washed and dried my hands before and after sampling' },
-  { key: 'sterile', label: 'I did not touch the swab tip or the inside of the tube' },
-  { key: 'swab_tube', label: 'The swab was placed correctly in the collection tube' },
-  { key: 'cap_sealed', label: 'The tube cap is sealed tightly — no leaks' },
-  { key: 'no_spillage', label: 'There was no spillage during the process' },
-  { key: 'labeled', label: 'The tube is labelled with my patient code' },
-  { key: 'hazard_bag', label: 'The tube is inside the biohazard bag' },
-  { key: 'bag_sealed', label: 'The biohazard bag is sealed properly' },
-  { key: 'waste', label: 'I disposed of packaging safely and washed my hands again' },
-];
 
 interface Facility {
   id: number;
@@ -126,6 +46,53 @@ function countdown(target: number) {
   };
 }
 
+function escapeHtml(value: string) {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function buildOfflineHtml() {
+  const stepBlock = (s: SamplingStep) => `
+    <section class="step">
+      <h2>${s.number}. ${escapeHtml(s.title)}</h2>
+      <p>${escapeHtml(s.instruction)}</p>
+      <div class="cols">
+        <div class="do"><strong>Do</strong><ul>${s.doList.map((d) => `<li>${escapeHtml(d)}</li>`).join('')}</ul></div>
+        <div class="dont"><strong>Don't</strong><ul>${s.dontList.map((d) => `<li>${escapeHtml(d)}</li>`).join('')}</ul></div>
+      </div>
+      <p><strong>Why:</strong> ${escapeHtml(s.why)}</p>
+      <p><strong>What to expect:</strong> ${escapeHtml(s.expected)}</p>
+      <p><strong>What's normal:</strong> ${escapeHtml(s.normal)}</p>
+    </section>`;
+
+  return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CerviTrack Self-Sampling Instructions</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; color: #1E1A4B; max-width: 720px; margin: 0 auto; padding: 24px; line-height: 1.5; }
+  h1 { color: #6C5CE7; }
+  h2 { color: #6C5CE7; margin-top: 28px; }
+  .step { border: 1px solid #E5E1F5; border-radius: 12px; padding: 16px; margin: 16px 0; }
+  .cols { display: flex; gap: 12px; flex-wrap: wrap; margin: 8px 0; }
+  .do, .dont { flex: 1 1 240px; border-radius: 8px; padding: 8px 12px; }
+  .do { background: #ECFDF5; border: 1px solid #A7F3D0; }
+  .dont { background: #FEF2F2; border: 1px solid #FECACA; }
+  ul { margin: 6px 0; padding-left: 20px; }
+  .checklist li { margin: 4px 0; }
+  footer { margin-top: 32px; font-size: 12px; color: #6B7280; }
+</style></head>
+<body>
+  <h1>CerviTrack — HPV Self-Sampling Instructions</h1>
+  <p>Collect your own sample at home, then submit the sealed kit so the laboratory can run the molecular test.</p>
+  ${STEPS.map(stepBlock).join('')}
+  <h2>Before you submit</h2>
+  <ul class="checklist">${CHECKLIST_ITEMS.map((c) => `<li>${escapeHtml(c.label)}</li>`).join('')}</ul>
+  <h2>Frequently asked questions</h2>
+  ${FAQS.map((f) => `<p><strong>${escapeHtml(f.q)}</strong><br/>${escapeHtml(f.a)}</p>`).join('')}
+  <footer>Saved from CerviTrack. Your sample is viable for ${VIABILITY_DAYS} days from collection.</footer>
+</body></html>`;
+}
+
 export default function PatientSelfSampling() {
   const [stage, setStage] = useState<Stage>('order');
   const [profile, setProfile] = useState<Profile>({ name: '', phone: '', county: '', sub_county: '' });
@@ -143,6 +110,8 @@ export default function PatientSelfSampling() {
   const [now, setNow] = useState(Date.now());
   const [faqOpen, setFaqOpen] = useState<number | null>(null);
   const [showScanner, setShowScanner] = useState(false);
+  const [guided, setGuided] = useState(true);
+  const [guideStep, setGuideStep] = useState(0);
 
   useEffect(() => {
     async function init() {
@@ -340,11 +309,27 @@ export default function PatientSelfSampling() {
     }
   }
 
+  function printGuide() {
+    window.print();
+  }
+
+  function downloadOffline() {
+    const blob = new Blob([buildOfflineHtml()], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'cervitrack-self-sampling-instructions.html';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
   const stageIndex = ['order', 'scan', 'link', 'learn', 'checklist', 'confirm', 'complete'].indexOf(stage);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 print:hidden">
         {['Order', 'Scan', 'Link', 'Learn', 'Confirm', 'Re-scan', 'Done'].map((label, i) => (
           <div key={label} className="flex flex-1 flex-col items-center gap-1">
             <div className={`h-2.5 w-full rounded-full ${i <= stageIndex ? 'bg-primary' : 'bg-gray-200'}`} />
@@ -353,24 +338,27 @@ export default function PatientSelfSampling() {
         ))}
       </div>
 
-      {error && <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
-      {message && <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-700">{message}</div>}
+      {error && <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 print:hidden">{error}</div>}
+      {message && <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-700 print:hidden">{message}</div>}
 
       {stage === 'order' && (
         <section className="rounded-2xl border bg-white p-6 text-center shadow-sm">
           <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-3xl">🧪</div>
           <h1 className="text-2xl font-bold">HPV Self-Sampling</h1>
           <p className="mt-2 text-sm text-gray-600">
-            Collect your own sample in the privacy of your home. Request a free self-sampling kit or scan a kit you already have.
+            Collect your own sample in the privacy of your home, then submit the sealed kit for laboratory testing.
           </p>
           <div className="mt-6 space-y-3">
-            <Link href="/patient/test" className="block w-full rounded-xl bg-primary px-4 py-3 font-semibold text-white">
-              Request a Self-Sampling Kit
-            </Link>
-            <button onClick={() => setStage('scan')} className="w-full rounded-xl px-4 py-2 text-sm font-semibold text-primary">
-              I already have a kit — scan barcode
+            <button onClick={() => setStage('scan')} className="w-full rounded-xl bg-primary px-4 py-3 font-semibold text-white">
+              I have a kit — scan barcode
             </button>
+            <Link href="/patient/kits" className="block w-full rounded-xl px-4 py-2 text-sm font-semibold text-primary">
+              Track my kits
+            </Link>
           </div>
+          <p className="mt-4 text-xs text-gray-500">
+            No kit yet? You can collect one from your nearest health facility.
+          </p>
         </section>
       )}
 
@@ -429,46 +417,69 @@ export default function PatientSelfSampling() {
 
       {stage === 'learn' && (
         <section className="space-y-5">
-          <div className="rounded-2xl border bg-white p-6 text-center shadow-sm">
+          <div className="rounded-2xl border bg-white p-6 text-center shadow-sm print:border-0 print:shadow-none">
             <h2 className="text-lg font-bold">Step 2: Learn the Procedure</h2>
             <p className="mt-1 text-sm text-gray-600">Watch the guide and read each step before you collect your sample.</p>
-            <div className="mt-4 overflow-hidden rounded-xl">
+            <div className="mt-4 overflow-hidden rounded-xl print:hidden">
               <iframe src={VIDEO_URL} title="Self-sampling guide" className="h-56 w-full border-0" allowFullScreen allow="autoplay; encrypted-media" />
+            </div>
+            <div className="mt-4 flex flex-wrap justify-center gap-2 print:hidden">
+              <button onClick={() => setGuided((v) => !v)}
+                className="rounded-xl border border-primary px-4 py-2 text-sm font-semibold text-primary">
+                {guided ? 'Show all steps' : 'Guided step-by-step'}
+              </button>
+              <button onClick={printGuide}
+                className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700">
+                🖨 Print / Save PDF
+              </button>
+              <button onClick={downloadOffline}
+                className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700">
+                ⬇ Download offline copy
+              </button>
             </div>
           </div>
 
-          {STEPS.map((s) => (
-            <div key={s.number} className="rounded-2xl border bg-white p-5 shadow-sm">
-              <div className="flex items-center gap-3">
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-bold text-white">{s.number}</span>
-                <h3 className="font-bold">{s.title}</h3>
+          {guided ? (
+            <div className="rounded-2xl border bg-white p-5 shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Step {guideStep + 1} of {STEPS.length}
+                </span>
+                <span className="text-xs text-gray-400">{Math.round(((guideStep + 1) / STEPS.length) * 100)}%</span>
               </div>
-              <p className="mt-3 text-sm text-gray-700">{s.instruction}</p>
-
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-xl border border-green-200 bg-green-50 p-3">
-                  <div className="text-xs font-bold uppercase tracking-wide text-green-700">Do</div>
-                  <ul className="mt-2 space-y-1 text-sm text-green-900">
-                    {s.doList.map((d) => <li key={d}>• {d}</li>)}
-                  </ul>
-                </div>
-                <div className="rounded-xl border border-red-200 bg-red-50 p-3">
-                  <div className="text-xs font-bold uppercase tracking-wide text-red-700">Don&apos;t</div>
-                  <ul className="mt-2 space-y-1 text-sm text-red-900">
-                    {s.dontList.map((d) => <li key={d}>• {d}</li>)}
-                  </ul>
-                </div>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-gray-200">
+                <div className="h-full bg-primary transition-all" style={{ width: `${((guideStep + 1) / STEPS.length) * 100}%` }} />
               </div>
 
-              <div className="mt-3 space-y-2 text-sm">
-                <p><span className="font-semibold text-gray-800">Why: </span><span className="text-gray-600">{s.why}</span></p>
-                <p><span className="font-semibold text-gray-800">What to expect: </span><span className="text-gray-600">{s.expected}</span></p>
-                <p><span className="font-semibold text-gray-800">What&apos;s normal: </span><span className="text-gray-600">{s.normal}</span></p>
+              <div className="mt-4">{renderStep(STEPS[guideStep])}</div>
+
+              <div className="mt-5 flex items-center justify-between gap-3 print:hidden">
+                <button onClick={() => setGuideStep((s) => Math.max(0, s - 1))} disabled={guideStep === 0}
+                  className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 disabled:opacity-40">
+                  ← Back
+                </button>
+                {guideStep < STEPS.length - 1 ? (
+                  <button onClick={() => setGuideStep((s) => Math.min(STEPS.length - 1, s + 1))}
+                    className="flex-1 rounded-xl bg-primary px-4 py-2.5 font-semibold text-white">
+                    Next Step →
+                  </button>
+                ) : (
+                  <button onClick={() => setStage('checklist')}
+                    className="flex-1 rounded-xl bg-primary px-4 py-2.5 font-semibold text-white">
+                    I&apos;ve Finished — Continue
+                  </button>
+                )}
               </div>
             </div>
-          ))}
+          ) : (
+            STEPS.map((s) => (
+              <div key={s.number} className="rounded-2xl border bg-white p-5 shadow-sm break-inside-avoid">
+                {renderStep(s)}
+              </div>
+            ))
+          )}
 
-          <div className="rounded-2xl border bg-white p-5 shadow-sm">
+          <div className="rounded-2xl border bg-white p-5 shadow-sm print:hidden">
             <h3 className="font-bold">FAQs</h3>
             {FAQS.map((f, i) => (
               <button key={f.q} onClick={() => setFaqOpen(faqOpen === i ? null : i)} className="mt-3 block w-full text-left">
@@ -482,7 +493,7 @@ export default function PatientSelfSampling() {
           </div>
 
           <button onClick={() => setStage('checklist')}
-            className="w-full rounded-xl bg-primary px-4 py-3 font-semibold text-white">
+            className="w-full rounded-xl bg-primary px-4 py-3 font-semibold text-white print:hidden">
             I&apos;ve Read the Instructions — Next
           </button>
         </section>
@@ -568,8 +579,11 @@ export default function PatientSelfSampling() {
               <p><span className="text-gray-500">Location:</span> {[profile.sub_county, profile.county].filter(Boolean).join(', ') || '—'}</p>
             </div>
             <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-              🔔 Sample ready for pickup. Please return it to your nearest pickup station or arrange dispatch.
+              🔔 Sample ready for pickup. Submit it at your nearest pickup station so it can be sent to the laboratory.
             </div>
+            <Link href="/patient/test" className="mt-4 block w-full rounded-xl bg-primary px-4 py-3 text-center font-semibold text-white">
+              Submit My Sample →
+            </Link>
           </div>
 
           {remaining && (
@@ -665,10 +679,38 @@ export default function PatientSelfSampling() {
   );
 }
 
-const FAQS = [
-  { q: 'How long does the test take?', a: 'The entire self-sampling process takes about 5-10 minutes from opening the kit to sealing the tube.' },
-  { q: 'Is self-sampling painful?', a: 'No, self-sampling is generally painless. You may feel mild pressure but it should not cause pain.' },
-  { q: 'When will I get my results?', a: 'Results are typically available within 2-4 weeks. Your healthcare provider will contact you.' },
-  { q: 'Can I do self-sampling during my period?', a: 'It is best to avoid self-sampling during menstruation. Wait until at least 3-5 days after your period has ended.' },
-  { q: 'How accurate is self-sampling?', a: 'HPV self-sampling is highly accurate, with 96-99% sensitivity for detecting high-risk HPV.' },
-];
+function renderStep(s: SamplingStep) {
+  return (
+    <>
+      <div className="flex items-center gap-3">
+        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-bold text-white">{s.number}</span>
+        <h3 className="font-bold">{s.title}</h3>
+      </div>
+      <div className="mt-3 overflow-hidden rounded-xl border border-gray-100">
+        <StepDiagram step={s.number} />
+      </div>
+      <p className="mt-3 text-sm text-gray-700">{s.instruction}</p>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <div className="rounded-xl border border-green-200 bg-green-50 p-3">
+          <div className="text-xs font-bold uppercase tracking-wide text-green-700">Do</div>
+          <ul className="mt-2 space-y-1 text-sm text-green-900">
+            {s.doList.map((d) => <li key={d}>• {d}</li>)}
+          </ul>
+        </div>
+        <div className="rounded-xl border border-red-200 bg-red-50 p-3">
+          <div className="text-xs font-bold uppercase tracking-wide text-red-700">Don&apos;t</div>
+          <ul className="mt-2 space-y-1 text-sm text-red-900">
+            {s.dontList.map((d) => <li key={d}>• {d}</li>)}
+          </ul>
+        </div>
+      </div>
+
+      <div className="mt-3 space-y-2 text-sm">
+        <p><span className="font-semibold text-gray-800">Why: </span><span className="text-gray-600">{s.why}</span></p>
+        <p><span className="font-semibold text-gray-800">What to expect: </span><span className="text-gray-600">{s.expected}</span></p>
+        <p><span className="font-semibold text-gray-800">What&apos;s normal: </span><span className="text-gray-600">{s.normal}</span></p>
+      </div>
+    </>
+  );
+}

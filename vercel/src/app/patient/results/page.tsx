@@ -19,7 +19,6 @@ export default function PatientResults() {
   const [user, setUser] = useState({ id: '' });
   const [screenings, setScreenings] = useState<ResultCard[]>([]);
   const [vaccines, setVaccines] = useState<ResultCard[]>([]);
-  const [testResults, setTestResults] = useState<ResultCard[]>([]);
   const [labResults, setLabResults] = useState<ResultCard[]>([]);
   const [sampleKits, setSampleKits] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,18 +53,6 @@ export default function PatientResults() {
             id: v.id, type: 'vaccine' as const, date: v.date, result: v.status || '', subtitle: `${v.name} — ${v.hospital || ''}`,
           }));
           setVaccines(items);
-        }
-      } catch { }
-
-      // Test results
-      try {
-        const res = await apiFetch('/api/test-results?user_id=' + session.user.id);
-        if (res.ok) {
-          const d = await res.json();
-          const items: ResultCard[] = (Array.isArray(d) ? d : []).map((t: any) => ({
-            id: t.id, type: 'test' as const, date: t.created_at, result: t.result || '', subtitle: `Date: ${t.date || ''}`,
-          }));
-          setTestResults(items);
         }
       } catch { }
 
@@ -128,10 +115,9 @@ export default function PatientResults() {
 
       {section('Screenings', screenings)}
       {section('Vaccines', vaccines)}
-      {section('Self-Test Results', testResults)}
       {section('Lab Results', labResults)}
-      {section('Test Kits', sampleKits.map((k) => ({
-        ...k, subtitle: `Barcode: ${k.barcode} — ${k.result === 'positive' ? 'Positive' : k.result === 'negative' ? 'Negative' : k.result} — ${k.status}`,
+      {section('Sample Kits', sampleKits.map((k) => ({
+        ...k, subtitle: `Barcode: ${k.barcode} — Status: ${k.status}`,
       })))}
     </div>
   );
