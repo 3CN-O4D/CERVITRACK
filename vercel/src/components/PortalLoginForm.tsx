@@ -52,6 +52,12 @@ export default function PortalLoginForm({ portal }: { portal: PortalConfig }) {
     setLoading(true);
 
     if (mode === 'register') {
+      if (!portal.allowRegister) {
+        setError('Staff accounts are created by an administrator. Sign in with a staff account.');
+        setMode('login');
+        setLoading(false);
+        return;
+      }
       if (!email || !password) { setError('Email and password are required.'); setLoading(false); return; }
       try {
         const res = await fetch('/api/auth/register', {
@@ -213,13 +219,15 @@ export default function PortalLoginForm({ portal }: { portal: PortalConfig }) {
             </form>
 
             <p className="text-center mt-5 text-sm text-gray-600">
-              {mode === 'login' ? "Don't have an account?" : 'Already have an account?'}{' '}
-              <button
-                onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
-                className={`font-medium hover:underline ${portal.primary}`}
-              >
-                {mode === 'login' ? 'Register' : 'Sign in'}
-              </button>
+              {mode === 'login' ? (portal.allowRegister ? "Don't have an account?" : 'Staff accounts are created by an administrator.') : 'Already have an account?'}{' '}
+              {portal.allowRegister && (
+                <button
+                  onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
+                  className={`font-medium hover:underline ${portal.primary}`}
+                >
+                  {mode === 'login' ? 'Register' : 'Sign in'}
+                </button>
+              )}
             </p>
 
             <div className="mt-6 pt-4 border-t border-gray-200 text-center">

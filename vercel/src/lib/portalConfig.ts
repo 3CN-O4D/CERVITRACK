@@ -21,6 +21,7 @@ export interface PortalConfig {
   from: string;           // gradient from
   to: string;             // gradient to
   allowedRoles: PortalRole[];
+  allowRegister: boolean;
   pageTitle: string;      // big heading ("Login as Admin")
   pageHint: string;       // subheading hint
   iconColor: string;
@@ -39,6 +40,7 @@ export const PORTAL_CONFIG: Record<string, PortalConfig> = {
     from: 'from-amber-50',
     to: 'to-orange-50',
     allowedRoles: ['admin', 'system_admin', 'national_admin'],
+    allowRegister: false,
     pageTitle: 'Login as Admin',
     pageHint: 'Sign in to the CerviTrack administrative dashboard',
     iconColor: '#D97706',
@@ -56,6 +58,7 @@ export const PORTAL_CONFIG: Record<string, PortalConfig> = {
     from: 'from-emerald-50',
     to: 'to-teal-50',
     allowedRoles: ['clinician', 'provider'],
+    allowRegister: false,
     pageTitle: 'Login as Clinician',
     pageHint: 'Sign in to access your clinical workspace',
     iconColor: '#059669',
@@ -73,6 +76,7 @@ export const PORTAL_CONFIG: Record<string, PortalConfig> = {
     from: 'from-violet-50',
     to: 'to-purple-50',
     allowedRoles: ['lab_technician'],
+    allowRegister: false,
     pageTitle: 'Login as Lab Technician',
     pageHint: 'Sign in to manage sample processing and results',
     iconColor: '#7C3AED',
@@ -90,6 +94,7 @@ export const PORTAL_CONFIG: Record<string, PortalConfig> = {
     from: 'from-rose-50',
     to: 'to-pink-50',
     allowedRoles: ['county_admin', 'system_admin', 'national_admin'],
+    allowRegister: false,
     pageTitle: 'Login as County Admin',
     pageHint: 'Sign in to manage your county\'s health programs',
     iconColor: '#E11D48',
@@ -107,6 +112,7 @@ export const PORTAL_CONFIG: Record<string, PortalConfig> = {
     from: 'from-sky-50',
     to: 'to-blue-50',
     allowedRoles: ['patient'],
+    allowRegister: true,
     pageTitle: 'Login as Patient',
     pageHint: 'Use the CerviTrack mobile app for the full experience',
     iconColor: '#0284C7',

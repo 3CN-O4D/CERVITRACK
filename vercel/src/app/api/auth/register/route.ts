@@ -10,6 +10,12 @@ export async function POST(req: NextRequest) {
     }
 
     const userRole = role || 'patient';
+    if (userRole !== 'patient') {
+      return NextResponse.json(
+        { error: 'Public registration is only available for patients. Staff accounts are created by an administrator.' },
+        { status: 403 },
+      );
+    }
 
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,

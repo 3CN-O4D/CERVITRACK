@@ -4,7 +4,6 @@ import { getRequestUser, unauthorized, forbidden } from '@/lib/api-auth';
 const PUBLIC_PREFIXES = [
   '/api/auth/login',
   '/api/auth/register',
-  '/api/auth/register-provider',
   '/api/sample-kits',
   '/api/batches',
   '/api/providers/login',
