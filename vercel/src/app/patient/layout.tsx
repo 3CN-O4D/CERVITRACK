@@ -75,6 +75,13 @@ export default function PatientLayout({
     { label: 'Messages', href: '/patient/messages', disabled: userRole !== 'patient' },
     { label: 'Care Team', href: '/patient/consent', disabled: userRole !== 'patient' },
     { label: 'Profile', href: '/patient/profile', disabled: userRole !== 'patient' },
+    { label: 'Health', href: '/patient/health', disabled: userRole !== 'patient' },
+    { label: 'Library', href: '/patient/library', disabled: userRole !== 'patient' },
+    { label: 'Telehealth', href: '/patient/telehealth', disabled: userRole !== 'patient' },
+    { label: 'Reminders', href: '/patient/reminders', disabled: userRole !== 'patient' },
+    { label: 'Clinicians', href: '/patient/clinicians', disabled: userRole !== 'patient' },
+    { label: 'AI Assistant', href: '/patient/assistant', disabled: userRole !== 'patient' },
+    { label: 'Feedback', href: '/patient/feedback', disabled: userRole !== 'patient' },
     { label: 'Sign Out', href: '/auth?signout', disabled: false },
   ];
 
