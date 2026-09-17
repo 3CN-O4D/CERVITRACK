@@ -138,31 +138,6 @@ export default function MessagesScreen({ navigation }: any) {
 
   useEffect(() => {
     (async () => {
-      // Fetch approved clinicians from providers table
-      try {
-        const { searchClinicians } = await import('../services/api');
-        const clinicians = await searchClinicians();
-        if (clinicians && clinicians.length > 0) {
-          const mapped: Contact[] = clinicians.map((c: any) => ({
-            id: String(c.id),
-            name: c.name,
-            role: 'Clinician',
-            specialty: c.specialty || '',
-            hospital: c.hospital || '',
-            online: false,
-            lastMessage: 'Tap to start chatting',
-            lastTime: '',
-            unread: 0,
-            initials: c.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase(),
-          }));
-          setContacts(mapped);
-          await setItemEnc(`${CONTACTS_KEY}_${user?.id || 'default'}`, JSON.stringify(mapped));
-          setLoaded(true);
-          return;
-        }
-      } catch { /* fall through */ }
-
-      // Fallback: try chat_contacts table
       try {
         const dbContacts = await getChatContacts();
         if (dbContacts && dbContacts.length > 0) {
@@ -185,12 +160,9 @@ export default function MessagesScreen({ navigation }: any) {
         }
       } catch { /* fall through */ }
 
-      // Fallback to local storage
       const uid = user?.id || 'default';
       const raw = await getItemEnc(`${CONTACTS_KEY}_${uid}`);
-      if (raw) {
-        setContacts(JSON.parse(raw));
-      }
+      if (raw) setContacts(JSON.parse(raw));
       setLoaded(true);
     })();
   }, [user?.id]);

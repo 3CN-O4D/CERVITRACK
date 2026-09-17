@@ -10,6 +10,8 @@ export default function PatientMessages() {
   const router = useRouter();
   const [user, setUser] = useState({ id: '' });
   const [conversations, setConversations] = useState<any[]>([]);
+  const [contacts, setContacts] = useState<any[]>([]);
+  const [showPicker, setShowPicker] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -21,10 +23,17 @@ export default function PatientMessages() {
       }
       setUser({ id: session.user.id });
       try {
-        const res = await apiFetch('/api/chats/conversations?user_id=' + session.user.id);
-        if (res.ok) {
-          const d = await res.json();
+        const [convRes, contactRes] = await Promise.all([
+          apiFetch('/api/chats/conversations?user_id=' + session.user.id),
+          apiFetch('/api/chats/contacts'),
+        ]);
+        if (convRes.ok) {
+          const d = await convRes.json();
           setConversations(Array.isArray(d) ? d : []);
+        }
+        if (contactRes.ok) {
+          const d = await contactRes.json();
+          setContacts(Array.isArray(d) ? d : []);
         }
       } catch { }
       setLoading(false);
@@ -32,11 +41,57 @@ export default function PatientMessages() {
     init();
   }, [router]);
 
+  async function startConversation(contact: any) {
+    try {
+      const res = await apiFetch('/api/chats/conversations/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: user.id, contact_id: contact.id }),
+      });
+      if (res.ok) {
+        const conv = await res.json();
+        router.push(`/patient/messages/${conv.id}`);
+      }
+    } catch { }
+  }
+
   if (loading) return <div className="h-96 flex items-center justify-center text-gray-500">Loading…</div>;
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Messages</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Messages</h1>
+        <button
+          onClick={() => setShowPicker((v) => !v)}
+          className="rounded bg-primary px-4 py-2 text-white font-medium text-sm hover:bg-primary/90 transition-colors"
+        >
+          {showPicker ? 'Close' : 'New message'}
+        </button>
+      </div>
+
+      {showPicker && (
+        <div className="rounded-lg border bg-white p-3 shadow-sm">
+          {contacts.length === 0 ? (
+            <p className="text-sm text-gray-500">No contacts available.</p>
+          ) : (
+            <ul className="space-y-1 max-h-64 overflow-y-auto">
+              {contacts.map((c) => (
+                <li key={c.id}>
+                  <button
+                    onClick={() => startConversation(c)}
+                    className="w-full text-left rounded px-3 py-2 hover:bg-gray-50 transition-colors"
+                  >
+                    <p className="font-medium text-sm">{c.name}</p>
+                    <p className="text-xs text-gray-500">
+                      {[c.specialty, c.hospital].filter(Boolean).join(' · ') || c.role}
+                    </p>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       {conversations.length === 0 ? (
         <p className="text-gray-500">No conversations yet.</p>

@@ -473,31 +473,20 @@ export async function getClinicianById(id: string): Promise<Clinician | null> {
 export async function getChatContacts() {
   const local = localDb.getChatContacts();
   try {
-    const { data: providers, error } = await supabase
-      .from('providers')
-      .select('id, name, specialty, hospital, approval_status')
-      .eq('approval_status', 'approved')
+    const { data, error } = await supabase
+      .from('chat_contacts')
+      .select('id, user_id, name, role, specialty, hospital, online')
       .order('name', { ascending: true });
-    if (!error && providers && providers.length > 0) {
-      const contacts = providers.map((p: any) => ({
-        id: p.id, name: p.name, role: 'clinician',
-        specialty: p.specialty || '', hospital: p.hospital || '', online: false,
-      }));
+    if (error) throw error;
+    const { data: authData } = await supabase.auth.getUser();
+    const selfId = authData?.user?.id;
+    const contacts = (data ?? []).filter((c: any) => c.user_id && c.user_id !== selfId);
+    if (contacts.length > 0) {
       localDb.saveChatContacts(contacts);
       return contacts;
     }
   } catch { /* fall through */ }
-  if (local.length > 0) return local;
-  // Fallback to chat_contacts
-  try {
-    const { data, error } = await supabase
-      .from('chat_contacts')
-      .select('*')
-      .order('id', { ascending: true });
-    if (error) throw error;
-    localDb.saveChatContacts(data ?? []);
-    return data ?? [];
-  } catch { return local; }
+  return local;
 }
 
 export async function getProvidersForChat(): Promise<Clinician[]> {
@@ -1111,6 +1100,24 @@ export async function collectKit(barcode: string, data: { collectedBy: string; c
   try {
     const notes = data.phone ? `${data.notes || ''} | Contact: ${data.phone}`.trim() : (data.notes || '');
     const res = await fetch(KIT_API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'collect', barcode, ...data, notes }) });
+    if (res.ok) return await res.json();
+    return null;
+  } catch { return null; }
+}
+
+export async function patientCollectKit(barcode: string, data: { collectedBy: string; collectedByName: string; collectionMethod: string; location?: string; notes?: string; phone?: string }): Promise<Kit | null> {
+  try {
+    const notes = data.phone ? `${data.notes || ''} | Contact: ${data.phone}`.trim() : (data.notes || '');
+    const res = await fetch(KIT_API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'collect-patient', barcode, ...data, notes }) });
+    if (res.ok) return await res.json();
+    return null;
+  } catch { return null; }
+}
+
+export async function transitKit(barcode: string, data: { scannedBy: string; scannedByName: string; fromLocation?: string; toLocation?: string; notes?: string }): Promise<Kit | null> {
+  try {
+    localDb.saveSampleKit({ barcode, status: 'IN_TRANSIT', sync_status: 'pending' } as any, 'pending');
+    const res = await fetch(KIT_API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'transit', barcode, ...data }) });
     if (res.ok) return await res.json();
     return null;
   } catch { return null; }

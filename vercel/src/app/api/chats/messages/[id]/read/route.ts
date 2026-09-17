@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { getRequestUser, ownsPatientRow, hasConsentGrant, forbidden } from '@/lib/api-auth';
+import { getRequestUser, ownsPatientRow, hasConsentGrant, isChatContact, forbidden } from '@/lib/api-auth';
 
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -14,13 +14,13 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     if (!msg) return forbidden();
     const { data: conv } = await supabaseAdmin
       .from('chat_conversations')
-      .select('user_id')
+      .select('user_id, contact_id')
       .eq('id', msg.conversation_id)
       .maybeSingle();
-    if (!ownsPatientRow(user, conv?.user_id)) return forbidden();
-    if (user.role !== 'patient') {
+    if (!ownsPatientRow(user, conv?.user_id)) {
       const granted = await hasConsentGrant(conv?.user_id, user.userId);
-      if (!granted) return forbidden();
+      const isContact = await isChatContact(conv?.contact_id, user.userId);
+      if (!granted && !isContact) return forbidden();
     }
 
     const { data, error } = await supabaseAdmin

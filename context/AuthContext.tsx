@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, Rea
 import { supabase } from '../lib/supabase/client';
 import { getItem, setItem, removeItem } from '../services/storage';
 import { saveUser as saveUserToLocal, getCurrentUser, clearAllData, updateUserLocally, markUserSynced } from '../services/localDb';
+import { uploadToCloudinary } from '../lib/cloudinary';
 import type { User } from './types';
 
 interface AuthContextType {
@@ -14,7 +15,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   loginByPhone: (phone: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (name: string, email: string, phone: string, password: string, role: string, location?: string, county?: string, subCounty?: string, ward?: string, photoUri?: string) => Promise<{ success: boolean; error?: string }>;
-  updateProfile: (updates: Partial<User>) => Promise<void>;
+  updateProfile: (updates: Partial<User>) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
 }
 
@@ -233,6 +234,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const register = useCallback(
     async (name: string, email: string, phone: string, password: string, role: string, location?: string, county?: string, subCounty?: string, ward?: string, photoUri?: string) => {
       try {
+        let photoUrl: string | null = photoUri || null;
+        if (photoUri && !/^(https?:|data:)/.test(photoUri)) {
+          try { photoUrl = await uploadToCloudinary(photoUri); } catch { photoUrl = null; }
+        }
+
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
@@ -245,7 +251,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               county,
               sub_county: subCounty,
               ward,
-              photo: photoUri ?? null,
+              photo: photoUrl,
               consent_terms: true,
               consent_medical: true,
               consent_at: new Date().toISOString(),
@@ -274,7 +280,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           email,
           phone,
           role: role || 'patient',
-          photo: photoUri || null,
+          photo: photoUrl,
           county: county || '',
           sub_county: subCounty || '',
           ward: ward || '',
@@ -291,7 +297,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Save user to local SQLite (password is never stored locally)
         saveUserToLocal({
           id: uid, name, email, phone, role: role || 'patient',
-          photo: photoUri || null, county: county || '', sub_county: subCounty || '',
+          photo: photoUrl, county: county || '', sub_county: subCounty || '',
           ward: ward || '', patient_id: patientId, created_at: new Date().toISOString(),
         });
 
@@ -312,8 +318,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  const updateProfile = useCallback(async (updates: Partial<User>) => {
-    if (!user) return;
+  const updateProfile = useCallback(async (updates: Partial<User>): Promise<{ success: boolean; error?: string }> => {
+    if (!user) return { success: false, error: 'Not signed in' };
     const payload: any = {};
     if (updates.name) payload.name = updates.name;
     if (updates.phone) payload.phone = updates.phone;
@@ -341,9 +347,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .update(payload)
       .eq('id', user.id);
 
-    if (!error) {
-      markUserSynced(user.id);
+    if (error) {
+      return { success: false, error: error.message };
     }
+    markUserSynced(user.id);
+    return { success: true };
   }, [user]);
 
   const logout = useCallback(async () => {

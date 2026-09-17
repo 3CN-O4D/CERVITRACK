@@ -89,6 +89,7 @@ export async function getKitStats(facilityId?: string) {
   const total = list.length;
   const registered = byStatus['REGISTERED'] || 0;
   const paired = byStatus['PAIRED'] || 0;
+  const withPatient = byStatus['WITH_PATIENT'] || 0;
   const collected = byStatus['COLLECTED'] || 0;
   const inTransit = byStatus['IN_TRANSIT'] || 0;
   const inLab = byStatus['IN_LAB'] || 0;
@@ -97,16 +98,16 @@ export async function getKitStats(facilityId?: string) {
 
   // Available = registered but not yet paired/given out
   const available = registered;
-  // Given out = paired + collected + in_transit + in_lab + processed
-  const givenOut = paired + collected + inTransit + inLab + processed;
-  // In pipeline = collected + in_transit + in_lab (samples being processed)
-  const inPipeline = collected + inTransit + inLab;
+  // Given out = paired + with_patient + collected + in_transit + in_lab + processed
+  const givenOut = paired + withPatient + collected + inTransit + inLab + processed;
+  // In pipeline = with_patient + collected + in_transit + in_lab (samples taken, being handled)
+  const inPipeline = withPatient + collected + inTransit + inLab;
   // Pending requests
   const requested = requestedCount || 0;
 
   return {
     total, byStatus,
-    registered, paired, collected, inTransit, inLab, processed, unregistered,
+    registered, paired, withPatient, collected, inTransit, inLab, processed, unregistered,
     available, givenOut, inPipeline, requested,
   };
 }
@@ -157,10 +158,30 @@ export async function pairKit(barcode: string, data: { patientId: string; patien
   return { kit: await getKit(barcode) };
 }
 
-export async function collectKit(barcode: string, data: { collectedBy: string; collectedByName: string; collectionMethod: string; facilityId?: string; location?: string; notes?: string }) {
+export async function collectByPatientKit(barcode: string, data: { collectedBy: string; collectedByName: string; collectionMethod: string; facilityId?: string; location?: string; notes?: string }) {
   const kit = await getKit(barcode);
   if (!kit) return { error: 'Kit not found', status: 404 };
   if (kit.status !== 'PAIRED') return { error: `Kit is ${kit.status}`, status: 400 };
+
+  await supabaseAdmin
+    .from('sample_kits')
+    .update({
+      status: 'WITH_PATIENT',
+      collection_method: data.collectionMethod,
+      collected_at: new Date().toISOString(),
+      current_location: 'with_patient',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', kit.id);
+
+  await addEvent(kit.id, 'WITH_PATIENT', data.collectedBy, data.collectedByName, data.location, data.facilityId, `${data.collectionMethod} self-collected, awaiting handover. ${data.notes || ''}`);
+  return { kit: await getKit(barcode) };
+}
+
+export async function collectKit(barcode: string, data: { collectedBy: string; collectedByName: string; collectionMethod: string; facilityId?: string; location?: string; notes?: string }) {
+  const kit = await getKit(barcode);
+  if (!kit) return { error: 'Kit not found', status: 404 };
+  if (kit.status !== 'PAIRED' && kit.status !== 'WITH_PATIENT') return { error: `Kit is ${kit.status}`, status: 400 };
 
   await supabaseAdmin
     .from('sample_kits')

@@ -284,7 +284,7 @@ export default function PatientSelfSampling() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'collect',
+          action: 'collect-patient',
           barcode: barcode.trim(),
           collectedBy: 'self',
           collectedByName: profile.name || 'Patient (Self-Collection)',

@@ -18,7 +18,7 @@ import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-ico
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
-import { scanKit, registerKit, pairKit, collectKit, createKitRequest } from '../services/api';
+import { scanKit, registerKit, pairKit, patientCollectKit, createKitRequest } from '../services/api';
 
 const VIDEO_URL = 'https://youtu.be/njsHSnDGcDk';
 
@@ -176,7 +176,7 @@ export default function SelfSamplingScreen() {
         setKitLoading(false);
         return;
       }
-      const collected = await collectKit(barcode2.trim(), {
+      const collected = await patientCollectKit(barcode2.trim(), {
         collectedBy: 'self', collectedByName: user?.name || 'Patient (Self-Collection)',
         collectionMethod: 'HPV_SELF', location: 'home',
         phone: contactPhone || undefined,

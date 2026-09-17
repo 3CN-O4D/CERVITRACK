@@ -53,6 +53,52 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     })();
   }, []);
 
+  // Pull server-created notifications (appointments, results, alerts) and merge
+  // them with locally generated ones.
+  useEffect(() => {
+    let active = true;
+
+    const sync = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user?.id) return;
+        const { getNotifications } = await import('../services/api');
+        const remote = await getNotifications(session.user.id).catch(() => []);
+        if (!active || !Array.isArray(remote)) return;
+
+        setNotifications((prev) => {
+          const remoteMapped: AppNotification[] = remote.map((r: any) => ({
+            id: `remote_${r.id}`,
+            title: r.title || 'Notification',
+            message: r.message || '',
+            type: r.type,
+            read: !!r.read,
+            createdAt: r.created_at || new Date().toISOString(),
+          }));
+          const signature = (n: AppNotification) => `${n.title}|${n.message}|${(n.createdAt || '').slice(0, 16)}`;
+          const remoteSignatures = new Set(remoteMapped.map(signature));
+          const localKept = prev.filter(
+            (n) => !String(n.id).startsWith('remote_') && !remoteSignatures.has(signature(n)),
+          );
+          const merged = [...remoteMapped, ...localKept].sort(
+            (a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''),
+          );
+          setItem(NOTIF_KEY, JSON.stringify(merged)).catch(() => {});
+          return merged;
+        });
+      } catch { /* offline — keep cache */ }
+    };
+
+    sync();
+    const { data: sub } = supabase.auth.onAuthStateChange(() => sync());
+    const interval = setInterval(sync, 60000);
+    return () => {
+      active = false;
+      sub?.subscription?.unsubscribe?.();
+      clearInterval(interval);
+    };
+  }, []);
+
   const persist = useCallback(async (items: AppNotification[]) => {
     setNotifications(items);
     await setItem(NOTIF_KEY, JSON.stringify(items)).catch(() => {});

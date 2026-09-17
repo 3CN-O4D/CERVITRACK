@@ -58,7 +58,7 @@ CREATE TYPE vaccine_status AS ENUM ('scheduled','done','missed','cancelled');
 CREATE TYPE appointment_status AS ENUM ('pending','upcoming','completed','cancelled');
 CREATE TYPE notification_type AS ENUM ('info','reminder','alert','appointment','screening','admin','provider');
 CREATE TYPE message_type AS ENUM ('text','image','audio');
-CREATE TYPE kit_status AS ENUM ('UNREGISTERED','REGISTERED','PAIRED','COLLECTED','IN_TRANSIT','IN_LAB','PROCESSED');
+CREATE TYPE kit_status AS ENUM ('UNREGISTERED','REGISTERED','PAIRED','WITH_PATIENT','COLLECTED','IN_TRANSIT','IN_LAB','PROCESSED');
 CREATE TYPE batch_status AS ENUM ('receiving','testing','submitted');
 CREATE TYPE approval_status AS ENUM ('pending','approved','rejected');
 CREATE TYPE clinician_specialty AS ENUM ('oncologist','gynecologist','nurse_practitioner','public_health_officer','pathologist','general_practitioner','other');
@@ -306,6 +306,7 @@ CREATE TABLE articles (
 
 CREATE TABLE chat_contacts (
   id              bigserial PRIMARY KEY,
+  user_id         uuid REFERENCES users(id) ON DELETE CASCADE,
   name            text NOT NULL DEFAULT '',
   role            text DEFAULT '',
   specialty       text DEFAULT '',
@@ -313,6 +314,8 @@ CREATE TABLE chat_contacts (
   online          boolean DEFAULT false,
   last_updated    timestamptz DEFAULT now()
 );
+
+CREATE UNIQUE INDEX chat_contacts_user_id_key ON chat_contacts(user_id);
 
 CREATE TABLE chat_conversations (
   id              bigserial PRIMARY KEY,
@@ -765,14 +768,26 @@ INSERT INTO facilities (name, location, distance, phone, hours, services, county
 ('Kakamega County General Hospital', 'Kakamega Town', 0, '+254-56-202-1065', '8am-5pm', 'Screening, Treatment, Vaccination', 'Kakamega', 'Kakamega Central', 'Kakamega Town', 'secondary')
 ON CONFLICT DO NOTHING;
 
-INSERT INTO chat_contacts (name, role, specialty, hospital, online) VALUES
-('Dr. Amina Wanjiku', 'clinician', 'Oncologist', 'Kenyatta National Hospital', true),
-('Dr. James Ochieng', 'clinician', 'Gynecologist', 'Moi Teaching and Referral Hospital', true),
-('Nurse Sarah Kimani', 'clinician', 'Nurse Practitioner', 'Nakuru Level 5 Hospital', false),
-('Lab Tech Peter Mwangi', 'lab_technician', 'Pathologist', 'Coast General Hospital', true),
-('Dr. Faith Akinyi', 'clinician', 'Public Health Officer', 'Kisumu County Hospital', false),
-('System Administrator', 'admin', 'IT Support', 'CerviTrack HQ', true)
-ON CONFLICT DO NOTHING;
+-- Chat contacts are derived from real staff user accounts (no hardcoded list).
+CREATE OR REPLACE FUNCTION sync_chat_contact_for_user()
+RETURNS trigger AS $$
+BEGIN
+  IF NEW.role IN ('clinician','provider','lab_technician','facility_admin','county_admin','national_admin','system_admin','admin') THEN
+    INSERT INTO chat_contacts (user_id, name, role, online)
+    VALUES (NEW.id, NEW.name, NEW.role::text, false)
+    ON CONFLICT (user_id) DO UPDATE
+      SET name = EXCLUDED.name,
+          role = EXCLUDED.role,
+          last_updated = now();
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_users_chat_contact ON users;
+CREATE TRIGGER trg_users_chat_contact
+AFTER INSERT OR UPDATE OF name, role ON users
+FOR EACH ROW EXECUTE FUNCTION sync_chat_contact_for_user();
 
 CREATE OR REPLACE FUNCTION cleanup_orphaned_auth_users()
 RETURNS void AS $$

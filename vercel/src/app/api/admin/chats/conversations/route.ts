@@ -9,7 +9,8 @@ export async function GET(request: NextRequest) {
 
     const { data: contacts, error: contactsErr } = await supabaseAdmin
       .from('chat_contacts')
-      .select('*');
+      .select('id, user_id, name, role, specialty, hospital, online')
+      .not('user_id', 'is', null);
 
     if (contactsErr) throw contactsErr;
 
@@ -21,6 +22,9 @@ export async function GET(request: NextRequest) {
 
     if (grantsErr) throw grantsErr;
     const granted = new Set((grants || []).map((g) => g.patient_id));
+    const myContactIds = new Set(
+      (contacts || []).filter((c) => c.user_id === user.userId).map((c) => c.id)
+    );
 
     const { data: conversations, error: convErr } = await supabaseAdmin
       .from('chat_conversations')
@@ -29,7 +33,9 @@ export async function GET(request: NextRequest) {
 
     if (convErr) throw convErr;
 
-    const scoped = (conversations || []).filter((c) => granted.has(c.user_id));
+    const scoped = (conversations || []).filter(
+      (c) => granted.has(c.user_id) || myContactIds.has(c.contact_id)
+    );
 
     return NextResponse.json({
       contacts: contacts || [],

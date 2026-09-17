@@ -16,25 +16,26 @@ import { CameraView, useCameraPermissions, scanFromURLAsync } from 'expo-camera'
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
-import { scanKit, registerKit, pairKit, collectKit, linkKit, searchPatients, type Kit, type KitEvent } from '../services/api';
+import { scanKit, registerKit, pairKit, collectKit, patientCollectKit, linkKit, searchPatients, type Kit, type KitEvent } from '../services/api';
 import { getItem, setItem } from '../services/storage';
 import { supabase } from '../lib/supabase/client';
 import { scheduleLocalNotification, fireLocalNotification } from '../services/notifications';
 
 const { width } = Dimensions.get('window');
 
-type KitStatus = 'REGISTERED' | 'PAIRED' | 'COLLECTED' | 'IN_TRANSIT' | 'IN_LAB' | 'PROCESSED';
+type KitStatus = 'REGISTERED' | 'PAIRED' | 'WITH_PATIENT' | 'COLLECTED' | 'IN_TRANSIT' | 'IN_LAB' | 'PROCESSED';
 
 const STATUS_CONFIG: Record<KitStatus, { label: string; color: string; bg: string; icon: string }> = {
   REGISTERED: { label: 'Registered', color: '#2563EB', bg: '#EFF6FF', icon: '📋' },
   PAIRED: { label: 'Paired', color: '#D97706', bg: '#FFFBEB', icon: '🔗' },
+  WITH_PATIENT: { label: 'With Patient', color: '#CA8A04', bg: '#FEFCE8', icon: '🏠' },
   COLLECTED: { label: 'Collected', color: '#16A34A', bg: '#F0FDF4', icon: '✅' },
   IN_TRANSIT: { label: 'In Transit', color: '#9333EA', bg: '#FAF5FF', icon: '🚚' },
   IN_LAB: { label: 'At Lab', color: '#0891B2', bg: '#ECFEFF', icon: '🔬' },
   PROCESSED: { label: 'Results Ready', color: '#059669', bg: '#ECFDF5', icon: '📄' },
 };
 
-const STATUS_FLOW: KitStatus[] = ['REGISTERED', 'PAIRED', 'COLLECTED', 'IN_TRANSIT', 'IN_LAB', 'PROCESSED'];
+const STATUS_FLOW: KitStatus[] = ['REGISTERED', 'PAIRED', 'WITH_PATIENT', 'COLLECTED', 'IN_TRANSIT', 'IN_LAB', 'PROCESSED'];
 const KITS_LOG_KEY = '@cervitrack_kits';
 
 export default function KitTrackingScreen() {
@@ -239,7 +240,8 @@ export default function KitTrackingScreen() {
     setScanning(true);
     setError('');
     try {
-      const result = await collectKit(barcode, {
+      const collect = method === 'HPV_SELF' ? patientCollectKit : collectKit;
+      const result = await collect(barcode, {
         collectedBy: user?.id || 'self',
         collectedByName: user?.name || 'Patient (Self-Collection)',
         collectionMethod: method,
@@ -488,8 +490,9 @@ export default function KitTrackingScreen() {
                   {STATUS_CONFIG[kit.status as KitStatus]?.label}
                 </Text>
                 <Text style={[s.statusDesc, { color: colors.textSecondary }]}>
-                  {kit.status === 'REGISTERED' ? 'Scan to pair to your account' :
+                  {                   kit.status === 'REGISTERED' ? 'Scan to pair to your account' :
                    kit.status === 'PAIRED' ? 'Collect your sample when ready' :
+                   kit.status === 'WITH_PATIENT' ? 'Collected - still with you, awaiting pickup' :
                    kit.status === 'COLLECTED' ? 'Waiting for lab processing' :
                    kit.status === 'IN_TRANSIT' ? 'Sample being transported' :
                    kit.status === 'IN_LAB' ? 'Lab is processing your sample' :
@@ -559,6 +562,12 @@ export default function KitTrackingScreen() {
                   <Ionicons name="checkmark-circle" size={18} color="#FFF" />
                   <Text style={s.actionBtnText}>I Collected My Sample</Text>
                 </TouchableOpacity>
+              )}
+              {kit.status === 'WITH_PATIENT' && (
+                <View style={[s.infoBox, { backgroundColor: '#FEFCE8', borderColor: '#FDE68A' }]}>
+                  <Text style={[s.infoBoxText, { color: '#CA8A04' }]}>Collected, still with you.</Text>
+                  <Text style={[s.infoBoxSub, { color: colors.textSecondary }]}>Hand it over at a pickup point. It becomes Collected once the lab scans it.</Text>
+                </View>
               )}
               {kit.status === 'COLLECTED' && (
                 <View style={[s.infoBox, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }]}>

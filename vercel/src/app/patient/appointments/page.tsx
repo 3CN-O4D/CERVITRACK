@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase-browser';
 import { apiFetch } from '@/lib/api-fetch';
+import MonthCalendar from '@/components/MonthCalendar';
 
 interface Provider {
   id: string;
@@ -15,17 +16,6 @@ interface Provider {
 
 const TIME_SLOTS = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-function nextDates(count = 14): string[] {
-  const out: string[] = [];
-  const start = new Date();
-  for (let i = 1; i <= count; i++) {
-    const d = new Date(start);
-    d.setDate(start.getDate() + i);
-    out.push(d.toISOString().split('T')[0]);
-  }
-  return out;
-}
 
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr + 'T12:00:00');
@@ -47,6 +37,7 @@ export default function PatientAppointments() {
   const [selectedHospital, setSelectedHospital] = useState('');
   const [selectedProvider, setSelectedProvider] = useState<Provider | null>(null);
   const [anyAvailable, setAnyAvailable] = useState(false);
+  const [clinicianSearch, setClinicianSearch] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedTime, setSelectedTime] = useState('');
   const [patientNote, setPatientNote] = useState('');
@@ -91,11 +82,14 @@ export default function PatientAppointments() {
     () => Array.from(new Set(providers.map((p) => p.hospital).filter(Boolean))).sort() as string[],
     [providers]
   );
-  const hospitalProviders = useMemo(
-    () => (selectedHospital ? providers.filter((p) => p.hospital === selectedHospital) : providers),
-    [providers, selectedHospital]
-  );
-  const dates = useMemo(() => nextDates(14), []);
+  const visibleProviders = useMemo(() => {
+    const q = clinicianSearch.trim().toLowerCase();
+    return providers.filter((p) => {
+      if (selectedHospital && p.hospital !== selectedHospital) return false;
+      if (!q) return true;
+      return `${p.name} ${p.specialty || ''} ${p.hospital || ''}`.toLowerCase().includes(q);
+    });
+  }, [providers, selectedHospital, clinicianSearch]);
 
   const filtered = filterStatus === 'all' ? appointments : appointments.filter((a) => a.status === filterStatus);
   const activeCount = appointments.filter((a) => a.status === 'upcoming' || a.status === 'pending').length;
@@ -104,6 +98,7 @@ export default function PatientAppointments() {
     setSelectedHospital('');
     setSelectedProvider(null);
     setAnyAvailable(false);
+    setClinicianSearch('');
     setSelectedDate('');
     setSelectedTime('');
     setPatientNote('');
@@ -229,9 +224,16 @@ export default function PatientAppointments() {
               <button onClick={() => setShowBooking(false)} className="text-2xl leading-none text-gray-400">×</button>
             </div>
 
-            <label className="text-xs font-bold">Select Hospital</label>
+            <label className="text-xs font-bold">Search Clinician</label>
+            <input
+              value={clinicianSearch}
+              onChange={(e) => setClinicianSearch(e.target.value)}
+              placeholder="Search by name, specialty or hospital…"
+              className="mt-2 w-full rounded-2xl border-2 border-gray-200 p-3 text-sm focus:border-primary focus:outline-none"
+            />
+
+            <label className="mt-5 block text-xs font-bold">Filter by Hospital (optional)</label>
             <div className="mt-2 flex flex-wrap gap-2">
-              {hospitals.length === 0 && <p className="text-xs text-gray-500">No hospitals available.</p>}
               {hospitals.map((h) => (
                 <button key={h} onClick={() => { setSelectedHospital(selectedHospital === h ? '' : h); setSelectedProvider(null); }}
                   className={`rounded-full border px-3.5 py-1.5 text-xs font-semibold ${
@@ -250,7 +252,12 @@ export default function PatientAppointments() {
                 }`}>
                 <span>❓</span>{anyAvailable ? 'Any Available Selected' : "Any Available — I'll take whoever is free"}
               </button>
-              {hospitalProviders.map((p) => (
+              {visibleProviders.length === 0 && (
+                <p className="px-1 text-xs text-gray-500">
+                  {providers.length === 0 ? 'No clinicians available yet.' : 'No clinicians match your search.'}
+                </p>
+              )}
+              {visibleProviders.map((p) => (
                 <button key={p.id} onClick={() => { setSelectedProvider(p); setAnyAvailable(false); }}
                   className={`flex w-full items-center gap-3 rounded-2xl border-2 p-3 text-left ${
                     selectedProvider?.id === p.id ? 'border-primary bg-primary/5' : 'border-gray-200 bg-gray-50'
@@ -260,7 +267,9 @@ export default function PatientAppointments() {
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-bold">{p.name}</span>
-                    <span className="block truncate text-xs text-gray-500">{p.specialty || 'Clinician'}</span>
+                    <span className="block truncate text-xs text-gray-500">
+                      {[p.specialty, p.hospital].filter(Boolean).join(' · ') || 'Clinician'}
+                    </span>
                   </span>
                   {selectedProvider?.id === p.id && <span className="text-primary">✓</span>}
                 </button>
@@ -268,18 +277,8 @@ export default function PatientAppointments() {
             </div>
 
             <label className="mt-5 block text-xs font-bold">Select Date</label>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {dates.map((d) => {
-                const parts = d.split('-');
-                return (
-                  <button key={d} onClick={() => setSelectedDate(d)}
-                    className={`rounded-xl border px-3.5 py-2.5 text-xs font-semibold ${
-                      selectedDate === d ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-gray-50 text-gray-700'
-                    }`}>
-                    {parseInt(parts[2], 10)} {MONTHS[parseInt(parts[1], 10) - 1]}
-                  </button>
-                );
-              })}
+            <div className="mt-2">
+              <MonthCalendar value={selectedDate} onChange={setSelectedDate} />
             </div>
 
             <label className="mt-5 block text-xs font-bold">Select Time</label>

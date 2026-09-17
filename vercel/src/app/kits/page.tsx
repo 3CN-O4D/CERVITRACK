@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase-browser';
 import CodeInput from '@/components/CodeInput';
 
-type KitStatus = 'UNREGISTERED' | 'REGISTERED' | 'PAIRED' | 'COLLECTED' | 'IN_TRANSIT' | 'IN_LAB' | 'PROCESSED';
+type KitStatus = 'UNREGISTERED' | 'REGISTERED' | 'PAIRED' | 'WITH_PATIENT' | 'COLLECTED' | 'IN_TRANSIT' | 'IN_LAB' | 'PROCESSED';
 
 interface Kit {
   id: string;
@@ -30,13 +30,14 @@ interface KitEvent {
   timestamp: string;
 }
 
-const STATUS_FLOW: KitStatus[] = ['UNREGISTERED', 'REGISTERED', 'PAIRED', 'COLLECTED', 'IN_TRANSIT', 'IN_LAB', 'PROCESSED'];
+const STATUS_FLOW: KitStatus[] = ['UNREGISTERED', 'REGISTERED', 'PAIRED', 'WITH_PATIENT', 'COLLECTED', 'IN_TRANSIT', 'IN_LAB', 'PROCESSED'];
 
 const STATUS_CONFIG: Record<KitStatus, { label: string; color: string; icon: string; description: string }> = {
   UNREGISTERED: { label: 'New Kit', color: 'bg-gray-500', icon: '📦', description: 'Scan barcode to register this kit' },
   REGISTERED: { label: 'Registered', color: 'bg-blue-500', icon: '📋', description: 'Kit is registered. Pair it to your account.' },
   PAIRED: { label: 'Paired to You', color: 'bg-amber-500', icon: '🔗', description: 'Kit is paired. Collect your sample when ready.' },
-  COLLECTED: { label: 'Sample Collected', color: 'bg-green-500', icon: '✅', description: 'Sample collected. Waiting for lab processing.' },
+  WITH_PATIENT: { label: 'Collected — With You', color: 'bg-yellow-500', icon: '🏠', description: 'Sample collected and still with you. Return it for pickup.' },
+  COLLECTED: { label: 'Sample Collected', color: 'bg-green-500', icon: '✅', description: 'Sample received. Waiting for lab processing.' },
   IN_TRANSIT: { label: 'In Transit', color: 'bg-purple-500', icon: '🚚', description: 'Sample is being transported to the lab.' },
   IN_LAB: { label: 'At Lab', color: 'bg-cyan-500', icon: '🔬', description: 'Sample received at lab. Processing.' },
   PROCESSED: { label: 'Results Ready', color: 'bg-emerald-500', icon: '📄', description: 'Results are available.' },
@@ -111,6 +112,7 @@ export default function KitPage() {
         body.collectedByName = 'Patient (Self-Collection)';
         body.collectionMethod = extra?.method || 'HPV_SELF';
         body.location = 'home';
+        if ((extra?.method || 'HPV_SELF') === 'HPV_SELF') body.action = 'collect-patient';
       }
 
       const endpoint = '/api/sample-kits';
@@ -257,6 +259,13 @@ export default function KitPage() {
                   >
                     ✅ I Collected My Sample
                   </button>
+                )}
+
+                {kit.status === 'WITH_PATIENT' && (
+                  <div className="bg-yellow-900/30 border border-yellow-700 rounded-lg p-4 text-center">
+                    <p className="text-yellow-200 font-medium">Sample collected and still with you</p>
+                    <p className="text-gray-400 text-sm mt-1">Return it for pickup. It becomes Collected once the lab scans it.</p>
+                  </div>
                 )}
 
                 {kit.status === 'COLLECTED' && (

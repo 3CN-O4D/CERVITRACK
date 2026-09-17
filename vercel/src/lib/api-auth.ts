@@ -86,6 +86,18 @@ export async function hasConsentGrant(patientId: string | null | undefined, staf
   return !error && !!data;
 }
 
+// True when the given chat contact belongs to the staff member's real account.
+export async function isChatContact(contactId: number | string | null | undefined, staffId: string): Promise<boolean> {
+  if (contactId === null || contactId === undefined) return false;
+  const { data, error } = await getSupabaseAdmin()
+    .from('chat_contacts')
+    .select('id')
+    .eq('id', contactId)
+    .eq('user_id', staffId)
+    .maybeSingle();
+  return !error && !!data;
+}
+
 export function unauthorized(): NextResponse {
   return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
 }

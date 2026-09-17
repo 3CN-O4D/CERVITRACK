@@ -9,13 +9,14 @@ import BarcodeScanner from '@/components/BarcodeScanner';
 const VIABILITY_DAYS = 25;
 const LAB_PROCESSING_MINUTES = 99;
 
-type KitStatus = 'UNREGISTERED' | 'REGISTERED' | 'PAIRED' | 'COLLECTED' | 'IN_TRANSIT' | 'IN_LAB' | 'PROCESSED';
+type KitStatus = 'UNREGISTERED' | 'REGISTERED' | 'PAIRED' | 'WITH_PATIENT' | 'COLLECTED' | 'IN_TRANSIT' | 'IN_LAB' | 'PROCESSED';
 
 const STATUS_CONFIG: Record<KitStatus, { label: string; className: string; description: string }> = {
   UNREGISTERED: { label: 'New Kit', className: 'bg-gray-100 text-gray-700', description: 'Scan the kit barcode to register it.' },
   REGISTERED: { label: 'Registered', className: 'bg-blue-100 text-blue-700', description: 'Registered — link it to your account.' },
   PAIRED: { label: 'Paired to You', className: 'bg-amber-100 text-amber-700', description: 'Linked to you. Collect your sample when ready.' },
-  COLLECTED: { label: 'Sample Collected', className: 'bg-green-100 text-green-700', description: 'Sample collected. Keep it safe and return it for pickup.' },
+  WITH_PATIENT: { label: 'Collected — With You', className: 'bg-yellow-100 text-yellow-800', description: 'Sample collected. Keep it safe and return it for pickup.' },
+  COLLECTED: { label: 'Sample Collected', className: 'bg-green-100 text-green-700', description: 'Sample received. Waiting for lab processing.' },
   IN_TRANSIT: { label: 'In Transit', className: 'bg-purple-100 text-purple-700', description: 'Sample is on the way to the lab.' },
   IN_LAB: { label: 'At Lab', className: 'bg-cyan-100 text-cyan-700', description: 'Sample received. Processing is underway.' },
   PROCESSED: { label: 'Results Ready', className: 'bg-emerald-100 text-emerald-700', description: 'Results are available in My Results.' },
@@ -118,9 +119,9 @@ export default function PatientKits() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {kits.map((k) => {
           const cfg = STATUS_CONFIG[k.status as KitStatus] || STATUS_CONFIG.UNREGISTERED;
-          const remaining = (k.status === 'COLLECTED' || k.status === 'IN_TRANSIT' || k.status === 'IN_LAB') ? daysLeft(k.collected_at) : null;
+          const remaining = (k.status === 'WITH_PATIENT' || k.status === 'COLLECTED' || k.status === 'IN_TRANSIT' || k.status === 'IN_LAB') ? daysLeft(k.collected_at) : null;
           const etaTime = k.status === 'IN_LAB' ? eta(k.received_at_lab) : null;
-          const needsPickup = k.status === 'COLLECTED';
+          const needsPickup = k.status === 'WITH_PATIENT';
           return (
             <div key={k.id} className="rounded-lg border bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
               <div className="flex items-center justify-between">

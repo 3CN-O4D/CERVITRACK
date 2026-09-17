@@ -1,6 +1,7 @@
 'use client';
 
 import { apiFetch } from '@/lib/api-fetch';
+import { supabase } from '@/lib/supabase-browser';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -67,9 +68,22 @@ export default function ClinicianPortal() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showNotifs, setShowNotifs] = useState(false);
 
-  const providerId = typeof window !== 'undefined' ? localStorage.getItem('provider_id') || 'provider_1' : 'provider_1';
+  const [userId, setUserId] = useState('');
+  const [providerId, setProviderId] = useState('');
 
-  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.id) setUserId(user.id);
+      const res = await apiFetch('/api/providers/me');
+      if (res.ok) {
+        const provider = await res.json();
+        if (provider?.id) setProviderId(provider.id);
+      }
+    })();
+  }, []);
+
+  useEffect(() => { if (userId) fetchAll(); }, [userId, providerId]);
 
   async function fetchAll() {
     setLoading(true);
@@ -116,7 +130,7 @@ export default function ClinicianPortal() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           conversation_id: activeConvo.id,
-          sender_id: providerId,
+          sender_id: userId,
           content: newMessage.trim(),
         }),
       });
@@ -150,7 +164,7 @@ export default function ClinicianPortal() {
   async function acceptAppointment(appt: Appointment) {
     try {
       await apiFetch(`/api/appointments/${appt.id}/status`, {
-        method: 'POST',
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'upcoming' }),
       });
@@ -264,10 +278,10 @@ export default function ClinicianPortal() {
                   </div>
                   <div className="flex-1 overflow-y-auto p-6 space-y-3">
                     {messages.map(m => (
-                      <div key={m.id} className={`flex ${m.sender_id === providerId ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[70%] rounded-2xl px-4 py-2.5 ${m.sender_id === providerId ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-900'}`}>
+                      <div key={m.id} className={`flex ${m.sender_id === userId ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[70%] rounded-2xl px-4 py-2.5 ${m.sender_id === userId ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-900'}`}>
                           <p className="text-sm">{m.content}</p>
-                          <p className={`text-xs mt-1 ${m.sender_id === providerId ? 'text-blue-200' : 'text-gray-400'}`}>
+                          <p className={`text-xs mt-1 ${m.sender_id === userId ? 'text-blue-200' : 'text-gray-400'}`}>
                             {new Date(m.created_at).toLocaleTimeString()}
                           </p>
                         </div>

@@ -37,6 +37,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
   UNREGISTERED: { label: 'Unregistered', color: '#6B7280', bg: '#F3F4F6', icon: '📦' },
   REGISTERED: { label: 'Available', color: '#2563EB', bg: '#DBEAFE', icon: '✓' },
   PAIRED: { label: 'Given Out', color: '#D97706', bg: '#FEF3C7', icon: '👤' },
+  WITH_PATIENT: { label: 'With Patient', color: '#CA8A04', bg: '#FEF9C3', icon: '🏠' },
   COLLECTED: { label: 'Sample Taken', color: '#7C3AED', bg: '#EDE9FE', icon: '🧪' },
   IN_TRANSIT: { label: 'In Transit', color: '#0891B2', bg: '#ECFEFF', icon: '🚚' },
   IN_LAB: { label: 'At Lab', color: '#059669', bg: '#D1FAE5', icon: '🔬' },
@@ -189,7 +190,7 @@ export default function KitInventoryPage() {
       <div className="bg-white rounded-xl border border-gray-200 p-6 mb-8">
         <h3 className="text-sm font-bold text-gray-500 uppercase mb-4">Kit Lifecycle</h3>
         <div className="flex items-center gap-2 overflow-x-auto pb-2">
-          {['REGISTERED', 'PAIRED', 'COLLECTED', 'IN_TRANSIT', 'IN_LAB', 'PROCESSED'].map((st, i) => {
+          {['REGISTERED', 'PAIRED', 'WITH_PATIENT', 'COLLECTED', 'IN_TRANSIT', 'IN_LAB', 'PROCESSED'].map((st, i) => {
             const cfg = STATUS_CONFIG[st];
             const count = stats?.[st.toLowerCase() as keyof KitStats] || 0;
             return (

@@ -27,7 +27,7 @@ type RegStep = 'info' | 'otp';
 
 export default function AuthScreen() {
   const { colors } = useTheme();
-  const { login, loginByPhone, register, updateProfile } = useAuth();
+  const { login, loginByPhone, register } = useAuth();
   const { t } = useTranslation();
 
   const [tab, setTab] = useState<'login' | 'register'>('login');
@@ -110,9 +110,6 @@ export default function AuthScreen() {
       ward,
       photoUri,
     );
-    if (result.success && photoUri) {
-      updateProfile({ photo: photoUri });
-    }
     setLoading(false);
     if (!result.success) {
       setError(result.error || 'Registration failed');

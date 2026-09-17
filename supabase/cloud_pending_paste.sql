@@ -2,6 +2,8 @@
 -- Concatenation of:
 --   supabase/migrations/20260917090000_consent_grants.sql
 --   supabase/migrations/20260917093000_chat_edit_delete.sql
+--   supabase/migrations/20260917120000_chat_real_contacts.sql
+--   supabase/migrations/20260917130000_kit_with_patient_status.sql
 -- Safe to re-run: all statements are idempotent.
 
 -- ============================================================
@@ -69,3 +71,71 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM chat_conversations cc WHERE cc.id = p_conversation_id AND cc.user_id = auth.uid()) THEN RETURN; END IF;
   UPDATE chat_messages SET read = true, status = 'read' WHERE conversation_id = p_conversation_id AND sender_id <> auth.uid();
 END; $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+-- ============================================================
+-- chat_contacts now mirror real staff accounts (no hardcoded list).
+--   supabase/migrations/20260917120000_chat_real_contacts.sql
+-- ============================================================
+
+ALTER TABLE chat_contacts
+  ADD COLUMN IF NOT EXISTS user_id uuid REFERENCES users(id) ON DELETE CASCADE;
+
+CREATE UNIQUE INDEX IF NOT EXISTS chat_contacts_user_id_key ON chat_contacts(user_id);
+
+UPDATE chat_contacts c
+SET user_id = u.id
+FROM users u
+WHERE c.user_id IS NULL
+  AND u.name = c.name
+  AND u.role IN ('clinician','provider','lab_technician','facility_admin','county_admin','national_admin','system_admin','admin');
+
+UPDATE chat_conversations conv
+SET contact_name = u.name
+FROM chat_contacts c
+JOIN users u ON u.id = c.user_id
+WHERE conv.contact_id = c.id;
+
+INSERT INTO chat_contacts (user_id, name, role, specialty, hospital, online)
+SELECT u.id,
+       u.name,
+       u.role::text,
+       COALESCE(p.specialty, ''),
+       COALESCE(p.hospital, ''),
+       false
+FROM users u
+LEFT JOIN providers p ON p.email = u.email
+WHERE u.role IN ('clinician','provider','lab_technician','facility_admin','county_admin','national_admin','system_admin','admin')
+ON CONFLICT (user_id) DO UPDATE
+  SET name = EXCLUDED.name,
+      role = EXCLUDED.role,
+      specialty = EXCLUDED.specialty,
+      hospital = EXCLUDED.hospital,
+      last_updated = now();
+
+DELETE FROM chat_contacts WHERE user_id IS NULL;
+
+CREATE OR REPLACE FUNCTION sync_chat_contact_for_user()
+RETURNS trigger AS $$
+BEGIN
+  IF NEW.role IN ('clinician','provider','lab_technician','facility_admin','county_admin','national_admin','system_admin','admin') THEN
+    INSERT INTO chat_contacts (user_id, name, role, online)
+    VALUES (NEW.id, NEW.name, NEW.role::text, false)
+    ON CONFLICT (user_id) DO UPDATE
+      SET name = EXCLUDED.name,
+          role = EXCLUDED.role,
+          last_updated = now();
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_users_chat_contact ON users;
+CREATE TRIGGER trg_users_chat_contact
+AFTER INSERT OR UPDATE OF name, role ON users
+FOR EACH ROW EXECUTE FUNCTION sync_chat_contact_for_user();
+
+-- ============================================================
+-- kit_status: WITH_PATIENT (patient-collected, still with patient).
+-- ============================================================
+
+ALTER TYPE kit_status ADD VALUE IF NOT EXISTS 'WITH_PATIENT' AFTER 'PAIRED';

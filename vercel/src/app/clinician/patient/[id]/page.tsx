@@ -60,9 +60,19 @@ export default function ClinicianPatientProfile({ params }: { params: { id: stri
   const [bookForm, setBookForm] = useState({ date: '', time: '', title: '', notes: '', custom_text: '' });
   const [success, setSuccess] = useState('');
 
-  const providerId = typeof window !== 'undefined' ? localStorage.getItem('provider_id') || 'provider_1' : 'provider_1';
+  const [providerId, setProviderId] = useState('');
 
   useEffect(() => { fetchPatient(); }, [id]);
+
+  useEffect(() => {
+    (async () => {
+      const res = await apiFetch('/api/providers/me');
+      if (res.ok) {
+        const provider = await res.json();
+        if (provider?.id) setProviderId(provider.id);
+      }
+    })();
+  }, []);
 
   async function fetchPatient() {
     setLoading(true);

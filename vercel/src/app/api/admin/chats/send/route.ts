@@ -6,17 +6,26 @@ export async function POST(request: NextRequest) {
   try {
     const user = await getRequestUser(request);
     if (!user) return forbidden();
-    const { conversation_id, sender_id, content } = await request.json();
+    const { conversation_id, content } = await request.json();
+    if (!conversation_id || !content?.trim()) {
+      return NextResponse.json({ error: 'Missing conversation or content' }, { status: 400 });
+    }
 
     const { data: conv } = await supabaseAdmin
       .from('chat_conversations')
-      .select('user_id')
+      .select('user_id, contact_id')
       .eq('id', conversation_id)
       .maybeSingle();
     if (!conv) return forbidden();
     const granted = await hasConsentGrant(conv.user_id, user.userId);
-    if (!granted) return forbidden();
-    const scopedSender = sender_id || user.userId;
+    const { data: contact } = await supabaseAdmin
+      .from('chat_contacts')
+      .select('id')
+      .eq('id', conv.contact_id)
+      .eq('user_id', user.userId)
+      .maybeSingle();
+    if (!granted && !contact) return forbidden();
+    const scopedSender = user.userId;
 
     const { data: msg, error: msgErr } = await supabaseAdmin
       .from('chat_messages')

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { listKits, registerKit, pairKit, collectKit, transitKit, receiveKit, enterResults } from '@/lib/kit-store';
+import { listKits, registerKit, pairKit, collectKit, collectByPatientKit, transitKit, receiveKit, enterResults } from '@/lib/kit-store';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -25,6 +25,9 @@ export async function POST(req: NextRequest) {
       break;
     case 'pair':
       result = await pairKit(barcode, body);
+      break;
+    case 'collect-patient':
+      result = await collectByPatientKit(barcode, body);
       break;
     case 'collect':
       result = await collectKit(barcode, body);

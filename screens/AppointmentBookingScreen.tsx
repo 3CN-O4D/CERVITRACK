@@ -18,6 +18,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useNotifications } from '../context/NotificationContext';
 import { searchClinicians, requestAppointment, getPatientAppointments } from '../services/api';
+import MonthCalendar from '../components/MonthCalendar';
 
 interface Appointment {
   id: number;
@@ -54,11 +55,11 @@ export default function AppointmentBookingScreen() {
   const [doctors, setDoctors] = useState<any[]>([]);
   const [selectedDoctor, setSelectedDoctor] = useState<any>(null);
   const [selectedHospital, setSelectedHospital] = useState('');
+  const [clinicianSearch, setClinicianSearch] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedTime, setSelectedTime] = useState('');
   const [bookingNotes, setBookingNotes] = useState('');
   const [patientNote, setPatientNote] = useState('');
-  const [fallbackDates, setFallbackDates] = useState<string[]>([]);
   const [bookingLoading, setBookingLoading] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [anyAvailable, setAnyAvailable] = useState(false);
@@ -74,10 +75,14 @@ export default function AppointmentBookingScreen() {
     return Array.from(hospitals).sort();
   }, [doctors]);
 
-  const filteredDoctors = useMemo(() => {
-    if (!selectedHospital) return doctors;
-    return doctors.filter((d: any) => d.hospital === selectedHospital);
-  }, [doctors, selectedHospital]);
+  const visibleDoctors = useMemo(() => {
+    const q = clinicianSearch.trim().toLowerCase();
+    return doctors.filter((d: any) => {
+      if (selectedHospital && d.hospital !== selectedHospital) return false;
+      if (!q) return true;
+      return `${d.name || ''} ${d.specialty || ''} ${d.hospital || ''}`.toLowerCase().includes(q);
+    });
+  }, [doctors, selectedHospital, clinicianSearch]);
 
   useEffect(() => {
     loadData();
@@ -114,27 +119,15 @@ export default function AppointmentBookingScreen() {
     setRefreshing(false);
   };
 
-  const generateFallbackDates = (count = 14): string[] => {
-    const dates: string[] = [];
-    const start = new Date();
-    for (let i = 1; i <= count && dates.length < count; i++) {
-      const d = new Date(start);
-      d.setDate(start.getDate() + i);
-      const iso = d.toISOString().split('T')[0];
-      dates.push(iso);
-    }
-    return dates;
-  };
-
   const openBookingForm = () => {
     setSelectedDoctor(null);
     setSelectedHospital('');
+    setClinicianSearch('');
     setSelectedDate('');
     setSelectedTime('');
     setAnyAvailable(false);
     setBookingNotes('');
     setPatientNote('');
-    setFallbackDates(generateFallbackDates());
     setShowBooking(true);
   };
 
@@ -373,7 +366,16 @@ export default function AppointmentBookingScreen() {
                 </TouchableOpacity>
               </View>
 
-              <Text style={[s.fieldLabel, { color: colors.text }]}>Select Hospital</Text>
+              <Text style={[s.fieldLabel, { color: colors.text }]}>Search Clinician</Text>
+              <TextInput
+                style={[s.searchInput, { backgroundColor: colors.inputBg, color: colors.text, borderColor: colors.border }]}
+                placeholder="Search by name, specialty or hospital..."
+                placeholderTextColor={colors.textSecondary}
+                value={clinicianSearch}
+                onChangeText={setClinicianSearch}
+              />
+
+              <Text style={[s.fieldLabel, { color: colors.text }]}>Filter by Hospital (optional)</Text>
               {uniqueHospitals.length === 0 && (
                 <Text style={{ color: colors.textSecondary, fontSize: 13, marginBottom: 8 }}>No hospitals available.</Text>
               )}
@@ -389,74 +391,46 @@ export default function AppointmentBookingScreen() {
                 ))}
               </ScrollView>
 
-              {selectedHospital ? (
-                <>
-                  <Text style={[s.fieldLabel, { color: colors.text }]}>Select Clinician at {selectedHospital}</Text>
-                  {filteredDoctors.length === 0 && (
-                    <>
-                      <Text style={{ color: colors.textSecondary, fontSize: 13, marginBottom: 8 }}>No clinicians listed at this hospital.</Text>
-                      <TouchableOpacity
-                        style={[s.anyAvailableBtn, { borderColor: colors.primary }, anyAvailable && { backgroundColor: colors.primary }]}
-                        onPress={() => { setAnyAvailable(!anyAvailable); setSelectedDoctor(null); }}
-                      >
-                        <MaterialCommunityIcons name="account-question" size={18} color={anyAvailable ? '#FFF' : colors.primary} />
-                        <Text style={[s.anyAvailableText, { color: anyAvailable ? '#FFF' : colors.primary }]}>
-                          {anyAvailable ? '✓ Any Available Selected' : 'Any Available — I\'ll take whoever is free'}
-                        </Text>
-                      </TouchableOpacity>
-                    </>
-                  )}
-                  {filteredDoctors.map((doc) => (
-                    <TouchableOpacity
-                      key={doc.id}
-                      style={[s.doctorItem, { backgroundColor: colors.inputBg, borderColor: colors.border }, selectedDoctor?.id === doc.id && { borderColor: colors.primary, backgroundColor: colors.primary + '10' }]}
-                      onPress={() => { setSelectedDoctor(doc); setAnyAvailable(false); }}
-                    >
-                      <View style={[s.avatar, { backgroundColor: colors.primary + '20' }]}>
-                        <Text style={[s.avatarText, { color: colors.primary }]}>
-                          {doc.name?.split(' ').slice(-2).map((n: string) => n[0]).join('')}
-                        </Text>
-                      </View>
-                      <View style={s.doctorInfo}>
-                        <Text style={[s.doctorName, { color: colors.text }]}>{doc.name}</Text>
-                        <Text style={[s.doctorSpecialty, { color: colors.textSecondary }]}>{doc.specialty || 'Clinician'}</Text>
-                      </View>
-                      {selectedDoctor?.id === doc.id && (
-                        <MaterialCommunityIcons name="check-circle" size={22} color={colors.primary} />
-                      )}
-                    </TouchableOpacity>
-                  ))}
-                </>
-              ) : (
-                <Text style={{ color: colors.textSecondary, fontSize: 13, marginBottom: 8 }}>Please select a hospital first.</Text>
+              <Text style={[s.fieldLabel, { color: colors.text }]}>Select Clinician</Text>
+              <TouchableOpacity
+                style={[s.anyAvailableBtn, { borderColor: colors.primary }, anyAvailable && { backgroundColor: colors.primary }]}
+                onPress={() => { setAnyAvailable(!anyAvailable); setSelectedDoctor(null); }}
+              >
+                <MaterialCommunityIcons name="account-question" size={18} color={anyAvailable ? '#FFF' : colors.primary} />
+                <Text style={[s.anyAvailableText, { color: anyAvailable ? '#FFF' : colors.primary }]}>
+                  {anyAvailable ? '✓ Any Available Selected' : 'Any Available — I\'ll take whoever is free'}
+                </Text>
+              </TouchableOpacity>
+              {visibleDoctors.length === 0 && (
+                <Text style={{ color: colors.textSecondary, fontSize: 13, marginBottom: 8 }}>
+                  {doctors.length === 0 ? 'No clinicians available yet.' : 'No clinicians match your search.'}
+                </Text>
               )}
+              {visibleDoctors.map((doc) => (
+                <TouchableOpacity
+                  key={doc.id}
+                  style={[s.doctorItem, { backgroundColor: colors.inputBg, borderColor: colors.border }, selectedDoctor?.id === doc.id && { borderColor: colors.primary, backgroundColor: colors.primary + '10' }]}
+                  onPress={() => { setSelectedDoctor(doc); setAnyAvailable(false); }}
+                >
+                  <View style={[s.avatar, { backgroundColor: colors.primary + '20' }]}>
+                    <Text style={[s.avatarText, { color: colors.primary }]}>
+                      {doc.name?.split(' ').slice(-2).map((n: string) => n[0]).join('')}
+                    </Text>
+                  </View>
+                  <View style={s.doctorInfo}>
+                    <Text style={[s.doctorName, { color: colors.text }]}>{doc.name}</Text>
+                    <Text style={[s.doctorSpecialty, { color: colors.textSecondary }]}>
+                      {[doc.specialty, doc.hospital].filter(Boolean).join(' · ') || 'Clinician'}
+                    </Text>
+                  </View>
+                  {selectedDoctor?.id === doc.id && (
+                    <MaterialCommunityIcons name="check-circle" size={22} color={colors.primary} />
+                  )}
+                </TouchableOpacity>
+              ))}
 
               <Text style={[s.fieldLabel, { color: colors.text }]}>Select Date</Text>
-              <View style={s.dateRow}>
-                {fallbackDates.map((d) => {
-                  const selected = selectedDate === d;
-                  const parts = d.split('-');
-                  const display = `${parseInt(parts[2])} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(parts[1])-1]}`;
-                  return (
-                    <TouchableOpacity
-                      key={d}
-                      style={[s.dateChip, { backgroundColor: colors.inputBg, borderColor: colors.border }, selected && { backgroundColor: colors.primary, borderColor: colors.primary }]}
-                      onPress={() => setSelectedDate(d)}
-                    >
-                      <Text style={[s.dateChipText, { color: selected ? '#FFF' : colors.text }]}>
-                        {display}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-              <TouchableOpacity
-                style={s.refreshDates}
-                onPress={() => setFallbackDates(generateFallbackDates())}
-              >
-                <Ionicons name="refresh" size={16} color={colors.primary} />
-                <Text style={[s.refreshDatesText, { color: colors.primary }]}>Show more dates</Text>
-              </TouchableOpacity>
+              <MonthCalendar value={selectedDate} onChange={setSelectedDate} />
 
               <Text style={[s.fieldLabel, { color: colors.text }]}>Select Time</Text>
               <View style={s.timeRow}>
@@ -569,6 +543,7 @@ const s = StyleSheet.create({
   refreshDates: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8, alignSelf: 'center' },
   refreshDatesText: { fontSize: 13, fontWeight: '600' },
   notesInput: { borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12, fontSize: 14, borderWidth: 1, minHeight: 80, textAlignVertical: 'top' },
+  searchInput: { borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12, fontSize: 14, borderWidth: 1 },
   timeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   timeChip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, borderWidth: 1 },
   timeChipText: { fontSize: 13, fontWeight: '600' },

@@ -761,7 +761,8 @@ export function saveChatContacts(contacts: any[]) {
 export function getChatContacts(): any[] {
   try {
     const database = getDb();
-    return database.getAllSync('SELECT * FROM chat_contacts ORDER BY name ASC');
+    const rows = database.getAllSync('SELECT * FROM chat_contacts ORDER BY name ASC') as any[];
+    return rows.map((r) => ({ ...r, id: r.remote_id ?? r.id }));
   } catch { return []; }
 }
 

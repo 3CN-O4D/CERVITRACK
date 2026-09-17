@@ -124,18 +124,22 @@ export default function ProfileScreen({ navigation }: any) {
     setSaving(true);
     try {
       let photoUrl = photo;
-      if (photo && !photo.startsWith('http')) {
+      const isRemote = !!photo && (photo.startsWith('http') || photo.startsWith('data:'));
+      if (photo && !isRemote) {
         try {
           photoUrl = await uploadToCloudinary(photo);
         } catch {
-          // If upload fails, keep local URI (will vanish on logout but at least saves now)
+          Alert.alert('Photo upload failed', 'Check your connection and try again. Your profile was not saved.');
+          return;
         }
       }
-      await updateProfile({ name, email, phone, birthDate, lastHealedDate, photo: photoUrl, county, subCounty, ward });
+      const result = await updateProfile({ name, email, phone, birthDate, lastHealedDate, photo: photoUrl, county, subCounty, ward });
+      if (!result.success) {
+        Alert.alert('Error', result.error || 'Failed to update profile.');
+        return;
+      }
       setPhoto(photoUrl);
       Alert.alert('Success', 'Profile updated successfully.');
-    } catch {
-      Alert.alert('Error', 'Failed to update profile.');
     } finally {
       setSaving(false);
     }

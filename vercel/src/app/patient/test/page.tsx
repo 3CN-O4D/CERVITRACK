@@ -19,6 +19,7 @@ const TIMELINE = [
 const STATUS_ORDER: Record<string, number> = {
   REGISTERED: -2,
   PAIRED: -1,
+  WITH_PATIENT: 0,
   COLLECTED: 0,
   IN_TRANSIT: 1,
   IN_LAB: 2,
@@ -211,7 +212,7 @@ export default function SampleAndSubmit() {
             </div>
           )}
 
-          {kit?.status === 'COLLECTED' && (
+          {['WITH_PATIENT', 'COLLECTED'].includes(kit?.status) && (
             <div className="rounded-2xl border bg-white p-6 shadow-sm">
               <h3 className="font-bold">Submit your sample</h3>
               <p className="mt-1 text-sm text-gray-600">

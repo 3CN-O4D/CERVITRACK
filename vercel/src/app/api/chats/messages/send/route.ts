@@ -2,30 +2,46 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getRequestUser, ownsPatientRow, hasConsentGrant, forbidden } from '@/lib/api-auth';
 
+async function staffOwnsContact(contactId: number | null | undefined, staffId: string): Promise<boolean> {
+  if (!contactId) return false;
+  const { data } = await supabaseAdmin
+    .from('chat_contacts')
+    .select('id')
+    .eq('id', contactId)
+    .eq('user_id', staffId)
+    .maybeSingle();
+  return !!data;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const user = await getRequestUser(request);
     if (!user) return forbidden();
-    const { conversation_id, sender_id, sender_type, content } = await request.json();
+    const { conversation_id, content } = await request.json();
+    if (!conversation_id || !content?.trim()) {
+      return NextResponse.json({ error: 'Missing conversation or content' }, { status: 400 });
+    }
 
     const { data: conv } = await supabaseAdmin
       .from('chat_conversations')
-      .select('user_id')
+      .select('user_id, contact_id')
       .eq('id', conversation_id)
       .maybeSingle();
-    if (!ownsPatientRow(user, conv?.user_id)) return forbidden();
-    if (user.role !== 'patient') {
-      const granted = await hasConsentGrant(conv?.user_id, user.userId);
-      if (!granted) return forbidden();
-    }
-    const scopedSender = user.role === 'patient' ? user.userId : sender_id;
+    if (!conv) return forbidden();
 
+    if (!ownsPatientRow(user, conv.user_id)) {
+      const granted = await hasConsentGrant(conv.user_id, user.userId);
+      const isContact = await staffOwnsContact(conv.contact_id, user.userId);
+      if (!granted && !isContact) return forbidden();
+    }
+
+    const senderType = user.role === 'patient' ? 'patient' : 'staff';
     const { data: msg, error: msgErr } = await supabaseAdmin
       .from('chat_messages')
       .insert({
         conversation_id,
-        sender_id: scopedSender,
-        sender_type,
+        sender_id: user.userId,
+        sender_type: senderType,
         content,
         message_type: 'text',
         status: 'sent',

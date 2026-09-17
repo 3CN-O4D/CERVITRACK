@@ -1,31 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { getRequestUser, ownsPatientRow, hasConsentGrant, forbidden } from '@/lib/api-auth';
+import { getRequestUser, ownsPatientRow, hasConsentGrant, isChatContact, forbidden } from '@/lib/api-auth';
 
 export async function POST(request: NextRequest) {
   try {
     const user = await getRequestUser(request);
     if (!user) return forbidden();
-    const { conversation_id, sender_id, sender_type, content, file_url } = await request.json();
+    const { conversation_id, content, file_url } = await request.json();
 
     const { data: conv } = await supabaseAdmin
       .from('chat_conversations')
-      .select('user_id')
+      .select('user_id, contact_id')
       .eq('id', conversation_id)
       .maybeSingle();
-    if (!conv || !ownsPatientRow(user, conv.user_id)) return forbidden();
-    if (user.role !== 'patient') {
+    if (!conv) return forbidden();
+    if (!ownsPatientRow(user, conv.user_id)) {
       const granted = await hasConsentGrant(conv.user_id, user.userId);
-      if (!granted) return forbidden();
+      const isContact = await isChatContact(conv.contact_id, user.userId);
+      if (!granted && !isContact) return forbidden();
     }
-    const scopedSender = user.role === 'patient' ? user.userId : sender_id;
+    const scopedSender = user.userId;
+    const senderType = user.role === 'patient' ? 'patient' : 'staff';
 
     const { data: msg, error: msgErr } = await supabaseAdmin
       .from('chat_messages')
       .insert({
         conversation_id,
         sender_id: scopedSender,
-        sender_type,
+        sender_type: senderType,
         content: content || '',
         file_url,
         message_type: 'image',

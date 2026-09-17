@@ -58,6 +58,7 @@ interface KitEvent {
 const STATUS_COLORS: Record<string, string> = {
   REGISTERED: 'bg-blue-100 text-blue-700',
   PAIRED: 'bg-amber-100 text-amber-700',
+  WITH_PATIENT: 'bg-yellow-100 text-yellow-800',
   COLLECTED: 'bg-green-100 text-green-700',
   IN_TRANSIT: 'bg-purple-100 text-purple-700',
   IN_LAB: 'bg-cyan-100 text-cyan-700',
@@ -222,7 +223,7 @@ export default function AdminDashboard() {
             <div className="flex gap-2 flex-wrap">
               <button onClick={() => setKitFilter('')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium ${!kitFilter ? 'bg-sky-700 text-white' : 'bg-white text-gray-600 border border-gray-200'}`}>All</button>
-              {['REGISTERED', 'PAIRED', 'COLLECTED', 'IN_TRANSIT', 'IN_LAB', 'PROCESSED'].map((s) => (
+              {['REGISTERED', 'PAIRED', 'WITH_PATIENT', 'COLLECTED', 'IN_TRANSIT', 'IN_LAB', 'PROCESSED'].map((s) => (
                 <button key={s} onClick={() => setKitFilter(s)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium ${kitFilter === s ? 'bg-sky-700 text-white' : 'bg-white text-gray-600 border border-gray-200'}`}>
                   {s.replace('_', ' ')}

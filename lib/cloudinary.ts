@@ -1,10 +1,16 @@
-const CLOUD_NAME = process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME;
-const UPLOAD_PRESET = process.env.EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+import Constants from 'expo-constants';
+
+const extra: Record<string, any> =
+  (Constants.expoConfig?.extra as Record<string, any>) ||
+  ((Constants as any).manifest?.extra as Record<string, any>) ||
+  {};
+
+const CLOUD_NAME = process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME || extra.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME;
+const UPLOAD_PRESET = process.env.EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET || extra.EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
 
 export async function uploadToCloudinary(uri: string): Promise<string> {
   if (!CLOUD_NAME || !UPLOAD_PRESET) {
-    console.warn('Cloudinary not configured — returning original URI');
-    return uri;
+    throw new Error('Cloudinary not configured');
   }
 
   const form = new FormData();

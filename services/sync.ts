@@ -671,20 +671,24 @@ async function pullMessages(userId: string) {
 
 async function pullChatContacts() {
   const { data, error } = await supabase
-    .from('providers')
-    .select('id, name, specialty, hospital, approval_status')
-    .eq('approval_status', 'approved')
+    .from('chat_contacts')
+    .select('id, user_id, name, role, specialty, hospital, online')
     .order('name', { ascending: true });
   if (error || !data) return;
 
-  saveChatContacts(data.map(p => ({
-    id: p.id,
-    name: p.name,
-    role: 'clinician',
-    specialty: p.specialty || '',
-    hospital: p.hospital || '',
-    online: false,
-  })));
+  const { data: authData } = await supabase.auth.getUser();
+  const selfId = authData?.user?.id;
+
+  saveChatContacts(data
+    .filter((c) => c.user_id && c.user_id !== selfId)
+    .map((c) => ({
+      id: c.id,
+      name: c.name,
+      role: c.role || 'staff',
+      specialty: c.specialty || '',
+      hospital: c.hospital || '',
+      online: c.online ?? false,
+    })));
 }
 
 async function pullLabResults(userId: string) {
