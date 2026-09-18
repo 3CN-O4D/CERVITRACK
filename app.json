@@ -4,7 +4,7 @@
     "slug": "cervitrack",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/logo.jpeg",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
@@ -48,7 +48,9 @@
       ],
       "expo-sqlite",
       "expo-secure-store",
-      "expo-notifications"
+      "expo-notifications",
+      "expo-audio",
+      "expo-asset"
     ],
     "extra": {
       "eas": {
