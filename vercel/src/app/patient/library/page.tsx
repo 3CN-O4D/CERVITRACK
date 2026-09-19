@@ -11,9 +11,10 @@ interface Article {
   readTime: string;
   icon: string;
   content: string;
+  image?: string;
+  videoUrl?: string;
+  featured?: boolean;
 }
-
-const CATEGORIES = ['All', 'HPV Basics', 'Screening', 'Vaccines', 'Treatment', 'Prevention', 'Nutrition'];
 
 const ARTICLES: Article[] = [
   {
@@ -150,6 +151,12 @@ const ARTICLES: Article[] = [
   },
 ];
 
+function youtubeEmbed(url?: string) {
+  if (!url) return null;
+  const match = url.match(/(?:v=|youtu\.be\/|embed\/)([\w-]{6,})/);
+  return match ? `https://www.youtube.com/embed/${match[1]}` : null;
+}
+
 function ArticleBody({ content }: { content: string }) {
   return (
     <div className="space-y-3 text-[15px] leading-7 text-gray-800">
@@ -194,6 +201,9 @@ export default function LibraryPage() {
             readTime: a.read_time || '5 min read',
             icon: '📄',
             content: a.content || a.summary || '',
+            image: a.image || undefined,
+            videoUrl: a.video_url || undefined,
+            featured: !!a.featured,
           }))
         );
       }
@@ -219,6 +229,8 @@ export default function LibraryPage() {
     return result;
   }, [articles, category, search]);
 
+  const categories = useMemo(() => ['All', ...Array.from(new Set(articles.map((a) => a.category).filter(Boolean)))], [articles]);
+
   return (
     <div className="mx-auto max-w-4xl pb-20">
       <div className="mb-2 flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2.5">
@@ -237,7 +249,7 @@ export default function LibraryPage() {
       </div>
 
       <div className="mb-1 flex flex-wrap gap-2 py-2">
-        {CATEGORIES.map((cat) => (
+        {categories.map((cat) => (
           <button
             key={cat}
             onClick={() => setCategory(cat)}
@@ -271,6 +283,7 @@ export default function LibraryPage() {
               <span className="min-w-0 flex-1">
                 <span className="flex items-start justify-between gap-2">
                   <span className="line-clamp-2 flex-1 text-sm font-bold leading-5">{a.title}</span>
+                  {a.featured && <span className="shrink-0 text-sm text-purple-500">★</span>}
                   <span className="shrink-0 rounded-md bg-primary-light px-2 py-0.5 text-[10px] font-bold text-primary">
                     {a.category}
                   </span>
@@ -295,8 +308,21 @@ export default function LibraryPage() {
               <span className="w-5" />
             </div>
             <div className="overflow-y-auto p-5">
-              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-light text-2xl">
-                {selected.icon}
+              {selected.image && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={selected.image}
+                  alt={selected.title}
+                  className="mb-4 h-44 w-full rounded-2xl object-cover"
+                />
+              )}
+              <div className="mb-4 flex items-center gap-2">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-light text-2xl">
+                  {selected.icon}
+                </div>
+                {selected.featured && (
+                  <span className="rounded-full bg-purple-100 px-2.5 py-1 text-[10px] font-bold text-purple-600">★ Featured</span>
+                )}
               </div>
               <h2 className="text-xl font-extrabold leading-7">{selected.title}</h2>
               <div className="my-4 flex items-center gap-2.5">
@@ -305,6 +331,17 @@ export default function LibraryPage() {
                 </span>
                 <span className="text-xs text-gray-500">{selected.readTime}</span>
               </div>
+              {youtubeEmbed(selected.videoUrl) && (
+                <div className="mb-5 overflow-hidden rounded-2xl bg-black">
+                  <iframe
+                    src={youtubeEmbed(selected.videoUrl) || ''}
+                    title={selected.title}
+                    className="aspect-video w-full"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                </div>
+              )}
               <ArticleBody content={selected.content} />
             </div>
           </div>

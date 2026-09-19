@@ -84,8 +84,10 @@ export interface Article {
   summary: string;
   content: string;
   image?: string;
+  video_url?: string;
   category?: string;
   read_time?: string;
+  featured?: boolean;
 }
 
 export interface Clinician {
@@ -147,8 +149,10 @@ export async function getArticles(): Promise<Article[]> {
     async () => {
       const { data, error } = await supabase
         .from('articles')
-        .select('id, title, summary, content, image, category, read_time')
-        .order('id', { ascending: true });
+        .select('id, title, summary, content, image, video_url, category, read_time, featured, last_updated')
+        .eq('published', true)
+        .order('featured', { ascending: false })
+        .order('last_updated', { ascending: false });
       if (error) throw error;
       return (data ?? []) as Article[];
     },
@@ -486,6 +490,24 @@ export async function getChatContacts() {
       return contacts;
     }
   } catch { /* fall through */ }
+
+  // Fall back to approved providers so patients can always start a chat.
+  try {
+    const providers = await searchClinicians();
+    if (providers.length > 0) {
+      const mapped = providers.map((p: Clinician) => ({
+        id: p.id,
+        provider_id: p.id,
+        name: p.name,
+        role: 'clinician',
+        specialty: p.specialty || '',
+        hospital: p.hospital || '',
+        online: false,
+      }));
+      return mapped;
+    }
+  } catch { /* fall through */ }
+
   return local;
 }
 

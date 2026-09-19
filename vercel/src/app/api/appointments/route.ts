@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getRequestUser, resolveUserScope, forbidden } from '@/lib/api-auth';
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 async function resolveClinicianUserId(provider: any): Promise<string | null> {
   const email = provider?.email;
@@ -21,7 +20,7 @@ export async function POST(request: NextRequest) {
     if (!user) return forbidden();
 
     const body = await request.json();
-    const { user_id: claimed, provider_id, date, time, title, notes, custom_text } = body;
+    const { user_id: claimed, provider_id, date, time, title: requestedTitle, notes, custom_text, method, reminder_phone } = body;
 
     const scopedId = resolveUserScope(user, claimed);
     if (!scopedId) return forbidden();
@@ -40,17 +39,31 @@ export async function POST(request: NextRequest) {
       provider = data;
     }
 
-    // "Any available" — assign the first approved provider so the request is
-    // actually routable instead of dead-ending with a null provider.
-    if (!provider) {
-      const { data } = await supabaseAdmin
+    // "Any available" — pick a provider near the patient's county so the
+    // request is routable instead of dead-ending with a null provider.
+    if (!provider && method === 'next_available') {
+      const { data: patientRow } = await supabaseAdmin
+        .from('users')
+        .select('county')
+        .eq('id', scopedId)
+        .maybeSingle();
+      const base = supabaseAdmin
         .from('providers')
         .select('id, name, email, hospital, county')
-        .eq('approval_status', 'approved')
-        .order('name', { ascending: true })
-        .limit(1)
-        .maybeSingle();
-      provider = data;
+        .eq('approval_status', 'approved');
+      const q = patientRow?.county ? base.eq('county', patientRow.county) : base;
+      const { data } = await q.order('name', { ascending: true }).limit(1).maybeSingle();
+      provider = data || null;
+      if (!provider) {
+        const { data: fallback } = await supabaseAdmin
+          .from('providers')
+          .select('id, name, email, hospital, county')
+          .eq('approval_status', 'approved')
+          .order('name', { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        provider = fallback;
+      }
     }
 
     const clinicianUserId = await resolveClinicianUserId(provider);
@@ -60,19 +73,24 @@ export async function POST(request: NextRequest) {
       .eq('id', scopedId)
       .maybeSingle();
 
+    const title = typeof provider?.name === 'string'
+      ? 'Appointment with ' + provider.name
+      : requestedTitle || 'Appointment';
+
     const { data, error } = await supabaseAdmin
       .from('appointments')
       .insert({
         user_id: scopedId,
         clinician_id: clinicianUserId,
         provider_id: provider?.id ?? null,
-        title: title || (provider ? `Appointment with ${provider.name}` : 'Appointment'),
+        title,
         facility_name: provider?.hospital ?? '',
         facility_location: provider?.county ?? '',
         date,
         time,
         notes: notes || '',
-        custom_text: custom_text || '',
+        custom_text: (custom_text || '') + ' | method:' + (method || 'doctor'),
+        reminder_phone: reminder_phone || '',
         status: 'pending',
       })
       .select()
@@ -123,13 +141,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(data, { status: 200 });
     }
 
-    const user_id = resolveUserScope(user, claimed);
-    if (!user_id) return forbidden();
+    const scopedId = resolveUserScope(user, claimed);
+    if (!scopedId) return forbidden();
 
     const { data, error } = await supabaseAdmin
       .from('appointments')
       .select('*')
-      .eq('user_id', user_id)
+      .eq('user_id', scopedId)
       .order('date', { ascending: false });
 
     if (error) throw error;

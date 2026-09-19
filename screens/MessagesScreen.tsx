@@ -46,6 +46,7 @@ interface Contact {
   role: string;
   specialty?: string;
   hospital?: string;
+  providerId?: string;
   online: boolean;
   lastMessage: string;
   lastTime: string;
@@ -147,6 +148,7 @@ export default function MessagesScreen({ navigation }: any) {
             role: c.role || 'Provider',
             specialty: c.specialty || '',
             hospital: c.hospital || '',
+            providerId: c.provider_id || c.providerId || undefined,
             online: c.online ?? false,
             lastMessage: 'Tap to start chatting',
             lastTime: '',
@@ -220,6 +222,14 @@ export default function MessagesScreen({ navigation }: any) {
     <View style={[s.container, { backgroundColor: colors.bg }]}>
       <View style={s.mlistHeader}>
         <Text style={[s.mlistTitle, { color: colors.text }]}>Messages</Text>
+        <TouchableOpacity
+          style={s.newMsgBtn}
+          onPress={() => navigation.navigate('SearchClinicians')}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="chatbubble-ellipses-outline" size={15} color="#FFF" />
+          <Text style={s.newMsgText}>New message</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={[s.searchBar, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
@@ -291,26 +301,37 @@ export function ChatDetail({ navigation, route }: any) {
       // First, find or create a chat_contacts entry for this provider
       let chatContactId: number | null = null;
       try {
-        const { data: existing } = await supabase
-          .from('chat_contacts')
-          .select('id')
-          .eq('name', contact.name)
-          .maybeSingle();
-        if (existing) {
-          chatContactId = existing.id;
-        } else {
-          const { data: newContact } = await supabase
+        if (contact.providerId) {
+          const { data: linked } = await supabase
             .from('chat_contacts')
-            .insert({
-              name: contact.name,
-              role: contact.role || 'clinician',
-              specialty: contact.specialty || '',
-              hospital: contact.hospital || '',
-              online: contact.online ?? true,
-            })
             .select('id')
-            .single();
-          if (newContact) chatContactId = newContact.id;
+            .eq('provider_id', contact.providerId)
+            .maybeSingle();
+          if (linked) chatContactId = linked.id;
+        }
+        if (!chatContactId) {
+          const { data: existing } = await supabase
+            .from('chat_contacts')
+            .select('id')
+            .eq('name', contact.name)
+            .maybeSingle();
+          if (existing) {
+            chatContactId = existing.id;
+          } else {
+            const { data: newContact } = await supabase
+              .from('chat_contacts')
+              .insert({
+                name: contact.name,
+                role: contact.role || 'clinician',
+                specialty: contact.specialty || '',
+                hospital: contact.hospital || '',
+                online: contact.online ?? true,
+                provider_id: contact.providerId || null,
+              })
+              .select('id')
+              .single();
+            if (newContact) chatContactId = newContact.id;
+          }
         }
       } catch { /* continue without chat_contacts */ }
 
@@ -739,6 +760,16 @@ const s = StyleSheet.create({
     marginBottom: 16,
   },
   mlistTitle: { fontSize: 26, fontWeight: '800' },
+  newMsgBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#6C5CE7',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  newMsgText: { color: '#FFF', fontSize: 12, fontWeight: '700' },
   dayPill: {
     alignSelf: 'center',
     backgroundColor: '#6C5CE7',

@@ -17,6 +17,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { getArticles, type Article as ApiArticle } from '../services/api';
 import { getItem, setItem } from '../services/storage';
+import { Linking, Image } from 'react-native';
 
 const { width } = Dimensions.get('window');
 
@@ -29,9 +30,10 @@ interface Article {
   icon: string;
   iconFamily: 'Ionicons' | 'MaterialCommunityIcons' | 'FontAwesome5';
   content: string;
+  image?: string;
+  videoUrl?: string;
+  featured?: boolean;
 }
-
-const CATEGORIES = ['All', 'HPV Basics', 'Screening', 'Vaccines', 'Treatment', 'Prevention', 'Nutrition'];
 
 const ARTICLES: Article[] = [
   {
@@ -295,6 +297,9 @@ export default function LibraryScreen() {
           icon: 'document-text-outline',
           iconFamily: 'Ionicons' as const,
           content: a.content || a.summary || '',
+          image: a.image || undefined,
+          videoUrl: a.video_url || undefined,
+          featured: !!a.featured,
         }));
         setArticles(merged);
         const now = new Date().toISOString();
@@ -324,6 +329,11 @@ export default function LibraryScreen() {
     }
     return result;
   }, [selectedCategory, searchQuery, articles]);
+
+  const categories = useMemo(
+    () => ['All', ...Array.from(new Set(articles.map((a) => a.category).filter(Boolean)))],
+    [articles]
+  );
 
   const getIcon = (article: Article) => {
     const size = 22;
@@ -362,7 +372,7 @@ export default function LibraryScreen() {
 
       <View style={styles.categoriesContainer}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoriesScroll}>
-          {CATEGORIES.map((cat) => (
+          {categories.map((cat) => (
             <TouchableOpacity
               key={cat}
               style={[styles.categoryChip, selectedCategory === cat && styles.categoryChipActive]}
@@ -407,6 +417,9 @@ export default function LibraryScreen() {
                   <Text style={styles.articleTitle} numberOfLines={2}>
                     {article.title}
                   </Text>
+                  {!!article.featured && (
+                    <Text style={styles.featuredStar}>{'★'}</Text>
+                  )}
                   <View style={styles.categoryBadge}>
                     <Text style={styles.categoryBadgeText}>{article.category}</Text>
                   </View>
@@ -438,16 +451,32 @@ export default function LibraryScreen() {
             <ScrollView contentContainerStyle={styles.modalScroll} showsVerticalScrollIndicator={false}>
               {selectedArticle && (
                 <>
-                  <View style={styles.modalIconWrap}>
-                    {getIcon(selectedArticle)}
-                  </View>
+                  <View style={styles.modalIconWrap}>{getIcon(selectedArticle)}</View>
                   <Text style={styles.modalArticleTitle}>{selectedArticle.title}</Text>
                   <View style={styles.modalMetaRow}>
                     <View style={styles.modalCategoryBadge}>
                       <Text style={styles.modalCategoryText}>{selectedArticle.category}</Text>
                     </View>
                     <Text style={styles.modalReadTime}>{selectedArticle.readTime}</Text>
+                    {!!selectedArticle.featured && <Text style={styles.featuredStar}>{'★'}</Text>}
                   </View>
+                  {selectedArticle.image ? (
+                    <Image
+                      source={{ uri: selectedArticle.image }}
+                      style={styles.modalImage}
+                      resizeMode="cover"
+                    />
+                  ) : null}
+                  {selectedArticle.videoUrl ? (
+                    <TouchableOpacity
+                      style={styles.videoBtn}
+                      onPress={() => Linking.openURL(selectedArticle.videoUrl!)}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="play-circle" size={20} color="#FFF" />
+                      <Text style={styles.videoBtnText}>Watch video</Text>
+                    </TouchableOpacity>
+                  ) : null}
                   <Text style={styles.modalArticleBody}>{selectedArticle.content}</Text>
                 </>
               )}
@@ -527,6 +556,7 @@ const makeStyles = (colors: any, isDark: boolean) =>
       borderRadius: 6,
       marginLeft: 8,
     },
+    featuredStar: { fontSize: 12, color: '#8B5CF6', fontWeight: '800', marginLeft: 8 },
     categoryBadgeText: { fontSize: 10, fontWeight: '700', color: colors.primary },
     articleExcerpt: { fontSize: 13, color: colors.textSecondary, marginTop: 6, lineHeight: 18 },
     articleFooter: {
@@ -589,4 +619,23 @@ const makeStyles = (colors: any, isDark: boolean) =>
       lineHeight: 25,
       color: colors.text,
     },
+    modalImage: {
+      width: '100%',
+      height: 200,
+      borderRadius: 16,
+      marginVertical: 14,
+    },
+    videoBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      backgroundColor: colors.primary,
+      borderRadius: 12,
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      marginTop: 4,
+      marginBottom: 14,
+    },
+    videoBtnText: { color: '#FFF', fontSize: 14, fontWeight: '700' },
   });

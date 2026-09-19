@@ -1,3 +1,19 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@media (max-width: 768px) {
+  main table,
+  .overflow-x-auto table {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+  }
+  img,
+  video,
+  iframe {
+    max-width: 100%;
+  }
+}

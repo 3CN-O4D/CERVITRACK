@@ -67,6 +67,7 @@ export default function SearchCliniciansScreen({ navigation }: any) {
           role: 'Clinician',
           specialty: clinician.specialty,
           hospital: clinician.hospital,
+          providerId: clinician.id,
           online: true,
           initials: clinician.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase(),
         },
